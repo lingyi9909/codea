@@ -254,12 +254,12 @@ codea/
 
 **Files:**
 - Create: `tui/go.mod`
-- Create: `codea/tui/cmd/codea/main.go`
-- Create: `codea/tui/cmd/parity-runner/main.go`
+- Create: `tui/cmd/codea/main.go`
+- Create: `tui/cmd/parity-runner/main.go`
 - Create: `Makefile`
 - Create: `VERSION`
 - Create: `.gitignore`
-- Create: `codea/.editorconfig`
+- Create: `.editorconfig`
 - Create: `runtime/version.json`
 - Create: `runtime/capabilities.yaml`
 - Create: `scripts/run-phase0-gates.sh`
@@ -408,7 +408,7 @@ Expected: `build/codea` 二进制生成；`go test ./...` 无测试但通过。
 - [ ] **Step 10: Commit**
 
 ```bash
-git init && git add -A
+git add -A
 git commit -m "feat: project skeleton with correct Go module and test structure"
 ```
 
