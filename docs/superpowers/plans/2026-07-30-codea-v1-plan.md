@@ -1,8 +1,8 @@
-# CompanyCode V1 实施计划
+# Codea V1 实施计划
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 构建企业内网 AI 编码助手 CompanyCode V1，基于 OpenCode Runtime + Go TUI，提供双模式（Native-Compatible + Enterprise-Controlled）的代码审查、单元测试生成、API 文档生成能力，支持离线发行、升级回滚和私有模型。
+**Goal:** 构建企业内网 AI 编码助手 Codea V1，基于 OpenCode Runtime + Go TUI，提供双模式（Native-Compatible + Enterprise-Controlled）的代码审查、单元测试生成、API 文档生成能力，支持离线发行、升级回滚和私有模型。
 
 **Architecture:** C+ 混合模式 — OpenCode（anomalyco/opencode）作为独立 Agent Runtime（`opencode serve`），Go TUI（Bubble Tea + Lip Gloss）通过 HTTP/SSE 与 Runtime 通信。RuntimeClient 抽象层隔离协议差异。企业能力（Reviewer/UT/API Doc）通过 Agent + Skill + 专用 Tool 组合实现，不侵入 OpenCode Core。离线发行包包含预编译 TUI、OpenCode 二进制、自包含 Plugin Bundle 和全部配置。
 
@@ -29,10 +29,10 @@
 ## 文件结构总览
 
 ```
-company-code/
+codea/
 ├── tui/                              # Go TUI（独立 Go Module，包含所有 Go 代码）
 │   ├── cmd/
-│   │   ├── company-code/main.go      # TUI 入口
+│   │   ├── codea/main.go      # TUI 入口
 │   │   ├── parity-runner/main.go     # Parity 测试运行器
 │   │   └── openapi-gen/main.go        # OpenAPI → Go DTO 生成器
 │   ├── internal/
@@ -172,7 +172,7 @@ company-code/
 │   │   ├── package.json
 │   │   └── bun.lock
 │   ├── config/
-│   │   ├── companycode/
+│   │   ├── codea/
 │   │   │   ├── defaults.yaml
 │   │   │   ├── skills.yaml
 │   │   │   └── profiles/
@@ -253,38 +253,38 @@ company-code/
 **Goal:** 建立正确的项目目录结构，Go Module 统一在 `tui/` 下，确保 `go test ./...` 可运行。
 
 **Files:**
-- Create: `company-code/tui/go.mod`
-- Create: `company-code/tui/cmd/company-code/main.go`
-- Create: `company-code/tui/cmd/parity-runner/main.go`
-- Create: `company-code/Makefile`
-- Create: `company-code/VERSION`
-- Create: `company-code/.gitignore`
-- Create: `company-code/.editorconfig`
-- Create: `company-code/runtime/version.json`
-- Create: `company-code/runtime/capabilities.yaml`
-- Create: `company-code/scripts/run-phase0-gates.sh`
+- Create: `codea/tui/go.mod`
+- Create: `codea/tui/cmd/codea/main.go`
+- Create: `codea/tui/cmd/parity-runner/main.go`
+- Create: `codea/Makefile`
+- Create: `codea/VERSION`
+- Create: `codea/.gitignore`
+- Create: `codea/.editorconfig`
+- Create: `codea/runtime/version.json`
+- Create: `codea/runtime/capabilities.yaml`
+- Create: `codea/scripts/run-phase0-gates.sh`
 
 - [ ] **Step 1: 创建项目目录结构**
 
 ```bash
-mkdir -p company-code/tui/cmd/company-code
-mkdir -p company-code/tui/cmd/parity-runner
-mkdir -p company-code/tui/internal/{app,runtime,opencode,supervisor,reasoning,components,theme,config,update,doctor,capability,parity}
-mkdir -p company-code/tui/tests/{contract,parity,e2e/code-review,e2e/unit-test,e2e/api-documentation,fixtures/fake-opencode-server}
-mkdir -p company-code/distribution/{agents,skills/builtin,skills/enterprise,plugins/src/tools,plugins/dist,config/companycode/profiles,config/opencode,templates}
-mkdir -p company-code/runtime/{openapi,patches}
-mkdir -p company-code/packaging/{config,scripts,platform/macos,platform/windows}
-mkdir -p company-code/tests/{offline,upgrade}
-mkdir -p company-code/devtools/{manifest-gen,skill-lint,license-report,sse-recorder}
-mkdir -p company-code/scripts
-mkdir -p company-code/docs/superpowers/{specs,plans}
+mkdir -p codea/tui/cmd/codea
+mkdir -p codea/tui/cmd/parity-runner
+mkdir -p codea/tui/internal/{app,runtime,opencode,supervisor,reasoning,components,theme,config,update,doctor,capability,parity}
+mkdir -p codea/tui/tests/{contract,parity,e2e/code-review,e2e/unit-test,e2e/api-documentation,fixtures/fake-opencode-server}
+mkdir -p codea/distribution/{agents,skills/builtin,skills/enterprise,plugins/src/tools,plugins/dist,config/codea/profiles,config/opencode,templates}
+mkdir -p codea/runtime/{openapi,patches}
+mkdir -p codea/packaging/{config,scripts,platform/macos,platform/windows}
+mkdir -p codea/tests/{offline,upgrade}
+mkdir -p codea/devtools/{manifest-gen,skill-lint,license-report,sse-recorder}
+mkdir -p codea/scripts
+mkdir -p codea/docs/superpowers/{specs,plans}
 ```
 
 - [ ] **Step 2: 初始化 Go Module**
 
 ```bash
-cd company-code/tui
-go mod init company-code/tui
+cd codea/tui
+go mod init codea/tui
 ```
 
 - [ ] **Step 3: 编写 Makefile**
@@ -295,7 +295,7 @@ go mod init company-code/tui
 VERSION := $$(cat VERSION)
 
 build:
-	cd tui && go build -o ../build/company-code ./cmd/company-code
+	cd tui && go build -o ../build/codea ./cmd/codea
 
 test:
 	cd tui && go test ./...
@@ -384,7 +384,7 @@ tui:
 
 - [ ] **Step 8: 编写 Go 编译验证**
 
-`tui/cmd/company-code/main.go`：
+`tui/cmd/codea/main.go`：
 
 ```go
 package main
@@ -392,23 +392,23 @@ package main
 import "fmt"
 
 func main() {
-	fmt.Println("CompanyCode V1")
+	fmt.Println("Codea V1")
 }
 ```
 
 - [ ] **Step 9: 验证构建和测试命令**
 
 ```bash
-cd company-code && make build
-cd company-code/tui && go test ./...
+cd codea && make build
+cd codea/tui && go test ./...
 ```
 
-Expected: `build/company-code` 二进制生成；`go test ./...` 无测试但通过。
+Expected: `build/codea` 二进制生成；`go test ./...` 无测试但通过。
 
 - [ ] **Step 10: Commit**
 
 ```bash
-cd company-code && git init && git add -A
+cd codea && git init && git add -A
 git commit -m "feat: project skeleton with correct Go module and test structure"
 ```
 
@@ -792,7 +792,7 @@ func main() {
 - [ ] **Step 3: 运行生成器**
 
 ```bash
-cd company-code/tui
+cd codea/tui
 go run ./cmd/openapi-gen \
   ../runtime/openapi/opencode-$(cat ../VERSION).json \
   internal/opencode/dto.go
@@ -1048,7 +1048,7 @@ type ParityScenario struct {
 	Description     string
 	Required        bool
 	BaselineRunner  Runner // 原版 OpenCode
-	CandidateRunner Runner // CompanyCode
+	CandidateRunner Runner // Codea
 	Fixture         string
 	Prompt          string
 	Assertions      []Assertion
@@ -1165,7 +1165,7 @@ func (r *ParityRunner) runScenario(ctx context.Context, s ParityScenario) Parity
 			continue
 		}
 
-		// 执行 Candidate（CompanyCode）
+		// 执行 Candidate（Codea）
 		candidateResult, cErr := s.CandidateRunner.Run(ctx, s.Fixture, s.Prompt)
 		if cErr != nil {
 			lastError = fmt.Sprintf("candidate repetition %d: %v", i, cErr)
@@ -1255,7 +1255,7 @@ package parity
 import (
 	"testing"
 
-	"company-code/tui/internal/capability"
+	"codea/tui/internal/capability"
 )
 
 func TestCapabilityInventoryLoad(t *testing.T) {
@@ -1295,7 +1295,7 @@ func TestNoSilentLossOfRequired(t *testing.T) {
 - [ ] **Step 6: 运行测试**
 
 ```bash
-cd company-code/tui && go test ./tests/parity/... ./internal/capability/... -v
+cd codea/tui && go test ./tests/parity/... ./internal/capability/... -v
 ```
 
 Expected: 所有测试 PASS。静默丢失检测正确。
@@ -1744,7 +1744,7 @@ import (
 	"encoding/json"
 	"time"
 
-	"company-code/tui/internal/runtime"
+	"codea/tui/internal/runtime"
 )
 
 type OpenCodeRawEvent struct {
@@ -1852,7 +1852,7 @@ import (
 	"context"
 	"strconv"
 
-	"company-code/tui/internal/runtime"
+	"codea/tui/internal/runtime"
 )
 
 type OpenCodeAdapter struct {
@@ -1963,8 +1963,8 @@ import (
 	"context"
 	"testing"
 
-	"company-code/tui/internal/opencode"
-	"company-code/tui/internal/runtime"
+	"codea/tui/internal/opencode"
+	"codea/tui/internal/runtime"
 )
 
 func TestAdapterWithFakeServer(t *testing.T) {
@@ -2060,7 +2060,7 @@ import (
 	"sync"
 	"time"
 
-	"company-code/tui/internal/runtime"
+	"codea/tui/internal/runtime"
 )
 
 type Config struct {
@@ -2320,7 +2320,7 @@ func killProcess(cmd *exec.Cmd) {
 - [ ] **Step 4: 运行构建验证跨平台编译**
 
 ```bash
-cd company-code/tui
+cd codea/tui
 GOOS=darwin GOARCH=arm64 go build ./internal/supervisor/...
 GOOS=windows GOARCH=amd64 go build ./internal/supervisor/...
 ```
@@ -2528,7 +2528,7 @@ package contract
 import (
 	"testing"
 
-	"company-code/tui/internal/reasoning"
+	"codea/tui/internal/reasoning"
 )
 
 func TestTagParserBasic(t *testing.T) {
@@ -2561,7 +2561,7 @@ func TestTagParserCrossChunk(t *testing.T) {
 - [ ] **Step 4: 运行测试**
 
 ```bash
-cd company-code/tui && go test ./internal/reasoning/... ./tests/contract/... -v
+cd codea/tui && go test ./internal/reasoning/... ./tests/contract/... -v
 ```
 
 - [ ] **Step 5: Commit**
@@ -2590,7 +2590,7 @@ git commit -m "feat: reasoning normalizer, tag parser state machine, and tests"
 - Create: `tui/internal/app/commands.go`
 - Create: `tui/internal/app/keymap.go`
 - Create: `tui/internal/app/page.go`
-- Modify: `tui/cmd/company-code/main.go`
+- Modify: `tui/cmd/codea/main.go`
 
 - [ ] **Step 1: 编写主题系统**
 
@@ -2635,8 +2635,8 @@ import (
 	"sync"
 	"time"
 
-	"company-code/tui/internal/runtime"
-	"company-code/tui/internal/theme"
+	"codea/tui/internal/runtime"
+	"codea/tui/internal/theme"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -2700,8 +2700,8 @@ import (
 	"fmt"
 	"os"
 
-	"company-code/tui/internal/app"
-	"company-code/tui/internal/opencode"
+	"codea/tui/internal/app"
+	"codea/tui/internal/opencode"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -2728,7 +2728,7 @@ func main() {
 - [ ] **Step 6: 安装依赖并验证**
 
 ```bash
-cd company-code/tui
+cd codea/tui
 go get github.com/charmbracelet/bubbletea
 go get github.com/charmbracelet/bubbles
 go get github.com/charmbracelet/lipgloss
@@ -2736,7 +2736,7 @@ go mod tidy
 
 # 启动 Fake Server 验证
 go run ./tests/fixtures/fake-opencode-server &
-OPENCODE_URL=http://localhost:49323 go run ./cmd/company-code
+OPENCODE_URL=http://localhost:49323 go run ./cmd/codea
 ```
 
 - [ ] **Step 7: Commit**
@@ -2834,7 +2834,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"company-code/tui/internal/opencode"
+	"codea/tui/internal/opencode"
 )
 
 func TestGoldenEventsNoSilentDrop(t *testing.T) {
@@ -2866,7 +2866,7 @@ func TestGoldenEventsNoSilentDrop(t *testing.T) {
 - [ ] **Step 4: 运行 Parity 测试**
 
 ```bash
-cd company-code/tui && go test ./tests/parity/... -v
+cd codea/tui && go test ./tests/parity/... -v
 ```
 
 - [ ] **Step 5: Commit**
@@ -2886,10 +2886,10 @@ git add -A && git commit -m "feat: General Agent parity tests for event passthro
 - Create: `tui/internal/config/merge.go`
 - Create: `tui/internal/config/profile.go`
 - Create: `tui/internal/components/skill.go`
-- Create: `distribution/config/companycode/defaults.yaml`
-- Create: `distribution/config/companycode/skills.yaml`
-- Create: `distribution/config/companycode/profiles/minimal.yaml`
-- Create: `distribution/config/companycode/profiles/java-backend.yaml`
+- Create: `distribution/config/codea/defaults.yaml`
+- Create: `distribution/config/codea/skills.yaml`
+- Create: `distribution/config/codea/profiles/minimal.yaml`
+- Create: `distribution/config/codea/profiles/java-backend.yaml`
 - Create: `distribution/skills/index.yaml`
 
 - [ ] **Step 1: 编写四级配置合并**
@@ -2951,7 +2951,7 @@ func EffectiveSkills(merged map[string]SkillConfig) []SkillConfig {
 
 - [ ] **Step 4: 编写默认配置和 Profile**
 
-`distribution/config/companycode/defaults.yaml`、`skills.yaml`、`profiles/*.yaml`。
+`distribution/config/codea/defaults.yaml`、`skills.yaml`、`profiles/*.yaml`。
 
 - [ ] **Step 5: 编写 Skill 配置文件生成器**
 
@@ -3655,7 +3655,7 @@ echo "All offline checks passed."
 
 - [ ] **Step 5: 编写 macOS 和 Windows 安装脚本**
 
-`platform/macos/install.sh` — 校验 → 解压 → 安装到 `~/.companycode/versions/` → 设置权限 → 创建启动入口。
+`platform/macos/install.sh` — 校验 → 解压 → 安装到 `~/.codea/versions/` → 设置权限 → 创建启动入口。
 `platform/windows/install.ps1` — 同等逻辑。
 
 - [ ] **Step 6: Commit**
@@ -3848,13 +3848,13 @@ git add -A && git commit -m "feat: atomic upgrade transaction with journal, migr
 
 ### Task 19: Doctor 诊断
 
-**Goal:** 实现 `company-code init` 和 `company-code doctor` 命令，覆盖静态/连接/行为/网络四类检查。
+**Goal:** 实现 `codea init` 和 `codea doctor` 命令，覆盖静态/连接/行为/网络四类检查。
 
 **Files:**
 - Create: `tui/internal/doctor/service.go`
 - Create: `tui/internal/doctor/checks.go`
 - Create: `tui/internal/doctor/report.go`
-- Modify: `tui/cmd/company-code/main.go` — 添加 init/doctor 子命令
+- Modify: `tui/cmd/codea/main.go` — 添加 init/doctor 子命令
 
 - [ ] **Step 1: 编写 Doctor 服务**
 
@@ -3940,7 +3940,7 @@ import (
 	"os"
 	"time"
 
-	"company-code/tui/internal/parity"
+	"codea/tui/internal/parity"
 )
 
 func main() {
@@ -3951,7 +3951,7 @@ func main() {
 		ID: "G11", Description: "All OpenCode native capabilities accessible",
 		Required: true,
 		BaselineRunner:  newBaselineRunner(),  // 原版 opencode serve
-		CandidateRunner: newCandidateRunner(), // company-code + opencode serve
+		CandidateRunner: newCandidateRunner(), // codea + opencode serve
 		Repetitions: 1,
 		Assertions: []parity.Assertion{
 			{Type: parity.AssertNoError},
@@ -3994,9 +3994,9 @@ func main() {
 - [ ] **Step 3: 运行全量测试**
 
 ```bash
-cd company-code/tui && go test ./...
-cd company-code && ./scripts/run-phase0-gates.sh
-cd company-code && go run ./tui/cmd/parity-runner
+cd codea/tui && go test ./...
+cd codea && ./scripts/run-phase0-gates.sh
+cd codea && go run ./tui/cmd/parity-runner
 ```
 
 - [ ] **Step 4: Commit**

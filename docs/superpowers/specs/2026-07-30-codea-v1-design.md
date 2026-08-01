@@ -1,6 +1,6 @@
-# CompanyCode V1 — 技术设计文档
+# Codea V1 — 技术设计文档
 
-产品范围：CompanyCode V1
+产品范围：Codea V1
 文档版本：2.0
 日期：2026-07-30
 状态：设计评审通过，允许进入 Phase 0；关键能力以 Spike 和 Parity 门禁结果为准
@@ -25,14 +25,14 @@
 
 ### 1.1 架构选型：C+ 混合模式
 
-OpenCode 作为独立 Agent Runtime，本地启动 Server；CompanyCode 使用 Go 开发独立 TUI，通过 HTTP/SSE 与 Runtime 通信；企业能力通过 Agent、Skill、Plugin 和配置扩展。
+OpenCode 作为独立 Agent Runtime，本地启动 Server；Codea 使用 Go 开发独立 TUI，通过 HTTP/SSE 与 Runtime 通信；企业能力通过 Agent、Skill、Plugin 和配置扩展。
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│                    CompanyCode V1                       │
+│                    Codea V1                       │
 │                                                         │
 │  ┌───────────────────────────────────────────────────┐  │
-│  │ Go TUI：company-code                              │  │
+│  │ Go TUI：codea                              │  │
 │  │                                                   │  │
 │  │ Bubble Tea + Lip Gloss + Glamour                  │  │
 │  │                                                   │  │
@@ -104,12 +104,12 @@ Code Reviewer、Unit Test Generator 和 API Documentation Generator 使用 Agent
 
 **原则 4：通过 RuntimeClient 隔离协议**
 
-Go TUI 不直接依赖 OpenCode API 数据结构。通过 `RuntimeClient + OpenCodeAdapter` 将 OpenCode HTTP/SSE 事件转换为 CompanyCode 内部统一模型，降低上游版本变化影响。
+Go TUI 不直接依赖 OpenCode API 数据结构。通过 `RuntimeClient + OpenCodeAdapter` 将 OpenCode HTTP/SSE 事件转换为 Codea 内部统一模型，降低上游版本变化影响。
 
 ```
 Go TUI
    ↓
-CompanyCode RuntimeClient
+Codea RuntimeClient
    ↓
 OpenCodeAdapter
    ↓
@@ -118,19 +118,19 @@ OpenCode OpenAPI/SSE
 
 **原则 5：OpenCode 原生能力不退化**
 
-CompanyCode 不以裁剪 OpenCode 通用能力为目标。General 模式应完整保留锁定版本 OpenCode 的 Agent Loop、Session、Provider、原生 Tool、文件操作、Shell、Agent/Subagent、Skill 和 Plugin 扩展能力。CompanyCode 新增的适配层、安全层和 Go TUI 不得静默丢弃或阻断原生能力。
+Codea 不以裁剪 OpenCode 通用能力为目标。General 模式应完整保留锁定版本 OpenCode 的 Agent Loop、Session、Provider、原生 Tool、文件操作、Shell、Agent/Subagent、Skill 和 Plugin 扩展能力。Codea 新增的适配层、安全层和 Go TUI 不得静默丢弃或阻断原生能力。
 
 企业 Agent 可以基于业务安全要求使用更严格的 Tool 和路径权限，但这些限制只作用于对应企业 Agent，不改变 General 模式的能力边界。
 
-CompanyCode 不得在架构和功能入口层削弱锁定版本 OpenCode 的原生能力。核心功能可达率、原生 Tool 可调用率、事件映射或透传率和原生 API 能力无静默丢失均必须达到 100%。模型生成结果具有随机性，同模型/同 Runtime/同权限条件下，任务效果通过 Parity 测试控制在统计容差内（不低于原版的 95%，且任何核心任务不得失败）。每次升级均通过能力基线回归测试验证。
+Codea 不得在架构和功能入口层削弱锁定版本 OpenCode 的原生能力。核心功能可达率、原生 Tool 可调用率、事件映射或透传率和原生 API 能力无静默丢失均必须达到 100%。模型生成结果具有随机性，同模型/同 Runtime/同权限条件下，任务效果通过 Parity 测试控制在统计容差内（不低于原版的 95%，且任何核心任务不得失败）。每次升级均通过能力基线回归测试验证。
 
 ### 1.3 双模式架构
 
-CompanyCode 提供两种能力模式，确保「安全可控」与「能力完整」不互相侵蚀：
+Codea 提供两种能力模式，确保「安全可控」与「能力完整」不互相侵蚀：
 
 ```
 ┌─────────────────────────────────────────┐
-│         CompanyCode V1                  │
+│         Codea V1                  │
 │                                         │
 │  ┌───────────────┐  ┌────────────────┐  │
 │  │ Native-       │  │ Enterprise-    │  │
@@ -153,7 +153,7 @@ CompanyCode 提供两种能力模式，确保「安全可控」与「能力完�
 - OpenCode 原生 Tool 全部保留（read/grep/glob/write/edit/bash/Agent/Subagent/Skill/Plugin）
 - 不通过专用 Tool 替换原生 Tool
 - 不删除 Runtime 原生能力
-- 危险操作通过 Permission（Allow/Ask/Deny）控制，不由 CompanyCode 单方面删除
+- 危险操作通过 Permission（Allow/Ask/Deny）控制，不由 Codea 单方面删除
 - 只有明确高危命令直接 Deny
 - 未知但非明确危险的操作进入 Ask，不直接 Deny
 - 批准的内网 Maven/npm/PyPI/Go Proxy 镜像可正常使用
@@ -220,9 +220,9 @@ tui:
 ### 2.1 仓库结构
 
 ```
-company-code/
+codea/
 ├── tui/                              # Go TUI（独立 Go Module）
-│   ├── cmd/company-code/
+│   ├── cmd/codea/
 │   │   └── main.go                   # 入口
 │   ├── internal/
 │   │   ├── app/                      # Bubble Tea 顶层 Model
@@ -233,9 +233,9 @@ company-code/
 │   │   │   ├── commands.go           # Bubble Tea 命令
 │   │   │   ├── keymap.go             # 快捷键定义
 │   │   │   └── page.go               # 页面状态枚举
-│   │   ├── runtime/                  # CompanyCode 领域接口与模型
+│   │   ├── runtime/                  # Codea 领域接口与模型
 │   │   │   ├── client.go             # RuntimeClient 接口
-│   │   │   ├── events.go             # CompanyCode 统一事件
+│   │   │   ├── events.go             # Codea 统一事件
 │   │   │   └── models.go             # 领域模型
 │   │   ├── opencode/                 # OpenCode 适配层
 │   │   │   ├── adapter.go            # RuntimeClient 的 OpenCode 实现
@@ -309,7 +309,7 @@ company-code/
 │   │   ├── builtin/                  # 开源预装 Skill
 │   │   │   ├── code-explain/
 │   │   │   │   ├── SKILL.md
-│   │   │   │   ├── companycode.yaml
+│   │   │   │   ├── codea.yaml
 │   │   │   │   ├── manifest.yaml
 │   │   │   │   └── LICENSE
 │   │   │   ├── git-helper/
@@ -317,7 +317,7 @@ company-code/
 │   │   └── enterprise/               # 企业自研 Skill
 │   │       ├── code-review/
 │   │       │   ├── SKILL.md
-│   │       │   └── companycode.yaml
+│   │       │   └── codea.yaml
 │   │       ├── unit-test/
 │   │       └── api-documentation/
 │   ├── plugins/
@@ -332,7 +332,7 @@ company-code/
 │   │   ├── package.json             # 仅开发构建使用
 │   │   └── bun.lock                 # 仅开发构建使用
 │   ├── config/
-│   │   ├── companycode/
+│   │   ├── codea/
 │   │   │   ├── defaults.yaml
 │   │   │   ├── skills.yaml
 │   │   │   └── profiles/
@@ -432,20 +432,20 @@ company-code/
 
 ### 2.2 关键设计点
 
-1. **tui/** — Go 模块，独立 `go.mod`。不依赖 distribution 以外的 CompanyCode 代码。
+1. **tui/** — Go 模块，独立 `go.mod`。不依赖 distribution 以外的 Codea 代码。
 2. **distribution/** — 保存所有企业扩展资源（Agent、Skill、Plugin、配置、模板）。不包含 OpenCode Core 源码。Plugin 需要 TypeScript 构建和运行时依赖，内置依赖随发行包交付，不在内网执行 `bun install`。
 3. **runtime/** — 只锁版本号和 Patch，不含 OpenCode 源码。
 4. **packaging/** — 构建脚本负责下载 OpenCode、编译 TUI、组装发行包。通用逻辑只保留一份，平台目录仅放真正有差异的内容。
-5. **Skill 目录** — 每个 Skill 独立保存 SKILL.md、companycode.yaml、manifest.yaml 和 LICENSE，不依赖单一全局 YAML。开源 Skill 和企业 Skill 分目录管理。
+5. **Skill 目录** — 每个 Skill 独立保存 SKILL.md、codea.yaml、manifest.yaml 和 LICENSE，不依赖单一全局 YAML。开源 Skill 和企业 Skill 分目录管理。
 6. **Agent 目录** — 每个企业 Agent 为独立目录（agent.md + manifest.yaml + 输出约束），不采用单文件。
-7. **配置分层** — CompanyCode 配置与 OpenCode 配置明确分离。运行前由 CompanyCode 生成最终 OpenCode 配置目录。
+7. **配置分层** — Codea 配置与 OpenCode 配置明确分离。运行前由 Codea 生成最终 OpenCode 配置目录。
 8. **测试 Fixtures** — 包含 fake-opencode-server 用于模拟 SSE/Reasoning/Tool Approval，TUI 开发时不依赖真实模型。
 
 ### 2.3 配置目录结构
 
 ```
 distribution/config/
-├── companycode/
+├── codea/
 │   ├── defaults.yaml
 │   ├── skills.yaml
 │   └── profiles/
@@ -463,7 +463,7 @@ distribution/config/
 运行时生成：
 
 ```
-~/.companycode/runtime/<project-hash>/
+~/.codea/runtime/<project-hash>/
 └── config/
     ├── opencode.json
     ├── agents/
@@ -511,13 +511,13 @@ Runtime 状态枚举：
   / RuntimeIncompatible / RuntimeCrashed / RuntimeStopping
 ```
 
-**Runtime 元信息记录（`~/.companycode/run/<hash>/runtime.json`）：**
+**Runtime 元信息记录（`~/.codea/run/<hash>/runtime.json`）：**
 
 ```json
 {
   "projectRoot": "/workspace/project",
   "workingDirectory": "/workspace/project/module-a",
-  "configDirectory": "~/.companycode/runtime/<hash>/config",
+  "configDirectory": "~/.codea/runtime/<hash>/config",
   "pid": 12345,
   "port": 49152
 }
@@ -529,7 +529,7 @@ Runtime 状态枚举：
 
 ### 3.2 HTTP API 调用
 
-| CompanyCode 操作 | HTTP 接口 | 说明 |
+| Codea 操作 | HTTP 接口 | 说明 |
 |---|---|---|
 | 健康检查 | `GET /global/health` | 启动时和 Doctor 使用 |
 | 创建 Session | `POST /session` | |
@@ -643,7 +643,7 @@ type RuntimeEvent struct {
 **事件处理原则：**
 
 ```
-已识别事件 → 转换成 CompanyCode 领域事件
+已识别事件 → 转换成 Codea 领域事件
 未识别事件 → 不丢弃 → 保留 RawType + Raw → 标记 RawSensitivity
            → 记录兼容性告警 → 通用事件查看器可展示（经 DLP）
 ```
@@ -741,7 +741,7 @@ SSE 断开 → 发布 runtime_disconnected → 指数退避重连（500ms→1s�
 
 ```
 ┌──────────────────────────────────────────────────┐
-│ CompanyCode  ● Ready   java-backend              │  ← 顶部状态栏（1行，响应式）
+│ Codea  ● Ready   java-backend              │  ← 顶部状态栏（1行，响应式）
 │━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━│
 │                                                  │
 │  User > review OrderService                      │  ← 对话区（可滚动）
@@ -807,7 +807,7 @@ SSE 断开 → 发布 runtime_disconnected → 指数退避重连（500ms→1s�
 - 推理结束：折叠为 `✓ Spent 3.2s thinking`，位于正式回答**之前**
 - 用户按 `Ctrl+T` 或在折叠条聚焦时按 Enter/Space 展开/折叠
 - 模型不返回 reasoning 时：不显示 Thinking、不显示 `Spent 0s thinking`
-- CompanyCode 只展示 Runtime 明确提供的 reasoning 内容，不自行推导
+- Codea 只展示 Runtime 明确提供的 reasoning 内容，不自行推导
 
 ### 4.5 Tool 确认
 
@@ -828,10 +828,10 @@ Runs project tests. No file deletion detected.
 [Y] Allow once   [R] Remember for this project   [N] Deny   [V] View full details
 ```
 
-`[R] Remember for this project` 写入 `.companycode/permissions.yaml`，默认不写入用户全局配置。
+`[R] Remember for this project` 写入 `.codea/permissions.yaml`，默认不写入用户全局配置。
 
 关键限制：
-- 只保存 CompanyCode 生成的结构化规则（`tool + module + action`），不直接保存模型提供的任意 Shell 通配符
+- 只保存 Codea 生成的结构化规则（`tool + module + action`），不直接保存模型提供的任意 Shell 通配符
 - 规则作用域为当前项目，不同项目独立管理
 
 危险命令直接拒绝，显示被拒命令、命中规则、危险原因和建议手动执行。
@@ -917,7 +917,7 @@ Profile 选择优先级：项目显式指定 > 用户显式指定 > 技术栈自
 
 Disabled Skill 不仅设置 Permission deny，而是**根本不放入 Runtime 临时配置目录**。
 
-**关键问题：** OpenCode 除了自定义配置目录，还会读取用户全局配置目录、项目 `.opencode/skills/`、Claude Code 兼容 Skill 目录等来源。即使 CompanyCode 临时目录只放 Enabled Skill，用户机器上的其他 Skill 仍可能被 OpenCode 发现。
+**关键问题：** OpenCode 除了自定义配置目录，还会读取用户全局配置目录、项目 `.opencode/skills/`、Claude Code 兼容 Skill 目录等来源。即使 Codea 临时目录只放 Enabled Skill，用户机器上的其他 Skill 仍可能被 OpenCode 发现。
 
 **因此必须启用 Runtime 配置隔离模式：**
 
@@ -935,7 +935,7 @@ Disabled Skill 不仅设置 Permission deny，而是**根本不放入 Runtime �
 **Skill 来源等级：**
 
 ```
-1. Approved — CompanyCode 发行包预装并审核通过
+1. Approved — Codea 发行包预装并审核通过
 2. Project  — 项目自带 Skill（.opencode/skills/ 等），经本地校验后可用
 3. User     — 用户级自定义 Skill
 ```
@@ -963,7 +963,7 @@ general:
 
 | 来源 | 说明 |
 |---|---|
-| Approved Plugin | CompanyCode 发行包预装并审核通过 |
+| Approved Plugin | Codea 发行包预装并审核通过 |
 | Project Plugin | 项目自带 Plugin（`.opencode/plugins/` 等） |
 | User Plugin | 用户级自定义 Plugin |
 
@@ -998,13 +998,13 @@ plugins:
 
 第二层：进程环境隔离
   若原生配置无法隔离项目/用户级 Skill，为 Runtime 指定独立环境：
-  HOME=<companycode-runtime-home>
-  XDG_CONFIG_HOME=<companycode-runtime-home>/.config
+  HOME=<codea-runtime-home>
+  XDG_CONFIG_HOME=<codea-runtime-home>/.config
   注意：不能影响项目文件和工具链执行
 
 第三层：极小 Patch
   若 OpenCode 仍不可避免地扫描项目 .opencode/skills/，
-  修改 Skill Discovery 搜索路径，使 CompanyCode 模式仅加载生成目录。
+  修改 Skill Discovery 搜索路径，使 Codea 模式仅加载生成目录。
   Patch 纳入契约测试。
 ```
 
@@ -1023,7 +1023,7 @@ plugins:
 
 ```
 发行包包含所有 Installed Skill
-  → CompanyCode 计算 Effective Skills
+  → Codea 计算 Effective Skills
   → 生成 Runtime 配置目录
   → 只链接/复制 Enabled Skill
   → 以隔离模式启动 OpenCode Runtime
@@ -1075,7 +1075,7 @@ optionalSkills:
   - security-review
 ```
 
-CompanyCode 启动前校验：required Skill 未启用 → Agent 不可用或提示用户启用。
+Codea 启动前校验：required Skill 未启用 → Agent 不可用或提示用户启用。
 
 ### 5.7 按需加载流程
 
@@ -1087,7 +1087,7 @@ CompanyCode 启动前校验：required Skill 未启用 → Agent 不可用或提
   → OpenCode 执行 skill Permission 检查
   → 读取完整 SKILL.md
   → Skill 内容加入当前任务上下文
-  → CompanyCode 从 Tool/SSE 事件记录 Loaded 状态
+  → Codea 从 Tool/SSE 事件记录 Loaded 状态
 ```
 
 ---
@@ -1096,9 +1096,9 @@ CompanyCode 启动前校验：required Skill 未启用 → Agent 不可用或提
 
 ### 6.1 私有模型接入
 
-**配置层：** CompanyCode 配置 → 生成 OpenCode `opencode.json` → `OPENCODE_CONFIG_DIR` → OpenCode Provider
+**配置层：** Codea 配置 → 生成 OpenCode `opencode.json` → `OPENCODE_CONFIG_DIR` → OpenCode Provider
 
-CompanyCode 配置：
+Codea 配置：
 
 ```yaml
 schemaVersion: 1
@@ -1118,7 +1118,7 @@ model:
 
 API Key 默认通过环境变量引用，不写入普通配置文件。V1 如需保存本地，使用独立 secrets 文件（权限 0600），日志和 Doctor 永不打印原值。
 
-**连接测试（`company-code init`）：** 必须测试普通对话、流式、Tool Call 和 Reasoning 四项。Tool Call 不支持时判定为配置不合格；Reasoning 不支持时只关闭思考展示。
+**连接测试（`codea init`）：** 必须测试普通对话、流式、Tool Call 和 Reasoning 四项。Tool Call 不支持时判定为配置不合格；Reasoning 不支持时只关闭思考展示。
 
 **重试约束：** Go TUI 只负责连接 OpenCode Server 的网络重试；OpenCode Runtime 负责单次模型请求；模型 Gateway 负责底层重试。涉及 Tool Call 的请求不能无条件重试。
 
@@ -1135,9 +1135,9 @@ API Key 默认通过环境变量引用，不写入普通配置文件。V1 如需
 **发行包结构：**
 
 ```
-company-code-1.0.0-darwin-arm64/
+codea-1.0.0-darwin-arm64/
 ├── bin/
-│   ├── company-code
+│   ├── codea
 │   └── opencode
 ├── distribution/
 │   ├── agents/  skills/  plugins/  config/  templates/
@@ -1157,7 +1157,7 @@ company-code-1.0.0-darwin-arm64/
 ```json
 {
   "schemaVersion": 1,
-  "packageId": "company-code-1.0.0-darwin-arm64+20260730.1",
+  "packageId": "codea-1.0.0-darwin-arm64+20260730.1",
   "companyCodeVersion": "1.0.0",
   "buildId": "20260730.1",
   "openCodeVersion": "x.y.z",
@@ -1166,7 +1166,7 @@ company-code-1.0.0-darwin-arm64/
   "configSchemaVersion": 1,
   "createdAt": "2026-07-30T12:00:00Z",
   "files": [
-    {"path": "bin/company-code", "sha256": "abc...", "size": 15432100, "executable": true}
+    {"path": "bin/codea", "sha256": "abc...", "size": 15432100, "executable": true}
   ],
   "skills": [],
   "plugins": []
@@ -1236,9 +1236,9 @@ distribution/plugins/
 **版本目录：**
 
 ```
-~/.companycode/
+~/.codea/
 ├── bin/
-│   └── company-code          # 稳定启动入口
+│   └── codea          # 稳定启动入口
 ├── config/                    # 用户配置（不随版本覆盖）
 ├── data/  logs/  backups/
 └── versions/
@@ -1279,7 +1279,7 @@ distribution/plugins/
 
 核心原则：新版本和新配置必须先在隔离环境验证，通过后才能切换。
 
-**同版本覆盖策略：** 默认拒绝重复安装，提供 `company-code repair <package>` 命令（解压到新临时目录 → 完整校验 → 原子替换整个版本目录）。
+**同版本覆盖策略：** 默认拒绝重复安装，提供 `codea repair <package>` 命令（解压到新临时目录 → 完整校验 → 原子替换整个版本目录）。
 
 **回滚流程：**
 
@@ -1297,7 +1297,7 @@ distribution/plugins/
 
 **配置迁移：** 配置 `schemaVersion` 定义迁移路径。迁移器：`FromVersion → ToVersion`，只能向副本迁移，失败退出时不覆盖。
 
-**升级锁：** `~/.companycode/update.lock` 防止两个终端同时升级。运行中不允许升级。
+**升级锁：** `~/.codea/update.lock` 防止两个终端同时升级。运行中不允许升级。
 
 ---
 
@@ -1533,7 +1533,7 @@ type AgentHandoff struct {
 | 确定性只读命令 | allow | git status/diff/log, ls, cat（非敏感路径）等 |
 | 明确高危命令 | deny | rm -rf, git reset --hard, chmod 777 等 |
 | Agent/Subagent | allow | 保留原生多 Agent 能力 |
-| 批准 Skill | allow | CompanyCode 预装 Skill |
+| 批准 Skill | allow | Codea 预装 Skill |
 | 项目 Skill | ask | 首次发现时校验、展示来源、用户确认 |
 | 内网 Maven/npm/PyPI/Go Proxy | ask/allow | 访问白名单镜像时允许 |
 | 公网地址 | deny | |
@@ -1615,16 +1615,16 @@ Knowledge sources:
 ```
 1. 校验压缩包 SHA256 → 校验 Manifest → 校验平台架构
 2. 创建 staging 目录 → 解压并校验全部文件
-3. 创建 ~/.companycode 目录 → 安装到 versions/<version+buildId>
+3. 创建 ~/.codea 目录 → 安装到 versions/<version+buildId>
 4. 原子设置 current → 创建稳定启动入口 → 设置文件权限
 5. 执行基础 Doctor → 提示用户执行 init
 ```
 
-支持非交互部署：`company-code init --config company-defaults.yaml --non-interactive`
+支持非交互部署：`codea init --config company-defaults.yaml --non-interactive`
 
-**文件权限：** `~/.companycode/` 0700、secrets 600、logs 700、bin/* 755、普通配置 600。
+**文件权限：** `~/.codea/` 0700、secrets 600、logs 700、bin/* 755、普通配置 600。
 
-**稳定启动入口：** `~/.companycode/bin/company-code` 读取 current 再执行真实程序，不直接链接到可变路径。Windows 单独处理。
+**稳定启动入口：** `~/.codea/bin/codea` 读取 current 再执行真实程序，不直接链接到可变路径。Windows 单独处理。
 
 **Doctor 检查分类：**
 
@@ -1738,7 +1738,7 @@ Parity 不是最后阶段补测，而是从 Phase 2 开始持续运行的回归�
 | G8 | API Doc 虚构字段 | 数量为 0 |
 | G9 | TUI Reasoning 展示 | 正确分离思考与回答，支持折叠和展开 |
 | G10 | 安全控制 | 高危命令直接拒绝；写操作默认要求确认 |
-| G11 | 原生能力完整性 | 锁定版本 OpenCode 核心能力清单全部可通过 CompanyCode 使用；未识别 SSE 事件不得静默丢弃 |
+| G11 | 原生能力完整性 | 锁定版本 OpenCode 核心能力清单全部可通过 Codea 使用；未识别 SSE 事件不得静默丢弃 |
 | G12 | 能力层完整性 | 核心功能可达率、原生 Tool 可调用率、事件映射或透传率、API 能力无丢失率均必须 100% |
 | G12.1 | 任务效果 Parity | 同模型/同 Runtime/同权限条件下，General 任务完成率不低于原版 OpenCode 的 95%；任何核心任务（读写文件、Shell、Tool Approval、Session、Abort、Agent/Subagent、Skill、错误显示）不得失败 |
 | G13 | 事件零静默丢失 | Golden SSE 样本中所有事件均被映射或 Raw 透传，静默丢失数量为 0 |
@@ -1750,7 +1750,7 @@ Parity 不是最后阶段补测，而是从 Phase 2 开始持续运行的回归�
 | 术语 | 含义 |
 |---|---|
 | OpenCode Runtime | 以 `opencode serve` 模式运行的 OpenCode 进程 |
-| RuntimeClient | Go TUI 侧定义的 CompanyCode 内部接口 |
+| RuntimeClient | Go TUI 侧定义的 Codea 内部接口 |
 | OpenCodeAdapter | RuntimeClient 的 OpenCode HTTP/SSE 实现 |
 | Effective Skills | 经过四级配置合并后的最终 Skill 启用状态 |
 | Runtime Password | 每次启动生成的 Basic Auth 随机密码 |

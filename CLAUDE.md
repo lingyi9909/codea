@@ -1,4 +1,4 @@
-# CompanyCode V1
+# Codea V1
 
 企业内网 AI 编码助手，基于 OpenCode Runtime + Go TUI 的 C+ 混合架构。
 
@@ -15,8 +15,8 @@
 
 ## 设计文档
 
-- **技术设计**：`docs/superpowers/specs/2026-07-30-companycode-v1-design.md`
-- **实施计划**：`docs/superpowers/plans/2026-07-30-companycode-v1-plan.md`
+- **技术设计**：`docs/superpowers/specs/2026-07-30-codea-v1-design.md`
+- **实施计划**：`docs/superpowers/plans/2026-07-30-codea-v1-plan.md`
 
 ## 五项设计原则
 
@@ -35,7 +35,7 @@
 
 ### 执行顺序
 
-按 `docs/superpowers/plans/2026-07-30-companycode-v1-plan.md` 中的 Task 0 → Task 21 逐个执行：
+按 `docs/superpowers/plans/2026-07-30-codea-v1-plan.md` 中的 Task 0 → Task 21 逐个执行：
 
 | 阶段 | Tasks | 内容 |
 |------|-------|------|
