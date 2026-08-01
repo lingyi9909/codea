@@ -1107,7 +1107,7 @@ model:
   protocol: openai-compatible
   baseUrl: https://api.deepseek.com/v1
   modelId: deepseek-chat
-  apiKeyEnv: COMPANYCODE_MODEL_API_KEY
+  apiKeyEnv: CODEA_MODEL_API_KEY
   timeout: 120s
   maxRetries: 2
   capabilities:
@@ -1158,7 +1158,7 @@ codea-1.0.0-darwin-arm64/
 {
   "schemaVersion": 1,
   "packageId": "codea-1.0.0-darwin-arm64+20260730.1",
-  "companyCodeVersion": "1.0.0",
+  "codeaVersion": "1.0.0",
   "buildId": "20260730.1",
   "openCodeVersion": "x.y.z",
   "openCodeCommit": "abc1234",

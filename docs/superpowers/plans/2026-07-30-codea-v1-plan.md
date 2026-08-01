@@ -253,37 +253,37 @@ codea/
 **Goal:** 建立正确的项目目录结构，Go Module 统一在 `tui/` 下，确保 `go test ./...` 可运行。
 
 **Files:**
-- Create: `codea/tui/go.mod`
+- Create: `tui/go.mod`
 - Create: `codea/tui/cmd/codea/main.go`
 - Create: `codea/tui/cmd/parity-runner/main.go`
-- Create: `codea/Makefile`
-- Create: `codea/VERSION`
-- Create: `codea/.gitignore`
+- Create: `Makefile`
+- Create: `VERSION`
+- Create: `.gitignore`
 - Create: `codea/.editorconfig`
-- Create: `codea/runtime/version.json`
-- Create: `codea/runtime/capabilities.yaml`
-- Create: `codea/scripts/run-phase0-gates.sh`
+- Create: `runtime/version.json`
+- Create: `runtime/capabilities.yaml`
+- Create: `scripts/run-phase0-gates.sh`
 
 - [ ] **Step 1: 创建项目目录结构**
 
 ```bash
-mkdir -p codea/tui/cmd/codea
-mkdir -p codea/tui/cmd/parity-runner
-mkdir -p codea/tui/internal/{app,runtime,opencode,supervisor,reasoning,components,theme,config,update,doctor,capability,parity}
-mkdir -p codea/tui/tests/{contract,parity,e2e/code-review,e2e/unit-test,e2e/api-documentation,fixtures/fake-opencode-server}
-mkdir -p codea/distribution/{agents,skills/builtin,skills/enterprise,plugins/src/tools,plugins/dist,config/codea/profiles,config/opencode,templates}
-mkdir -p codea/runtime/{openapi,patches}
-mkdir -p codea/packaging/{config,scripts,platform/macos,platform/windows}
-mkdir -p codea/tests/{offline,upgrade}
-mkdir -p codea/devtools/{manifest-gen,skill-lint,license-report,sse-recorder}
-mkdir -p codea/scripts
-mkdir -p codea/docs/superpowers/{specs,plans}
+mkdir -p tui/cmd/codea
+mkdir -p tui/cmd/parity-runner
+mkdir -p tui/internal/{app,runtime,opencode,supervisor,reasoning,components,theme,config,update,doctor,capability,parity}
+mkdir -p tui/tests/{contract,parity,e2e/code-review,e2e/unit-test,e2e/api-documentation,fixtures/fake-opencode-server}
+mkdir -p distribution/{agents,skills/builtin,skills/enterprise,plugins/src/tools,plugins/dist,config/codea/profiles,config/opencode,templates}
+mkdir -p runtime/{openapi,patches}
+mkdir -p packaging/{config,scripts,platform/macos,platform/windows}
+mkdir -p tests/{offline,upgrade}
+mkdir -p devtools/{manifest-gen,skill-lint,license-report,sse-recorder}
+mkdir -p scripts
+mkdir -p docs/superpowers/{specs,plans}
 ```
 
 - [ ] **Step 2: 初始化 Go Module**
 
 ```bash
-cd codea/tui
+cd tui
 go mod init codea/tui
 ```
 
@@ -399,8 +399,8 @@ func main() {
 - [ ] **Step 9: 验证构建和测试命令**
 
 ```bash
-cd codea && make build
-cd codea/tui && go test ./...
+make build
+cd tui && go test ./...
 ```
 
 Expected: `build/codea` 二进制生成；`go test ./...` 无测试但通过。
@@ -408,7 +408,7 @@ Expected: `build/codea` 二进制生成；`go test ./...` 无测试但通过。
 - [ ] **Step 10: Commit**
 
 ```bash
-cd codea && git init && git add -A
+git init && git add -A
 git commit -m "feat: project skeleton with correct Go module and test structure"
 ```
 
@@ -792,7 +792,7 @@ func main() {
 - [ ] **Step 3: 运行生成器**
 
 ```bash
-cd codea/tui
+cd tui
 go run ./cmd/openapi-gen \
   ../runtime/openapi/opencode-$(cat ../VERSION).json \
   internal/opencode/dto.go
@@ -1295,7 +1295,7 @@ func TestNoSilentLossOfRequired(t *testing.T) {
 - [ ] **Step 6: 运行测试**
 
 ```bash
-cd codea/tui && go test ./tests/parity/... ./internal/capability/... -v
+cd tui && go test ./tests/parity/... ./internal/capability/... -v
 ```
 
 Expected: 所有测试 PASS。静默丢失检测正确。
@@ -2320,7 +2320,7 @@ func killProcess(cmd *exec.Cmd) {
 - [ ] **Step 4: 运行构建验证跨平台编译**
 
 ```bash
-cd codea/tui
+cd tui
 GOOS=darwin GOARCH=arm64 go build ./internal/supervisor/...
 GOOS=windows GOARCH=amd64 go build ./internal/supervisor/...
 ```
@@ -2561,7 +2561,7 @@ func TestTagParserCrossChunk(t *testing.T) {
 - [ ] **Step 4: 运行测试**
 
 ```bash
-cd codea/tui && go test ./internal/reasoning/... ./tests/contract/... -v
+cd tui && go test ./internal/reasoning/... ./tests/contract/... -v
 ```
 
 - [ ] **Step 5: Commit**
@@ -2728,7 +2728,7 @@ func main() {
 - [ ] **Step 6: 安装依赖并验证**
 
 ```bash
-cd codea/tui
+cd tui
 go get github.com/charmbracelet/bubbletea
 go get github.com/charmbracelet/bubbles
 go get github.com/charmbracelet/lipgloss
@@ -2866,7 +2866,7 @@ func TestGoldenEventsNoSilentDrop(t *testing.T) {
 - [ ] **Step 4: 运行 Parity 测试**
 
 ```bash
-cd codea/tui && go test ./tests/parity/... -v
+cd tui && go test ./tests/parity/... -v
 ```
 
 - [ ] **Step 5: Commit**
@@ -3594,7 +3594,7 @@ git add -A && git commit -m "feat: API Documentation Generator agent with determ
 
 ```yaml
 schemaVersion: 1
-companyCodeVersion: "0.1.0"
+codeaVersion: "0.1.0"
 platforms:
   - os: darwin, arch: arm64
   - os: darwin, arch: x64
@@ -3994,9 +3994,9 @@ func main() {
 - [ ] **Step 3: 运行全量测试**
 
 ```bash
-cd codea/tui && go test ./...
-cd codea && ./scripts/run-phase0-gates.sh
-cd codea && go run ./tui/cmd/parity-runner
+cd tui && go test ./...
+./scripts/run-phase0-gates.sh
+go run ./tui/cmd/parity-runner
 ```
 
 - [ ] **Step 4: Commit**
