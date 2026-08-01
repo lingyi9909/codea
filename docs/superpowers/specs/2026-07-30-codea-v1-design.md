@@ -1686,7 +1686,7 @@ Doctor 严重级别：PASS / WARN / FAIL / SKIP。核心检查失败时返回非
 
 | 阶段 | Task | 内容 |
 |---|---|---|
-| Phase 0 | Spike 1-5 | 验证 Server API、SSE、Tool Approval、Reasoning、Skill 隔离 |
+| Phase 0 | Spike 1-6 | 验证 Server 离线启动、SSE、Tool Approval、Reasoning、Skill 隔离、Enterprise/General 模式隔离 |
 | Phase 1 | 能力盘点 | OpenCode 原生能力清单 + General Agent Parity Harness + Golden Event 录制 |
 | Phase 2 | T1-T2 + T12-T14 | OpenCode 基线 + 私有模型 + Go TUI 基础（完成能力透传） |
 | Phase 3 | General 对齐 | Session/Resume、Tool、Agent/Subagent、Skill(compatible)、Shell、Edit 全能力对齐 |
@@ -1720,6 +1720,7 @@ Parity 不是最后阶段补测，而是从 Phase 2 开始持续运行的回归�
 | S3 | Tool Approval | Go TUI 能接收权限申请事件，批准/拒绝后 Runtime 正确执行 |
 | S4 | Reasoning 接收 | Go 客户端能实时接收并区分 reasoning 与 answer；若无法接收则定位丢失层 |
 | S5 | Skill 隔离 | Enabled Skill 隔离验证通过：其他来源 Skill 不被注入 |
+| S6 | Enterprise/General 模式隔离 | Enterprise 模式下项目 Skill 不被注入；General compatible 模式下项目 Skill 经校验后可加载；General strict 模式下项目 Skill 不被注入 |
 
 ### B.2 V1 发布门禁
 
