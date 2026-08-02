@@ -1,0 +1,11 @@
+{
+  "openCodeVersion": "TBD-by-spike",
+  "openCodeCommit": "TBD-by-spike",
+  "openCodeRepo": "https://github.com/anomalyco/opencode",
+  "lockedAt": "2026-07-30",
+  "platforms": {
+    "darwin-arm64": {"checksum": "TBD-by-spike"},
+    "darwin-x64": {"checksum": "TBD-by-spike"},
+    "windows-x64": {"checksum": "TBD-by-spike"}
+  }
+}

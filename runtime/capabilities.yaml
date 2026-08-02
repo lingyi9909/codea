@@ -1,0 +1,23 @@
+schemaVersion: 1
+openCodeVersion: TBD-by-spike
+capabilities:
+  sessions: required
+  streaming: required
+  reasoning: required
+  fileRead: required
+  fileWrite: required
+  edit: required
+  bash: required
+  toolApproval: required
+  agents: required
+  subagents: required
+  skills: required
+  plugins: required
+  abort: required
+  messageHistory: required
+  contextCompaction: required
+tui:
+  sessionList: required
+  sessionResume: required
+  toolApproval: required
+  rawEventFallback: required

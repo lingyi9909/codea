@@ -1,0 +1,11 @@
+build/
+packaging/staging/
+*.exe
+*.dll
+*.so
+*.dylib
+.DS_Store
+Thumbs.db
+.env
+*.key
+*.p12
