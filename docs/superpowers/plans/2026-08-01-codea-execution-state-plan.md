@@ -29,6 +29,7 @@
 - Create: `tests/execution-state/state_validator_test.sh`
 - Modify: `AGENTS.md`
 - Modify: `CLAUDE.md`
+- Modify: `docs/codea-v1-handoff.md`
 - Modify: `docs/superpowers/plans/2026-07-30-codea-v1-plan.md`
 
 **Interfaces:**
@@ -314,6 +315,8 @@ PY
 - Task 0 Files 增加 Modify `docs/execution-state.yaml` 和 Create `docs/task-reports/task-00.md`。
 - Task 0 验证步骤增加 `./scripts/check-execution-state.sh`。
 - Task 0 完成后将状态更新为 `awaiting_acceptance` 并停止，人工验收前不得开始 Task 1。
+
+更新 `docs/codea-v1-handoff.md`，将当前阶段改为 Task E0 已实现并通过自动验证、等待人工验收；Task 0 仍为 `pending`，人工验收 E0 前不得开始。
 
 - [ ] **Step 7: 运行校验和测试**
 

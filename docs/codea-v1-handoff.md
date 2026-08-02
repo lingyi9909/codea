@@ -6,11 +6,11 @@
 - 工作分支：`develop`，后续直接在该分支按顺序修改，不另建功能分支
 - 技术设计与主实施计划：已评审通过
 - 执行状态机制设计与实施计划：已评审通过
-- 当前执行阶段：Task E0 尚未开始，Task 0 尚未开始
-- 唯一下一步：只执行 Task E0，建立可校验、可恢复的执行状态机制
-- 边界：Task E0 完成并经人工验收前，不得开始 Task 0
+- 当前执行阶段：Task E0 已实现并通过自动验证，等待人工验收；Task 0 尚未开始
+- 唯一下一步：人工评估并明确验收 Task E0
+- 边界：Task E0 经人工验收前，不得开始 Task 0
 
-当前仓库尚未包含 `docs/execution-state.yaml` 属于预期状态；该文件及其校验器将在 Task E0 中创建。
+当前仓库已包含 `docs/execution-state.yaml` 及其校验器。状态文件保持 Task 0 为 `pending`，`nextAction` 为等待 Task E0 人工验收。
 
 ## 2. 权威文档与读取顺序
 
@@ -115,9 +115,9 @@ Task Gate 状态：
 9. API Key 不得写入普通配置或日志。
 10. 状态文件、Task 报告、验证证据和实际 Git Commit 必须一致。
 
-## 7. 当前唯一执行范围：Task E0
+## 7. 当前暂停点：Task E0 人工验收
 
-Task E0 只负责建立执行状态与恢复协议，主要交付物为：
+Task E0 已完成实现和自动验证，交付物为：
 
 - `docs/execution-state.yaml`
 - `docs/task-reports/README.md`
@@ -125,7 +125,7 @@ Task E0 只负责建立执行状态与恢复协议，主要交付物为：
 - `tests/execution-state/state_validator_test.sh`
 - `AGENTS.md`、`CLAUDE.md` 和主实施计划中的恢复与验收规则
 
-必须按照 E0 计划先写失败测试，再实现状态文件和校验器。完成后运行计划要求的全部检查，将 E0 结果提交并停止，等待人工评估。不得顺带创建 Task 0 的项目骨架。
+E0 已按计划完成 RED → GREEN 测试、状态校验和 Git 检查，当前必须停止等待人工评估。不得顺带创建 Task 0 的项目骨架。
 
 ## 8. E0 验收后的 Task 0
 
@@ -196,4 +196,4 @@ Task 0 验收后，Task 1 执行 S1～S6：
 
 ## 11. 当前交接结论
 
-项目可以继续执行，但正式开发尚未开始。下一位执行者只能先完成 Task E0；E0 经人工验收后才能开始 Task 0，Task 0 经人工验收后才能开始 Task 1 的 Phase 0 S1～S6。任何阶段均不得一次性开发完整 V1。
+Task E0 已实现并通过自动验证，正式产品开发尚未开始。当前必须等待人工验收 E0；验收后才能开始 Task 0，Task 0 经人工验收后才能开始 Task 1 的 Phase 0 S1～S6。任何阶段均不得一次性开发完整 V1。
