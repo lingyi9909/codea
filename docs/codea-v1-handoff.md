@@ -6,8 +6,8 @@
 - 工作分支：`develop`，后续直接在该分支按顺序修改，不另建功能分支
 - 技术设计与主实施计划：已评审通过
 - 执行状态机制设计与实施计划：已评审通过
-- 当前执行阶段：Task E0 已人工验收通过；Task 0 在 Step 2 因缺少 Go 1.22+ 阻塞
-- 唯一下一步：安装 Go 1.22+，从 Task 0 Step 2 恢复
+- 当前执行阶段：Task E0 已人工验收通过；Task 0 因缺少 Go 1.22+ 阻塞
+- 唯一下一步：安装 Go 1.22+，从 Task 0 Step 1 重新执行
 - 边界：Task 0 进入 `awaiting_acceptance` 后停止，人工验收前不得开始 Task 1
 - 已知非阻塞改进：项目全部完成时补充校验终态 `current.task = 21` 的一致性
 
@@ -116,7 +116,7 @@ Task Gate 状态：
 9. API Key 不得写入普通配置或日志。
 10. 状态文件、Task 报告、验证证据和实际 Git Commit 必须一致。
 
-## 7. 当前阻塞点：Task 0 Step 2
+## 7. 当前阻塞点：Task 0
 
 Task E0 已完成实现和自动验证，交付物为：
 
@@ -126,7 +126,7 @@ Task E0 已完成实现和自动验证，交付物为：
 - `tests/execution-state/state_validator_test.sh`
 - `AGENTS.md`、`CLAUDE.md` 和主实施计划中的恢复与验收规则
 
-E0 已按计划完成 RED → GREEN 测试、状态校验、Git 检查和人工验收。Task 0 Step 1 已创建本地目录结构；Step 2 执行 `go mod init codea/tui` 时因系统无 Go 可执行文件而阻塞。安装 Go 1.22+ 后从 Step 2 恢复，不得开始 Task 1。
+E0 已按计划完成 RED → GREEN 测试、状态校验、Git 检查和人工验收。Task 0 Step 1 只创建了本地空目录，Git 无法持久化；Step 2 执行 `go mod init codea/tui` 时因系统无 Go 可执行文件而阻塞。安装 Go 1.22+ 后必须从 Step 1 重放目录创建，再继续 Step 2，不得开始 Task 1。
 
 ## 8. E0 验收后的 Task 0
 

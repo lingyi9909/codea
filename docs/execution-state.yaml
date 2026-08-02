@@ -3,12 +3,12 @@ project: codea-v1
 plan: docs/superpowers/plans/2026-07-30-codea-v1-plan.md
 current:
   task: 0
-  step: 2
+  step: 1
   status: blocked
-  nextAction: Install Go 1.22+ and rerun Task 0 Step 2
+  nextAction: Install Go 1.22+ and rerun Task 0 from Step 1
 checkpoint:
   commit: 4376765d386eb99874d6df77812a6cb30c79340b
-  updatedAt: "2026-08-02T06:10:28Z"
+  updatedAt: "2026-08-02T06:12:25Z"
 verification:
   status: unable_to_run
   commands:
@@ -19,13 +19,13 @@ verification:
       exitCode: 127
       result: unable_to_run
   errorSummary: "Go executable is not installed or available on PATH"
-  recoveryAdvice: "Install Go 1.22+ and rerun Task 0 from Step 2"
+  recoveryAdvice: "Install Go 1.22+ and rerun Task 0 from Step 1 because empty directories are not persisted by Git"
 taskGate:
   status: unable_to_evaluate
 humanAcceptance:
   accepted: false
 tasks:
-  "0": {status: blocked, completedSteps: [1], verificationStatus: unable_to_run, taskGateStatus: unable_to_evaluate, humanAccepted: false, checkpoint: 4376765d386eb99874d6df77812a6cb30c79340b, report: docs/task-reports/task-00.md}
+  "0": {status: blocked, completedSteps: [], verificationStatus: unable_to_run, taskGateStatus: unable_to_evaluate, humanAccepted: false, checkpoint: 4376765d386eb99874d6df77812a6cb30c79340b, report: docs/task-reports/task-00.md}
   "1": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-01.md}
   "2": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-02.md}
   "3": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-03.md}
