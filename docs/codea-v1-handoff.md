@@ -6,12 +6,12 @@
 - 工作分支：`develop`，后续直接在该分支按顺序修改，不另建功能分支
 - 技术设计与主实施计划：已评审通过
 - 执行状态机制设计与实施计划：已评审通过
-- 当前执行阶段：Task E0 已人工验收通过；Task 0 正在执行 Step 1
-- 唯一下一步：严格执行 Task 0，不得开始 Task 1
+- 当前执行阶段：Task E0 已人工验收通过；Task 0 在 Step 2 因缺少 Go 1.22+ 阻塞
+- 唯一下一步：安装 Go 1.22+，从 Task 0 Step 2 恢复
 - 边界：Task 0 进入 `awaiting_acceptance` 后停止，人工验收前不得开始 Task 1
 - 已知非阻塞改进：项目全部完成时补充校验终态 `current.task = 21` 的一致性
 
-当前仓库已包含 `docs/execution-state.yaml` 及其校验器。状态文件已将 Task 0 标记为 `in_progress`。
+当前仓库已包含 `docs/execution-state.yaml` 及其校验器。状态文件已将 Task 0 标记为 `blocked`，并记录失败命令和恢复建议。
 
 ## 2. 权威文档与读取顺序
 
@@ -116,7 +116,7 @@ Task Gate 状态：
 9. API Key 不得写入普通配置或日志。
 10. 状态文件、Task 报告、验证证据和实际 Git Commit 必须一致。
 
-## 7. 当前执行范围：Task 0
+## 7. 当前阻塞点：Task 0 Step 2
 
 Task E0 已完成实现和自动验证，交付物为：
 
@@ -126,7 +126,7 @@ Task E0 已完成实现和自动验证，交付物为：
 - `tests/execution-state/state_validator_test.sh`
 - `AGENTS.md`、`CLAUDE.md` 和主实施计划中的恢复与验收规则
 
-E0 已按计划完成 RED → GREEN 测试、状态校验、Git 检查和人工验收。当前只允许执行 Task 0，不得顺带开始 Task 1。
+E0 已按计划完成 RED → GREEN 测试、状态校验、Git 检查和人工验收。Task 0 Step 1 已创建本地目录结构；Step 2 执行 `go mod init codea/tui` 时因系统无 Go 可执行文件而阻塞。安装 Go 1.22+ 后从 Step 2 恢复，不得开始 Task 1。
 
 ## 8. E0 验收后的 Task 0
 
@@ -197,4 +197,4 @@ Task 0 验收后，Task 1 执行 S1～S6：
 
 ## 11. 当前交接结论
 
-Task E0 已人工验收通过，Task 0 正在执行。Task 0 完成自动验证后必须进入 `awaiting_acceptance` 并停止；只有 Task 0 经人工验收后才能开始 Task 1 的 Phase 0 S1～S6。任何阶段均不得一次性开发完整 V1。
+Task E0 已人工验收通过，Task 0 当前为 `blocked`。安装 Go 1.22+ 并完成 Task 0 自动验证后，状态必须进入 `awaiting_acceptance` 并停止；只有 Task 0 经人工验收后才能开始 Task 1 的 Phase 0 S1～S6。任何阶段均不得一次性开发完整 V1。

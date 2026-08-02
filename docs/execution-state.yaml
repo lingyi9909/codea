@@ -3,23 +3,29 @@ project: codea-v1
 plan: docs/superpowers/plans/2026-07-30-codea-v1-plan.md
 current:
   task: 0
-  step: 1
-  status: in_progress
-  nextAction: Execute Task 0 Step 1
+  step: 2
+  status: blocked
+  nextAction: Install Go 1.22+ and rerun Task 0 Step 2
 checkpoint:
-  commit: 163d8cef0e8a804b27d9e3d57368c69aef1e3061
-  updatedAt: "2026-08-02T06:07:27Z"
+  commit: 4376765d386eb99874d6df77812a6cb30c79340b
+  updatedAt: "2026-08-02T06:10:28Z"
 verification:
-  status: not_run
-  commands: []
-  errorSummary: null
-  recoveryAdvice: null
+  status: unable_to_run
+  commands:
+    - command: make build
+      exitCode: 2
+      result: expected_red
+    - command: cd tui && go mod init codea/tui
+      exitCode: 127
+      result: unable_to_run
+  errorSummary: "Go executable is not installed or available on PATH"
+  recoveryAdvice: "Install Go 1.22+ and rerun Task 0 from Step 2"
 taskGate:
-  status: not_evaluated
+  status: unable_to_evaluate
 humanAcceptance:
   accepted: false
 tasks:
-  "0": {status: in_progress, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: 163d8cef0e8a804b27d9e3d57368c69aef1e3061, report: docs/task-reports/task-00.md}
+  "0": {status: blocked, completedSteps: [1], verificationStatus: unable_to_run, taskGateStatus: unable_to_evaluate, humanAccepted: false, checkpoint: 4376765d386eb99874d6df77812a6cb30c79340b, report: docs/task-reports/task-00.md}
   "1": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-01.md}
   "2": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-02.md}
   "3": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-03.md}
