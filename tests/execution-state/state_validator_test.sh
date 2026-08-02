@@ -24,6 +24,24 @@ expect_fail() {
   fi
 }
 
+expect_pass() {
+  local name="$1"
+  local file="$2"
+  local expected="$3"
+  local output
+  if ! output="$("$CHECKER" "$file" 2>&1)"; then
+    echo "FAIL: $name was rejected"
+    echo "Actual: $output"
+    exit 1
+  fi
+  if [[ "$output" != *"$expected"* ]]; then
+    echo "FAIL: $name returned the wrong output"
+    echo "Expected: $expected"
+    echo "Actual: $output"
+    exit 1
+  fi
+}
+
 "$CHECKER" "$STATE"
 
 python3 - "$STATE" "$TMP_DIR" <<'PY'
@@ -108,6 +126,27 @@ accepted_pending = copy.deepcopy(data)
 accepted_pending["humanAcceptance"]["accepted"] = True
 accepted_pending["tasks"]["0"]["humanAccepted"] = True
 (target / "accepted-pending.yaml").write_text(yaml.safe_dump(accepted_pending, sort_keys=False))
+
+future_active = copy.deepcopy(data)
+future_active["tasks"]["1"]["status"] = "in_progress"
+(target / "future-active.yaml").write_text(yaml.safe_dump(future_active, sort_keys=False))
+
+terminal_report = target / "terminal-report.md"
+terminal_report.write_text("# Terminal Task Report\n")
+terminal = copy.deepcopy(data)
+for task in terminal["tasks"].values():
+    task.update({
+        "status": "completed",
+        "verificationStatus": "pass",
+        "taskGateStatus": "pass",
+        "humanAccepted": True,
+        "report": str(terminal_report),
+    })
+terminal["current"].update({"task": 21, "step": 1, "status": "completed"})
+terminal["verification"]["status"] = "pass"
+terminal["taskGate"]["status"] = "pass"
+terminal["humanAcceptance"]["accepted"] = True
+(target / "terminal.yaml").write_text(yaml.safe_dump(terminal, sort_keys=False))
 PY
 
 expect_fail "duplicate active tasks" "$TMP_DIR/duplicate-active.yaml" "FAIL: more than one Task is active"
@@ -122,5 +161,7 @@ expect_fail "verification failed while pending" "$TMP_DIR/verification-failed-pe
 expect_fail "task gate unable while pending" "$TMP_DIR/gate-unable-pending.yaml" "FAIL: unable_to_evaluate Task Gate requires Task 0 to be blocked"
 expect_fail "missing current step" "$TMP_DIR/missing-step.yaml" "FAIL: current.step must be a positive integer"
 expect_fail "pending task already accepted" "$TMP_DIR/accepted-pending.yaml" "FAIL: human acceptance is only valid for completed Task 0"
+expect_pass "all tasks completed terminal state" "$TMP_DIR/terminal.yaml" "Execution state is valid: Task 21 Step 1 (completed)"
+expect_fail "future task active while current is pending" "$TMP_DIR/future-active.yaml" "FAIL: pending current Task requires no active Task"
 
 echo "Execution state validator tests passed."

@@ -76,7 +76,10 @@ if type(current.get("step")) is not int or current["step"] < 1:
     raise SystemExit("FAIL: current.step must be a positive integer")
 if current.get("status") != tasks[current_id]["status"]:
     raise SystemExit("FAIL: current.status does not match current Task")
-if current.get("status") != "pending" and active != [current_id]:
+all_completed = all(task["status"] == "completed" for task in tasks.values())
+if not all_completed and current.get("status") == "pending" and active:
+    raise SystemExit("FAIL: pending current Task requires no active Task")
+if not all_completed and current.get("status") != "pending" and active != [current_id]:
     raise SystemExit("FAIL: current.task must be the unique active Task")
 
 first_incomplete = next((task_id for task_id in map(str, range(22)) if tasks[task_id]["status"] != "completed"), None)
