@@ -10,6 +10,9 @@
 
 ## Global Constraints
 
+- 开始或恢复任何 Task 前必须读取并通过 `./scripts/check-execution-state.sh` 校验 `docs/execution-state.yaml`
+- 同一时间最多一个 Task 处于 `in_progress`、`blocked` 或 `awaiting_acceptance`，不得跳过或并行推进 Task
+- 当前 Task 自动验证与 Task Gate 通过后只能进入 `awaiting_acceptance`；只有人工明确验收后才能标记为 `completed` 并开始下一 Task
 - OpenCode 官方仓库: `https://github.com/anomalyco/opencode`
 - OpenCode Core 修改文件数不超过 5 个，每个 Patch 必须有说明和对应测试
 - Go TUI 不承担 Agent Loop、消息历史管理、Tool 选择决策、上下文压缩、Subagent 调度
@@ -253,6 +256,8 @@ codea/
 **Goal:** 建立正确的项目目录结构，Go Module 统一在 `tui/` 下，确保 `go test ./...` 可运行。
 
 **Files:**
+- Modify: `docs/execution-state.yaml`
+- Create: `docs/task-reports/task-00.md`
 - Create: `tui/go.mod`
 - Create: `tui/cmd/codea/main.go`
 - Create: `tui/cmd/parity-runner/main.go`
@@ -401,9 +406,10 @@ func main() {
 ```bash
 make build
 cd tui && go test ./...
+./scripts/check-execution-state.sh
 ```
 
-Expected: `build/codea` 二进制生成；`go test ./...` 无测试但通过。
+Expected: `build/codea` 二进制生成；`go test ./...` 无测试但通过；执行状态校验通过。
 
 - [ ] **Step 10: Commit**
 
@@ -411,6 +417,21 @@ Expected: `build/codea` 二进制生成；`go test ./...` 无测试但通过。
 git add -A
 git commit -m "feat: project skeleton with correct Go module and test structure"
 ```
+
+- [ ] **Step 11: 更新执行状态并等待人工验收**
+
+创建 `docs/task-reports/task-00.md`，记录实际文件变更、执行命令、验证结果、计划偏差、未解决问题和 Gate 结论。
+
+将 `docs/execution-state.yaml` 中 Task 0 的 `verificationStatus` 和 `taskGateStatus` 更新为 `pass`，状态更新为 `awaiting_acceptance`，checkpoint 指向 Step 10 的真实完整 Commit，并将 `nextAction` 更新为等待人工验收。然后运行：
+
+```bash
+./scripts/check-execution-state.sh
+git add docs/execution-state.yaml docs/task-reports/task-00.md
+git commit -m "chore: record Task 0 verification"
+./scripts/check-execution-state.sh
+```
+
+提交后立即停止。只有人工明确验收 Task 0 后，才能将其标记为 `completed` 并开始 Task 1。
 
 ---
 
