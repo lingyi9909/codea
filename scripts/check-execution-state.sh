@@ -45,6 +45,17 @@ for task_id, task in tasks.items():
         raise SystemExit(f"FAIL: Task {task_id} has invalid verificationStatus")
     if task.get("taskGateStatus") not in task_gate_states:
         raise SystemExit(f"FAIL: Task {task_id} has invalid taskGateStatus")
+    if task.get("humanAccepted") is True and task.get("status") != "completed":
+        raise SystemExit(f"FAIL: human acceptance is only valid for completed Task {task_id}")
+    if task.get("verificationStatus") == "fail" and task.get("status") != "blocked":
+        raise SystemExit(f"FAIL: failed verification requires Task {task_id} to be blocked")
+    if task.get("verificationStatus") == "unable_to_run" and task.get("status") != "blocked":
+        raise SystemExit(f"FAIL: unable_to_run verification requires Task {task_id} to be blocked")
+    if task.get("taskGateStatus") == "unable_to_evaluate" and task.get("status") != "blocked":
+        raise SystemExit(f"FAIL: unable_to_evaluate Task Gate requires Task {task_id} to be blocked")
+    if task.get("status") == "awaiting_acceptance":
+        if task.get("verificationStatus") != "pass" or task.get("taskGateStatus") != "pass":
+            raise SystemExit(f"FAIL: awaiting_acceptance Task {task_id} must pass verification and Task Gate")
     if task.get("status") == "completed":
         if task.get("verificationStatus") != "pass" or task.get("taskGateStatus") != "pass":
             raise SystemExit(f"FAIL: completed Task {task_id} must pass verification and Task Gate")
@@ -61,10 +72,16 @@ current = state.get("current", {})
 current_id = str(current.get("task"))
 if current_id not in tasks:
     raise SystemExit("FAIL: current.task is invalid")
+if type(current.get("step")) is not int or current["step"] < 1:
+    raise SystemExit("FAIL: current.step must be a positive integer")
 if current.get("status") != tasks[current_id]["status"]:
     raise SystemExit("FAIL: current.status does not match current Task")
 if current.get("status") != "pending" and active != [current_id]:
     raise SystemExit("FAIL: current.task must be the unique active Task")
+
+first_incomplete = next((task_id for task_id in map(str, range(22)) if tasks[task_id]["status"] != "completed"), None)
+if first_incomplete is not None and current_id != first_incomplete:
+    raise SystemExit("FAIL: current.task must be the first incomplete Task")
 
 verification = state.get("verification", {})
 task_gate = state.get("taskGate", {})
