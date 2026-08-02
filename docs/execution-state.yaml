@@ -4,28 +4,22 @@ plan: docs/superpowers/plans/2026-07-30-codea-v1-plan.md
 current:
   task: 0
   step: 11
-  status: awaiting_acceptance
-  nextAction: 等待人工验收 Task 0
+  status: in_progress
+  nextAction: 修复 Task 0 评审发现的缺失文件、测试夹具与文档状态不一致
 checkpoint:
   commit: 7100610138160870984d9964d969ebda636d352f
-  updatedAt: "2026-08-02T13:50:00Z"
+  updatedAt: "2026-08-02T13:57:20Z"
 verification:
-  status: pass
-  commands:
-    - command: make build
-      exitCode: 0
-      result: pass
-    - command: cd tui && go test ./...
-      exitCode: 0
-      result: pass
-  errorSummary: ""
-  recoveryAdvice: ""
+  status: not_run
+  commands: []
+  errorSummary: "Task 0 reopened after review: required files are missing and the state validator missing-report fixture regressed"
+  recoveryAdvice: "Add the missing Task 0 files, fix the test fixture, synchronize documentation, and rerun all Task 0 verification"
 taskGate:
-  status: pass
+  status: not_evaluated
 humanAcceptance:
   accepted: false
 tasks:
-  "0": {status: awaiting_acceptance, completedSteps: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11], verificationStatus: pass, taskGateStatus: pass, humanAccepted: false, checkpoint: 7100610138160870984d9964d969ebda636d352f, report: docs/task-reports/task-00.md}
+  "0": {status: in_progress, completedSteps: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: 7100610138160870984d9964d969ebda636d352f, report: docs/task-reports/task-00.md}
   "1": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-01.md}
   "2": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-02.md}
   "3": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-03.md}

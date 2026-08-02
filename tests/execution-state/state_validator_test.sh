@@ -54,6 +54,20 @@ source = pathlib.Path(sys.argv[1])
 target = pathlib.Path(sys.argv[2])
 data = yaml.safe_load(source.read_text())
 
+# Build every negative fixture from the same known-valid state. The repository
+# state may legitimately be pending, in progress, blocked, or awaiting review
+# while this suite runs, so using it directly would make failure reasons drift.
+data["current"].update({"task": 0, "step": 11, "status": "awaiting_acceptance"})
+data["verification"]["status"] = "pass"
+data["taskGate"]["status"] = "pass"
+data["humanAcceptance"]["accepted"] = False
+data["tasks"]["0"].update({
+    "status": "awaiting_acceptance",
+    "verificationStatus": "pass",
+    "taskGateStatus": "pass",
+    "humanAccepted": False,
+})
+
 duplicate = copy.deepcopy(data)
 duplicate["current"]["status"] = "in_progress"
 duplicate["tasks"]["0"]["status"] = "in_progress"
@@ -90,31 +104,53 @@ missing_report["tasks"]["0"].update({
     "verificationStatus": "pass",
     "taskGateStatus": "pass",
     "humanAccepted": True,
+    "report": str(target / "missing-task-00.md"),
 })
 (target / "missing-report.yaml").write_text(yaml.safe_dump(missing_report, sort_keys=False))
 
 skipped = copy.deepcopy(data)
 skipped["current"].update({"task": 1, "step": 1, "status": "in_progress"})
+skipped["tasks"]["0"].update({
+    "status": "pending",
+    "verificationStatus": "not_run",
+    "taskGateStatus": "not_evaluated",
+})
 skipped["tasks"]["1"]["status"] = "in_progress"
 (target / "skipped-task.yaml").write_text(yaml.safe_dump(skipped, sort_keys=False))
 
 awaiting_without_gates = copy.deepcopy(data)
 awaiting_without_gates["current"]["status"] = "awaiting_acceptance"
+awaiting_without_gates["verification"]["status"] = "not_run"
+awaiting_without_gates["taskGate"]["status"] = "not_evaluated"
 awaiting_without_gates["tasks"]["0"]["status"] = "awaiting_acceptance"
+awaiting_without_gates["tasks"]["0"]["verificationStatus"] = "not_run"
+awaiting_without_gates["tasks"]["0"]["taskGateStatus"] = "not_evaluated"
 (target / "awaiting-without-gates.yaml").write_text(yaml.safe_dump(awaiting_without_gates, sort_keys=False))
 
 verification_unable = copy.deepcopy(data)
+verification_unable["current"]["status"] = "pending"
 verification_unable["verification"]["status"] = "unable_to_run"
+verification_unable["taskGate"]["status"] = "not_evaluated"
+verification_unable["tasks"]["0"]["status"] = "pending"
 verification_unable["tasks"]["0"]["verificationStatus"] = "unable_to_run"
+verification_unable["tasks"]["0"]["taskGateStatus"] = "not_evaluated"
 (target / "verification-unable-pending.yaml").write_text(yaml.safe_dump(verification_unable, sort_keys=False))
 
 verification_failed = copy.deepcopy(data)
+verification_failed["current"]["status"] = "pending"
 verification_failed["verification"]["status"] = "fail"
+verification_failed["taskGate"]["status"] = "not_evaluated"
+verification_failed["tasks"]["0"]["status"] = "pending"
 verification_failed["tasks"]["0"]["verificationStatus"] = "fail"
+verification_failed["tasks"]["0"]["taskGateStatus"] = "not_evaluated"
 (target / "verification-failed-pending.yaml").write_text(yaml.safe_dump(verification_failed, sort_keys=False))
 
 gate_unable = copy.deepcopy(data)
+gate_unable["current"]["status"] = "pending"
+gate_unable["verification"]["status"] = "not_run"
 gate_unable["taskGate"]["status"] = "unable_to_evaluate"
+gate_unable["tasks"]["0"]["status"] = "pending"
+gate_unable["tasks"]["0"]["verificationStatus"] = "not_run"
 gate_unable["tasks"]["0"]["taskGateStatus"] = "unable_to_evaluate"
 (target / "gate-unable-pending.yaml").write_text(yaml.safe_dump(gate_unable, sort_keys=False))
 
@@ -123,11 +159,27 @@ missing_step["current"].pop("step")
 (target / "missing-step.yaml").write_text(yaml.safe_dump(missing_step, sort_keys=False))
 
 accepted_pending = copy.deepcopy(data)
+accepted_pending["current"]["status"] = "pending"
+accepted_pending["verification"]["status"] = "not_run"
+accepted_pending["taskGate"]["status"] = "not_evaluated"
 accepted_pending["humanAcceptance"]["accepted"] = True
+accepted_pending["tasks"]["0"].update({
+    "status": "pending",
+    "verificationStatus": "not_run",
+    "taskGateStatus": "not_evaluated",
+})
 accepted_pending["tasks"]["0"]["humanAccepted"] = True
 (target / "accepted-pending.yaml").write_text(yaml.safe_dump(accepted_pending, sort_keys=False))
 
 future_active = copy.deepcopy(data)
+future_active["current"]["status"] = "pending"
+future_active["verification"]["status"] = "not_run"
+future_active["taskGate"]["status"] = "not_evaluated"
+future_active["tasks"]["0"].update({
+    "status": "pending",
+    "verificationStatus": "not_run",
+    "taskGateStatus": "not_evaluated",
+})
 future_active["tasks"]["1"]["status"] = "in_progress"
 (target / "future-active.yaml").write_text(yaml.safe_dump(future_active, sort_keys=False))
 
