@@ -294,7 +294,7 @@ PY
 
 - [ ] **Step 6: 接入执行者入口和主实施计划**
 
-在 `AGENTS.md` 和 `CLAUDE.md` 的“每个 Task 的工作流”之前增加：
+确认 `AGENTS.md` 和 `CLAUDE.md` 在“每个 Task 的工作流”之前包含以下规则；缺失时增加，已有时完善，禁止插入重复段落：
 
 ````markdown
 ### 执行状态恢复

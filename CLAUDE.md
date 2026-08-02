@@ -15,8 +15,11 @@
 
 ## 设计文档
 
+- **项目交接**：`docs/codea-v1-handoff.md`
 - **技术设计**：`docs/superpowers/specs/2026-07-30-codea-v1-design.md`
 - **实施计划**：`docs/superpowers/plans/2026-07-30-codea-v1-plan.md`
+- **执行状态设计**：`docs/superpowers/specs/2026-08-01-codea-execution-state-design.md`
+- **执行状态计划**：`docs/superpowers/plans/2026-08-01-codea-execution-state-plan.md`
 
 ## 五项设计原则
 
@@ -35,10 +38,12 @@
 
 ### 执行顺序
 
-按 `docs/superpowers/plans/2026-07-30-codea-v1-plan.md` 中的 Task 0 → Task 21 逐个执行：
+先执行 Task E0 建立执行状态机制；E0 经人工验收后，再按主实施计划中的 Task 0 → Task 21 逐个执行：
 
 | 阶段 | Tasks | 内容 |
 |------|-------|------|
+| Bootstrap | Task E0 | 执行状态、校验器、中断恢复与人工验收协议 |
+| Skeleton | Task 0 | 项目骨架与 Go Module 结构 |
 | Phase 0 | Task 1 | Spike S1-S6 验证 |
 | Phase 1 | Task 2-3 | OpenAPI 固化 + 能力盘点 + Parity Harness |
 | Phase 2 | Task 4-5 | RuntimeClient + Supervisor |
@@ -50,12 +55,39 @@
 | Phase 8 | Task 19-20 | Doctor + 试点统计 |
 | Phase 9 | Task 21 | Release Parity Certification |
 
+当前阶段以 `docs/codea-v1-handoff.md` 和 `docs/execution-state.yaml` 为准。状态机制初始化前，唯一允许执行的是 Task E0；不得直接开始 Task 0。
+
+### 执行状态恢复（最高优先级）
+
+开始或恢复任何 Task 前：
+
+1. 阅读 `docs/codea-v1-handoff.md`、技术设计、主实施计划、执行状态设计和执行状态计划。
+2. 如果 `docs/execution-state.yaml` 不存在，只允许按执行状态计划完成 Task E0；不得运行尚不存在的校验器，不得开始 Task 0。
+3. 如果 `docs/execution-state.yaml` 已存在，先运行：
+
+   ```bash
+   git status
+   ./scripts/check-execution-state.sh
+   ```
+
+4. 校验通过后，只执行 `current.task`、`current.step` 和 `nextAction` 指定的工作。
+5. 状态为 `blocked` 时先处理阻塞；状态为 `awaiting_acceptance` 时立即停止并等待人工验收。
+6. 状态文件、Git Commit、Task 报告或工作区互相矛盾时停止报告，不得猜测、覆盖或跳过。
+
+初始化 Task E0 时，checkpoint 必须通过 `git rev-parse HEAD` 获取 E0 修改前的真实完整 Commit，并用 `git cat-file` 验证；不得从文档复制固定 SHA。
+
 ### 每个 Task 的工作流
 
-1. 阅读计划中对应 Task 的完整内容
-2. 编写代码（TDD：先测试，再实现）
-3. 运行测试确认通过
-4. `git commit`（每个 Task 独立提交）
+以下流程适用于 Task 0～Task 21；Task E0 按执行状态计划单独完成，并在人工确认后结束 Bootstrap 阶段。
+
+1. 读取并校验执行状态，确认当前 Task、Step 和 checkpoint
+2. 阅读计划中对应 Task 的完整内容
+3. 开始 Step 前将状态更新为 `in_progress`
+4. 编写代码（TDD：先测试，再实现）
+5. 运行当前 Task 要求的全部构建、测试和校验命令
+6. 更新状态并生成 `docs/task-reports/task-XX.md`
+7. 自动验证及 Task Gate 通过后进入 `awaiting_acceptance`，提交并停止
+8. 只有用户明确验收后才能标记 `completed` 并开始下一 Task
 
 ### Git 提交规范
 
@@ -64,6 +96,8 @@ feat: <task description>
 ```
 
 每个 Task 至少一个 commit，不跨 Task 混合提交。
+
+后续修改直接提交到 `develop`，不新建功能分支；禁止强制推送。每个 Task 和验收状态变更仍须使用独立、可追溯的 Commit。
 
 ## 技术栈
 
