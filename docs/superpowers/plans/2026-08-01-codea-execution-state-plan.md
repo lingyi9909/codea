@@ -129,7 +129,15 @@ Expected: FAIL，因为 `scripts/check-execution-state.sh` 或 `docs/execution-s
 
 - [ ] **Step 3: 创建初始状态文件**
 
-创建 `docs/execution-state.yaml`。初始检查点固定指向已经通过评审的执行状态设计提交：
+在执行 E0 的任何文件修改前，先记录当时 `develop` 的真实 HEAD 和 UTC 时间：
+
+```bash
+BASELINE_COMMIT="$(git rev-parse HEAD)"
+UPDATED_AT="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+printf 'BASELINE_COMMIT=%s\nUPDATED_AT=%s\n' "$BASELINE_COMMIT" "$UPDATED_AT"
+```
+
+`BASELINE_COMMIT` 必须是当前仓库中可由 `git cat-file -e "$BASELINE_COMMIT^{commit}"` 验证的完整 40 位 Commit。创建 `docs/execution-state.yaml` 时，将下面模板中的两个同名变量替换为上述命令的实际输出；文件中不得保留变量字面量：
 
 ```yaml
 schemaVersion: 1
@@ -141,8 +149,8 @@ current:
   status: pending
   nextAction: Start Task 0 Step 1
 checkpoint:
-  commit: 02caeb6c6e8ed40deccdadd5eac1aaf5acfe4d7b
-  updatedAt: "2026-08-01T16:14:57+09:00"
+  commit: ${BASELINE_COMMIT}
+  updatedAt: "${UPDATED_AT}"
 verification:
   status: not_run
   commands: []
@@ -303,8 +311,6 @@ PY
 更新 `docs/superpowers/plans/2026-07-30-codea-v1-plan.md`：
 
 - 在 Global Constraints 增加执行状态文件、单活动 Task、人工验收门禁三条约束。
-- 把 Task 0 的三个残留路径改为 `tui/cmd/codea/main.go`、`tui/cmd/parity-runner/main.go`、`.editorconfig`。
-- 把 Task 0 Commit 命令中的 `git init &&` 删除。
 - Task 0 Files 增加 Modify `docs/execution-state.yaml` 和 Create `docs/task-reports/task-00.md`。
 - Task 0 验证步骤增加 `./scripts/check-execution-state.sh`。
 - Task 0 完成后将状态更新为 `awaiting_acceptance` 并停止，人工验收前不得开始 Task 1。
