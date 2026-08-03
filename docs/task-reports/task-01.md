@@ -4,7 +4,7 @@
 
 **Status:** in_progress
 
-**Current step:** 3 — S3 Tool Approval 批准与拒绝
+**Current step:** 4 — S4 Reasoning 事件结构
 
 **Date:** 2026-08-03
 
@@ -53,13 +53,22 @@
 - 原始证据：`docs/spike-artifacts/s2-20260803/`。
 - 该 Spike 验证 Runtime 协议与状态链路；本地模型协议桩不用于评价模型质量。
 
+### S3 Tool Approval — PASS
+
+- 新增 Go Spike 客户端 `tui/cmd/spike-s3/`，按 TDD 验证目标 Session 的 Permission 过滤和 `session.error` 失败处理。
+- 真实事件名为 `permission.asked`，Permission ID 使用 `per_...`；回复枚举为 `once/always/reject`。
+- 使用非废弃端点 `POST /permission/{requestID}/reply`。
+- 批准分支：`once` 返回 HTTP 200，Tool completed/exit 0，marker 文件存在，Session idle。
+- 拒绝分支：`reject` 返回 HTTP 200，Tool error 为用户拒绝，marker 文件不存在，Session idle。
+- 两条链路均无 `session.error`；原始证据位于 `docs/spike-artifacts/s3-20260803/`。
+
 ## 下一步
 
-S3：Tool Approval 批准与拒绝验证。
+S4：Reasoning 事件结构验证。
 
 ## Gate 结论
 
-- **Verification (S1–S2):** `pass`
+- **Verification (S1–S3):** `pass`
 - **Task Gate:** `not_evaluated`（待 S1–S6 全部通过）
 - **Human acceptance:** `false`
 - **Task 1:** `in_progress`

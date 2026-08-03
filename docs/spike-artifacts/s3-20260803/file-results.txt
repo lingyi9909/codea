@@ -1,0 +1,2 @@
+approve_marker=present
+reject_marker=absent

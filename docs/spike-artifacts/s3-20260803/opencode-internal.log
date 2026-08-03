@@ -1,0 +1,37 @@
+timestamp=2026-08-03T15:06:27.659Z level=INFO run=7bfa7bb7 message=loading path=/tmp/codea-s3-run.ct0Nn6/home/config/opencode/config.json
+timestamp=2026-08-03T15:06:27.662Z level=INFO run=7bfa7bb7 message=loading path=/tmp/codea-s3-run.ct0Nn6/home/config/opencode/opencode.json
+timestamp=2026-08-03T15:06:27.662Z level=INFO run=7bfa7bb7 message=loading path=/tmp/codea-s3-run.ct0Nn6/home/config/opencode/opencode.jsonc
+timestamp=2026-08-03T15:06:29.259Z level=INFO run=7bfa7bb7 message="creating instance" directory=/tmp/codea-s3-run.ct0Nn6/approve
+timestamp=2026-08-03T15:06:29.261Z level=INFO run=7bfa7bb7 message=fromDirectory directory=/tmp/codea-s3-run.ct0Nn6/approve
+timestamp=2026-08-03T15:06:29.281Z level=INFO run=7bfa7bb7 message=bootstrapping directory=/tmp/codea-s3-run.ct0Nn6/approve
+timestamp=2026-08-03T15:06:29.295Z level=INFO run=7bfa7bb7 message=loading path=/tmp/codea-s3-run.ct0Nn6/home/config/opencode/config.json
+timestamp=2026-08-03T15:06:29.295Z level=INFO run=7bfa7bb7 message=loading path=/tmp/codea-s3-run.ct0Nn6/home/config/opencode/opencode.json
+timestamp=2026-08-03T15:06:29.295Z level=INFO run=7bfa7bb7 message=loading path=/tmp/codea-s3-run.ct0Nn6/home/config/opencode/opencode.jsonc
+timestamp=2026-08-03T15:06:29.454Z level=INFO run=7bfa7bb7 message=loading path=/workspace/scratch/38ea0d84307e/codea-develop/docs/spike-artifacts/s3/opencode.json
+timestamp=2026-08-03T15:06:29.460Z level=INFO run=7bfa7bb7 message=loading path=/workspace/scratch/38ea0d84307e/codea-develop/docs/spike-artifacts/s3/opencode.jsonc
+timestamp=2026-08-03T15:06:29.488Z level=INFO run=7bfa7bb7 message="all LSPs are disabled"
+timestamp=2026-08-03T15:06:29.489Z level=INFO run=7bfa7bb7 message="all formatters are disabled"
+timestamp=2026-08-03T15:06:29.489Z level=INFO run=7bfa7bb7 message=init
+timestamp=2026-08-03T15:06:29.493Z level=INFO run=7bfa7bb7 message=created id=ses_037d6850affe84u05qdsmMwRFh slug=neon-wolf version=1.18.11 projectID=global directory=/tmp/codea-s3-run.ct0Nn6/approve path=tmp/codea-s3-run.ct0Nn6/approve workspaceID=undefined parentID=undefined title="Codea S3 permission spike" agent=undefined model=undefined metadata=undefined permission=undefined cost=0 tokens.input=0 tokens.output=0 tokens.reasoning=0 tokens.cache.read=0 tokens.cache.write=0 time.created=1785769589493 time.updated=1785769589493
+timestamp=2026-08-03T15:06:29.502Z level=INFO run=7bfa7bb7 message="global event connected"
+timestamp=2026-08-03T15:06:30.068Z level=INFO run=7bfa7bb7 message=loop session.id=ses_037d6850affe84u05qdsmMwRFh step=0
+timestamp=2026-08-03T15:06:30.086Z level=INFO run=7bfa7bb7 message="shell tool using shell" shell=/usr/bin/bash
+timestamp=2026-08-03T15:06:30.096Z level=INFO run=7bfa7bb7 message=init count=1
+timestamp=2026-08-03T15:06:30.235Z level=INFO run=7bfa7bb7 message="watcher backend" directory=/tmp/codea-s3-run.ct0Nn6/approve platform=linux backend=inotify
+timestamp=2026-08-03T15:06:30.281Z level=INFO run=7bfa7bb7 message="booting location services" directory=/tmp/codea-s3-run.ct0Nn6/approve workspaceID=undefined
+timestamp=2026-08-03T15:06:30.284Z level=WARN run=7bfa7bb7 message="background dependency install failed" dir=/tmp/codea-s3-run.ct0Nn6/home/config/opencode error="Cause([Fail(NpmInstallFailedError (cause: FetchError: Invalid response body while trying to fetch https://registry.npmjs.org/@opencode-ai%2fplugin: EROFS: read-only file system, mkdir '/root/.npm'))])"
+timestamp=2026-08-03T15:06:30.293Z level=INFO run=7bfa7bb7 message="project copy refresh started" projectID=global
+timestamp=2026-08-03T15:06:30.295Z level=INFO run=7bfa7bb7 message="project copy refresh done" projectID=global updated=[] removed=[]
+timestamp=2026-08-03T15:06:30.589Z level=INFO run=7bfa7bb7 message=process session.id=ses_037d6850affe84u05qdsmMwRFh messageID=msg_fc8297d39001Fjscu2HGhEf2p0
+timestamp=2026-08-03T15:06:30.592Z level=INFO run=7bfa7bb7 message=stream providerID=codea-s3 modelID=fake-tool session.id=ses_037d6850affe84u05qdsmMwRFh small=false agent=build mode=primary
+timestamp=2026-08-03T15:06:30.598Z level=WARN run=7bfa7bb7 message="background dependency install failed" dir=/workspace/scratch/38ea0d84307e/codea-develop/docs/spike-artifacts/s3 error="Cause([Fail(NpmInstallFailedError (cause: FetchError: Invalid response body while trying to fetch https://registry.npmjs.org/@opencode-ai%2fplugin: EROFS: read-only file system, mkdir '/root/.npm'))])"
+timestamp=2026-08-03T15:06:30.601Z level=INFO run=7bfa7bb7 message="llm runtime selected" llm.runtime=ai-sdk llm.provider=codea-s3 llm.model=fake-tool
+timestamp=2026-08-03T15:06:30.816Z level=INFO run=7bfa7bb7 message="resolved path" arg=s3-marker.txt resolved=/tmp/codea-s3-run.ct0Nn6/approve/s3-marker.txt
+timestamp=2026-08-03T15:06:30.851Z level=INFO run=7bfa7bb7 message=evaluated permission=bash pattern="touch s3-marker.txt" action.permission=bash action.action=ask action.pattern=*
+timestamp=2026-08-03T15:06:30.851Z level=INFO run=7bfa7bb7 message=asking id=per_fc8298043001P324FHyn62r94u permission=bash patterns="[\"touch s3-marker.txt\"]"
+timestamp=2026-08-03T15:06:30.903Z level=INFO run=7bfa7bb7 message=loop session.id=ses_037d6850affe84u05qdsmMwRFh step=1
+timestamp=2026-08-03T15:06:30.938Z level=INFO run=7bfa7bb7 message=process session.id=ses_037d6850affe84u05qdsmMwRFh messageID=msg_fc829807a001JT0Jv4xRtSwaR4
+timestamp=2026-08-03T15:06:30.939Z level=INFO run=7bfa7bb7 message=stream providerID=codea-s3 modelID=fake-tool session.id=ses_037d6850affe84u05qdsmMwRFh small=false agent=build mode=primary
+timestamp=2026-08-03T15:06:30.949Z level=INFO run=7bfa7bb7 message="llm runtime selected" llm.runtime=ai-sdk llm.provider=codea-s3 llm.model=fake-tool
+timestamp=2026-08-03T15:06:30.972Z level=INFO run=7bfa7bb7 message=loop session.id=ses_037d6850affe84u05qdsmMwRFh step=2
+timestamp=2026-08-03T15:06:30.973Z level=INFO run=7bfa7bb7 message="exiting loop" session.id=ses_037d6850affe84u05qdsmMwRFh

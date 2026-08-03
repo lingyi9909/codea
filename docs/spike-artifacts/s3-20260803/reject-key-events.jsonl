@@ -1,0 +1,5 @@
+{"directory":"/tmp/codea-s3-run.ct0Nn6/reject","payload":{"type":"session.status","properties":{"sessionID":"ses_037d67ed4ffenTKlMlyN0RSg9x","status":{"type":"busy"}}}}
+{"directory":"/tmp/codea-s3-run.ct0Nn6/reject","payload":{"type":"session.status","properties":{"sessionID":"ses_037d67ed4ffenTKlMlyN0RSg9x","status":{"type":"busy"}}}}
+{"directory":"/tmp/codea-s3-run.ct0Nn6/reject","payload":{"type":"permission.asked","properties":{"id":"per_fc8298401001FvfUk6FtXvcPji","sessionID":"ses_037d67ed4ffenTKlMlyN0RSg9x","permission":"bash","patterns":["touch s3-marker.txt"],"metadata":{"command":"touch s3-marker.txt"},"always":["touch *"],"tool":{"messageID":"msg_fc8298248001RyCUP7Xo0A5Bc8","callID":"call_codea_s3"}}}}
+{"directory":"/tmp/codea-s3-run.ct0Nn6/reject","payload":{"type":"permission.replied","properties":{"sessionID":"ses_037d67ed4ffenTKlMlyN0RSg9x","requestID":"per_fc8298401001FvfUk6FtXvcPji","reply":"reject"}}}
+{"directory":"/tmp/codea-s3-run.ct0Nn6/reject","payload":{"type":"session.status","properties":{"sessionID":"ses_037d67ed4ffenTKlMlyN0RSg9x","status":{"type":"idle"}}}}

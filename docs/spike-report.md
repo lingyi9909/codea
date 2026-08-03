@@ -2,13 +2,13 @@
 
 ## 当前结论
 
-**S1、S2 判定：PASS。** S1 已证明 OpenCode v1.18.11 可在真实断网环境启动且无公网请求；S2 已通过真实 OpenCode Runtime、本地 OpenAI-compatible 协议桩和 Go 客户端完成 Session → Prompt → SSE → idle 全链路。
+**S1、S2、S3 判定：PASS。** S1 已证明 OpenCode v1.18.11 可在真实断网环境启动且无公网请求；S2 已完成 Session → Prompt → SSE → idle 全链路；S3 已验证 Tool Permission 的批准和拒绝分支。
 
 | Spike | 状态 | 说明 |
 |---|---|---|
 | S1 Server 离线启动 | **PASS** | 真实断网 + 正确环境变量，内部日志无公网请求 |
 | S2 Session + Prompt + SSE | **PASS** | Session 200、Prompt 204、收到目标 Session 的流式文本和 idle |
-| S3 Tool Approval | NOT_RUN | 待开始 |
+| S3 Tool Approval | **PASS** | `permission.asked` 可接收，`once/reject` 均正确执行 |
 | S4 Reasoning | NOT_RUN | 待开始 |
 | S5 Skill 来源隔离 | NOT_RUN | 待开始 |
 | S6 模式隔离 | NOT_RUN | 待开始 |
@@ -207,6 +207,41 @@ S2 验证的是 OpenCode Runtime 到 Go 客户端的完整协议与状态链路�
 
 ---
 
+## S3 证据
+
+### 验证范围与方法（Linux x64，2026-08-03）
+
+使用真实 OpenCode v1.18.11 Runtime、本地 OpenAI-compatible Tool Call 协议桩和 Go Spike 客户端，分别创建批准与拒绝两个独立 Session。Runtime 配置 `permission.bash=ask`，模型请求执行 `touch s3-marker.txt`。
+
+| 分支 | Permission Reply | Runtime 结果 | 文件结果 | 会话结果 |
+|---|---|---|---|---|
+| 批准 | `once`，HTTP 200 | Tool Part `completed`，exit 0 | marker 存在 | `idle`，无 `session.error` |
+| 拒绝 | `reject`，HTTP 200 | Tool Part `error`，明确记录用户拒绝 | marker 不存在 | `idle`，无 `session.error` |
+
+### 实际协议结构
+
+- 申请事件：`permission.asked`
+- Permission ID：`per_...`
+- 关键字段：`sessionID`、`permission`、`patterns`、`metadata`、`always`、`tool.messageID`、`tool.callID`
+- 推荐响应端点：`POST /permission/{requestID}/reply?directory=...`
+- 请求体：`{"reply":"once"}` 或 `{"reply":"reject"}`
+- 响应事件：`permission.replied`
+- v1.18.11 支持的 reply 枚举：`once`、`always`、`reject`
+
+计划中的 `tool_approval_required` 并非 v1.18.11 实际事件名；`POST /session/{sessionID}/permissions/{permissionID}` 虽仍存在，但 OpenAPI 已标记 deprecated，后续客户端应使用全局 Permission Reply API。
+
+### S3 门禁对照
+
+| 门禁要求 | 状态 | 证据 |
+|---|---|---|
+| Go 客户端接收权限申请 | 满足 | 两个 Session 均收到目标 `permission.asked` |
+| 批准后执行 Tool | 满足 | Tool completed、exit 0、marker 存在 |
+| 拒绝后不执行 Tool | 满足 | Tool error 为用户拒绝、marker 不存在 |
+| Runtime 正确完成会话 | 满足 | 两个 Session 最终均为 idle，无 session.error |
+| 记录事件、ID 与枚举 | 满足 | `docs/spike-artifacts/s3-20260803/` |
+
+---
+
 ## 原始证据文件
 
 | 文件 | 说明 |
@@ -229,9 +264,16 @@ S2 验证的是 OpenCode Runtime 到 Go 客户端的完整协议与状态链路�
 | `docs/spike-artifacts/s2-20260803/messages.json` | Session 最终消息回读 |
 | `docs/spike-artifacts/s2-20260803/fake-model-requests.jsonl` | OpenCode 发给模型端的原始流式请求 |
 | `docs/spike-artifacts/s2-20260803/opencode-internal.log` | OpenCode 内部日志 |
+| `docs/spike-artifacts/s3/opencode.json` | 强制 Bash Tool 进入 ask 的隔离配置 |
+| `docs/spike-artifacts/s3/fake-tool-server.py` | 确定性 Tool Call 协议桩 |
+| `docs/spike-artifacts/s3-20260803/approve-key-events.jsonl` | 批准分支 Permission 与状态事件 |
+| `docs/spike-artifacts/s3-20260803/reject-key-events.jsonl` | 拒绝分支 Permission 与状态事件 |
+| `docs/spike-artifacts/s3-20260803/tool-parts.jsonl` | Tool completed/error 最终状态 |
+| `docs/spike-artifacts/s3-20260803/file-results.txt` | 批准创建、拒绝不创建的文件断言 |
+| `docs/spike-artifacts/s3-20260803/opencode-internal.log` | S3 OpenCode 内部日志 |
 
 ---
 
 ## 未开始的验证
 
-S3～S6 尚未执行；在六项 Spike 完成前不创建全通过的 `docs/spike-results.json`。
+S4～S6 尚未执行；在六项 Spike 完成前不创建全通过的 `docs/spike-results.json`。

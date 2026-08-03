@@ -1,0 +1,8 @@
+{"directory":"/tmp/codea-s3-run.ct0Nn6/approve","payload":{"type":"session.status","properties":{"sessionID":"ses_037d6850affe84u05qdsmMwRFh","status":{"type":"busy"}}}}
+{"directory":"/tmp/codea-s3-run.ct0Nn6/approve","payload":{"type":"session.status","properties":{"sessionID":"ses_037d6850affe84u05qdsmMwRFh","status":{"type":"busy"}}}}
+{"directory":"/tmp/codea-s3-run.ct0Nn6/approve","payload":{"type":"permission.asked","properties":{"id":"per_fc8298043001P324FHyn62r94u","sessionID":"ses_037d6850affe84u05qdsmMwRFh","permission":"bash","patterns":["touch s3-marker.txt"],"metadata":{"command":"touch s3-marker.txt"},"always":["touch *"],"tool":{"messageID":"msg_fc8297d39001Fjscu2HGhEf2p0","callID":"call_codea_s3"}}}}
+{"directory":"/tmp/codea-s3-run.ct0Nn6/approve","payload":{"type":"permission.replied","properties":{"sessionID":"ses_037d6850affe84u05qdsmMwRFh","requestID":"per_fc8298043001P324FHyn62r94u","reply":"once"}}}
+{"directory":"/tmp/codea-s3-run.ct0Nn6/approve","payload":{"type":"session.status","properties":{"sessionID":"ses_037d6850affe84u05qdsmMwRFh","status":{"type":"busy"}}}}
+{"directory":"/tmp/codea-s3-run.ct0Nn6/approve","payload":{"type":"session.status","properties":{"sessionID":"ses_037d6850affe84u05qdsmMwRFh","status":{"type":"busy"}}}}
+{"directory":"/tmp/codea-s3-run.ct0Nn6/approve","payload":{"type":"session.status","properties":{"sessionID":"ses_037d6850affe84u05qdsmMwRFh","status":{"type":"busy"}}}}
+{"directory":"/tmp/codea-s3-run.ct0Nn6/approve","payload":{"type":"session.status","properties":{"sessionID":"ses_037d6850affe84u05qdsmMwRFh","status":{"type":"idle"}}}}

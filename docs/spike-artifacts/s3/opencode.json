@@ -1,0 +1,25 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "codea-s3/fake-tool",
+  "small_model": "codea-s3/fake-tool",
+  "enabled_providers": ["codea-s3"],
+  "permission": {
+    "bash": "ask"
+  },
+  "provider": {
+    "codea-s3": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "Codea S3 Local Tool Provider",
+      "options": {
+        "baseURL": "http://127.0.0.1:49221/v1",
+        "apiKey": "{env:CODEA_S3_API_KEY}"
+      },
+      "models": {
+        "fake-tool": {
+          "name": "Codea S3 Fake Tool Model",
+          "limit": {"context": 32768, "output": 4096}
+        }
+      }
+    }
+  }
+}
