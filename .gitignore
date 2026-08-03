@@ -12,3 +12,8 @@ Thumbs.db
 docs/spike-artifacts/opencode
 docs/spike-artifacts/*.zip
 docs/spike-artifacts/*.tar.gz
+docs/spike-artifacts/s1-sandbox/
+docs/spike-artifacts/s1-*-config/
+*.db
+*.db-shm
+*.db-wal
