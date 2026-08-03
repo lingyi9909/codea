@@ -9,3 +9,6 @@ Thumbs.db
 .env
 *.key
 *.p12
+docs/spike-artifacts/opencode
+docs/spike-artifacts/*.zip
+docs/spike-artifacts/*.tar.gz
