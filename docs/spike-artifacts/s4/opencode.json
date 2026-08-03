@@ -1,0 +1,23 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "codea-s4/fake-reasoning",
+  "small_model": "codea-s4/fake-reasoning",
+  "enabled_providers": ["codea-s4"],
+  "provider": {
+    "codea-s4": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "Codea S4 Local Reasoning Provider",
+      "options": {
+        "baseURL": "http://127.0.0.1:49222/v1",
+        "apiKey": "{env:CODEA_S4_API_KEY}"
+      },
+      "models": {
+        "fake-reasoning": {
+          "name": "Codea S4 Fake Reasoning",
+          "reasoning": true,
+          "limit": {"context": 32768, "output": 4096}
+        }
+      }
+    }
+  }
+}

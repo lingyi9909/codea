@@ -4,7 +4,7 @@
 
 **Status:** in_progress
 
-**Current step:** 4 — S4 Reasoning 事件结构
+**Current step:** 5 — S5 Skill 来源隔离
 
 **Date:** 2026-08-03
 
@@ -62,13 +62,21 @@
 - 拒绝分支：`reject` 返回 HTTP 200，Tool error 为用户拒绝，marker 文件不存在，Session idle。
 - 两条链路均无 `session.error`；原始证据位于 `docs/spike-artifacts/s3-20260803/`。
 
+### S4 Reasoning — PASS
+
+- 新增 `tui/cmd/spike-s4/`，按 TDD 验证结构化 Reasoning 与 Answer 分类。
+- 真实 Runtime 将模型的 `reasoning_content` 转换为独立 `type=reasoning` Part。
+- 普通回答为独立 `type=text` Part，两类均可流式接收。
+- 最终结果：reasoning=`considering options`，answer=`final answer`，Session idle。
+- 不存在 `<think>` 标签；客户端应按 Part 类型分流。
+
 ## 下一步
 
-S4：Reasoning 事件结构验证。
+S5：Skill 来源隔离验证。
 
 ## Gate 结论
 
-- **Verification (S1–S3):** `pass`
+- **Verification (S1–S4):** `pass`
 - **Task Gate:** `not_evaluated`（待 S1–S6 全部通过）
 - **Human acceptance:** `false`
 - **Task 1:** `in_progress`

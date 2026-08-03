@@ -1,0 +1,16 @@
+timestamp=2026-08-03T15:10:59.516Z level=INFO run=77853c44 message=loading path=/tmp/codea-s4-run.BVvBfF/home/config/opencode/config.json
+timestamp=2026-08-03T15:10:59.518Z level=INFO run=77853c44 message=loading path=/tmp/codea-s4-run.BVvBfF/home/config/opencode/opencode.json
+timestamp=2026-08-03T15:10:59.518Z level=INFO run=77853c44 message=loading path=/tmp/codea-s4-run.BVvBfF/home/config/opencode/opencode.jsonc
+timestamp=2026-08-03T15:11:01.039Z level=INFO run=77853c44 message="creating instance" directory=/tmp/codea-s4-run.BVvBfF/project
+timestamp=2026-08-03T15:11:01.041Z level=INFO run=77853c44 message=fromDirectory directory=/tmp/codea-s4-run.BVvBfF/project
+timestamp=2026-08-03T15:11:01.059Z level=INFO run=77853c44 message=bootstrapping directory=/tmp/codea-s4-run.BVvBfF/project
+timestamp=2026-08-03T15:11:01.070Z level=INFO run=77853c44 message=loading path=/tmp/codea-s4-run.BVvBfF/home/config/opencode/config.json
+timestamp=2026-08-03T15:11:01.070Z level=INFO run=77853c44 message=loading path=/tmp/codea-s4-run.BVvBfF/home/config/opencode/opencode.json
+timestamp=2026-08-03T15:11:01.071Z level=INFO run=77853c44 message=loading path=/tmp/codea-s4-run.BVvBfF/home/config/opencode/opencode.jsonc
+timestamp=2026-08-03T15:11:01.224Z level=INFO run=77853c44 message=loading path=/workspace/scratch/38ea0d84307e/codea-develop/docs/spike-artifacts/s4/opencode.json
+timestamp=2026-08-03T15:11:01.229Z level=INFO run=77853c44 message=loading path=/workspace/scratch/38ea0d84307e/codea-develop/docs/spike-artifacts/s4/opencode.jsonc
+timestamp=2026-08-03T15:11:01.254Z level=INFO run=77853c44 message="all LSPs are disabled"
+timestamp=2026-08-03T15:11:01.255Z level=INFO run=77853c44 message="all formatters are disabled"
+timestamp=2026-08-03T15:11:01.255Z level=INFO run=77853c44 message=init
+timestamp=2026-08-03T15:11:01.259Z level=INFO run=77853c44 message=created id=ses_037d25f74ffefqtFo5GCgfHn9T slug=sunny-meadow version=1.18.11 projectID=global directory=/tmp/codea-s4-run.BVvBfF/project path=tmp/codea-s4-run.BVvBfF/project workspaceID=undefined parentID=undefined title="Codea S4 reasoning spike" agent=undefined model=undefined metadata=undefined permission=undefined cost=0 tokens.input=0 tokens.output=0 tokens.reasoning=0 tokens.cache.read=0 tokens.cache.write=0 time.created=1785769861259 time.updated=1785769861259
+timestamp=2026-08-03T15:11:01.271Z level=INFO run=77853c44 message="global event connected"

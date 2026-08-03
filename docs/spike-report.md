@@ -2,14 +2,14 @@
 
 ## 当前结论
 
-**S1、S2、S3 判定：PASS。** S1 已证明 OpenCode v1.18.11 可在真实断网环境启动且无公网请求；S2 已完成 Session → Prompt → SSE → idle 全链路；S3 已验证 Tool Permission 的批准和拒绝分支。
+**S1～S4 判定：PASS。** S1 已证明离线启动；S2 已完成 Session/SSE 链路；S3 已验证 Tool Permission；S4 已验证结构化 Reasoning 与 Answer 分离。
 
 | Spike | 状态 | 说明 |
 |---|---|---|
 | S1 Server 离线启动 | **PASS** | 真实断网 + 正确环境变量，内部日志无公网请求 |
 | S2 Session + Prompt + SSE | **PASS** | Session 200、Prompt 204、收到目标 Session 的流式文本和 idle |
 | S3 Tool Approval | **PASS** | `permission.asked` 可接收，`once/reject` 均正确执行 |
-| S4 Reasoning | NOT_RUN | 待开始 |
+| S4 Reasoning | **PASS** | 独立 `reasoning` 与 `text` Part，无需 `<think>` 拆分 |
 | S5 Skill 来源隔离 | NOT_RUN | 待开始 |
 | S6 模式隔离 | NOT_RUN | 待开始 |
 
@@ -242,6 +242,22 @@ S2 验证的是 OpenCode Runtime 到 Go 客户端的完整协议与状态链路�
 
 ---
 
+## S4 证据
+
+使用真实 OpenCode v1.18.11 Runtime 和本地 OpenAI-compatible Reasoning 协议桩。模型流式 delta 同时返回 `reasoning_content` 和普通 `content`，Go 客户端监听到 87 条 SSE 后按 Part 类型完成区分。
+
+| 项目 | 实际结果 |
+|---|---|
+| Reasoning Part | `type=reasoning`，文本 `considering options` |
+| Answer Part | `type=text`，文本 `final answer` |
+| 流式事件 | 两类 Part 均有 `message.part.delta` 与 `message.part.updated` |
+| 完成条件 | 目标 Session 最终 `idle` |
+| `<think>` 标签 | 不存在，不依赖标签解析 |
+
+S4 结论：v1.18.11 能将兼容模型的 `reasoning_content` 转换为结构化 `reasoning` Part；Go 客户端应优先按 Part 类型分流，`<think>` 只能作为非结构化模型的兼容降级方案。
+
+---
+
 ## 原始证据文件
 
 | 文件 | 说明 |
@@ -271,9 +287,14 @@ S2 验证的是 OpenCode Runtime 到 Go 客户端的完整协议与状态链路�
 | `docs/spike-artifacts/s3-20260803/tool-parts.jsonl` | Tool completed/error 最终状态 |
 | `docs/spike-artifacts/s3-20260803/file-results.txt` | 批准创建、拒绝不创建的文件断言 |
 | `docs/spike-artifacts/s3-20260803/opencode-internal.log` | S3 OpenCode 内部日志 |
+| `docs/spike-artifacts/s4/opencode.json` | Reasoning 模型隔离配置 |
+| `docs/spike-artifacts/s4/fake-reasoning-server.py` | Reasoning 协议桩 |
+| `docs/spike-artifacts/s4-20260803/key-events.jsonl` | Reasoning/Text Part 与状态事件 |
+| `docs/spike-artifacts/s4-20260803/client.log` | 客户端分类摘要 |
+| `docs/spike-artifacts/s4-20260803/opencode-internal.log` | S4 OpenCode 内部日志 |
 
 ---
 
 ## 未开始的验证
 
-S4～S6 尚未执行；在六项 Spike 完成前不创建全通过的 `docs/spike-results.json`。
+S5～S6 尚未执行；在六项 Spike 完成前不创建全通过的 `docs/spike-results.json`。
