@@ -1,0 +1,17 @@
+timestamp=2026-08-03T11:22:10.902Z level=INFO run=ba7dc252 message=loading path=/tmp/codea-s2-run3/config-home/opencode/config.json
+timestamp=2026-08-03T11:22:10.905Z level=INFO run=ba7dc252 message=loading path=/tmp/codea-s2-run3/config-home/opencode/opencode.json
+timestamp=2026-08-03T11:22:10.905Z level=INFO run=ba7dc252 message=loading path=/tmp/codea-s2-run3/config-home/opencode/opencode.jsonc
+timestamp=2026-08-03T11:22:12.470Z level=INFO run=ba7dc252 message="creating instance" directory=/workspace/scratch/38ea0d84307e/codea-develop
+timestamp=2026-08-03T11:22:12.472Z level=INFO run=ba7dc252 message=fromDirectory directory=/workspace/scratch/38ea0d84307e/codea-develop
+timestamp=2026-08-03T11:22:12.505Z level=INFO run=ba7dc252 message=bootstrapping directory=/workspace/scratch/38ea0d84307e/codea-develop
+timestamp=2026-08-03T11:22:12.510Z level=INFO run=ba7dc252 message=loading path=/tmp/codea-s2-run3/config-home/opencode/config.json
+timestamp=2026-08-03T11:22:12.510Z level=INFO run=ba7dc252 message=loading path=/tmp/codea-s2-run3/config-home/opencode/opencode.json
+timestamp=2026-08-03T11:22:12.511Z level=INFO run=ba7dc252 message=loading path=/tmp/codea-s2-run3/config-home/opencode/opencode.jsonc
+timestamp=2026-08-03T11:22:12.662Z level=INFO run=ba7dc252 message=loading path=/tmp/codea-s2-run3/config/opencode.json
+timestamp=2026-08-03T11:22:12.667Z level=INFO run=ba7dc252 message=loading path=/tmp/codea-s2-run3/config/opencode.jsonc
+timestamp=2026-08-03T11:22:12.696Z level=INFO run=ba7dc252 message="all LSPs are disabled"
+timestamp=2026-08-03T11:22:12.697Z level=INFO run=ba7dc252 message="all formatters are disabled"
+timestamp=2026-08-03T11:22:12.697Z level=INFO run=ba7dc252 message=init
+timestamp=2026-08-03T11:22:12.701Z level=INFO run=ba7dc252 message=created id=ses_038a3daa2ffepds97I1dEfA1kk slug=hidden-garden version=1.18.11 projectID=db88b8fbd636419f25a559e9bc718d4e08eb37e7 directory=/workspace/scratch/38ea0d84307e/codea-develop path="" workspaceID=undefined parentID=undefined title="Codea S2 protocol spike" agent=undefined model=undefined metadata=undefined permission=undefined cost=0 tokens.input=0 tokens.output=0 tokens.reasoning=0 tokens.cache.read=0 tokens.cache.write=0 time.created=1785756132701 time.updated=1785756132701
+timestamp=2026-08-03T11:22:12.711Z level=INFO run=ba7dc252 message="global event connected"
+timestamp=2026-08-03T11:22:13.431Z level=INFO run=ba7dc252 message=loop session.id=ses_038a3daa2ffepds97I1dEfA1kk step=0

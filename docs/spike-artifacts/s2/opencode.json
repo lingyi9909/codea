@@ -1,0 +1,25 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "codea-s2/fake-chat",
+  "small_model": "codea-s2/fake-chat",
+  "enabled_providers": ["codea-s2"],
+  "provider": {
+    "codea-s2": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "Codea S2 Local Fake Provider",
+      "options": {
+        "baseURL": "http://127.0.0.1:49220/v1",
+        "apiKey": "{env:CODEA_S2_API_KEY}"
+      },
+      "models": {
+        "fake-chat": {
+          "name": "Codea S2 Fake Chat",
+          "limit": {
+            "context": 32768,
+            "output": 4096
+          }
+        }
+      }
+    }
+  }
+}

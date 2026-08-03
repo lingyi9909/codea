@@ -2,12 +2,12 @@
 
 ## 当前结论
 
-**S1 判定：PASS。** 使用正确的 `OPENCODE_DISABLE_MODELS_FETCH=1` 后，OpenCode v1.18.11 在真实断网 + 完全隔离沙箱环境下启动成功，内部日志零 ERROR、零 `models.opencode.ai` 请求，全接口抓包无 OpenCode 相关出站流量。
+**S1、S2 判定：PASS。** S1 已证明 OpenCode v1.18.11 可在真实断网环境启动且无公网请求；S2 已通过真实 OpenCode Runtime、本地 OpenAI-compatible 协议桩和 Go 客户端完成 Session → Prompt → SSE → idle 全链路。
 
 | Spike | 状态 | 说明 |
 |---|---|---|
 | S1 Server 离线启动 | **PASS** | 真实断网 + 正确环境变量，内部日志无公网请求 |
-| S2 Session + Prompt + SSE | NOT_RUN | 待开始 |
+| S2 Session + Prompt + SSE | **PASS** | Session 200、Prompt 204、收到目标 Session 的流式文本和 idle |
 | S3 Tool Approval | NOT_RUN | 待开始 |
 | S4 Reasoning | NOT_RUN | 待开始 |
 | S5 Skill 来源隔离 | NOT_RUN | 待开始 |
@@ -156,6 +156,57 @@ INFO loading opencode.jsonc
 
 ---
 
+## S2 证据
+
+### 验证范围与方法（Linux x64，2026-08-03）
+
+本次验证使用锁定的 OpenCode v1.18.11 Linux x64 官方制品。为排除外部模型可用性对协议 Spike 的影响，模型端使用本地 OpenAI-compatible 流式协议桩；Session、Agent Loop、消息持久化和 SSE 均由真实 OpenCode Runtime 执行。
+
+Go 客户端位于 `tui/cmd/spike-s2/`，执行顺序为：
+
+1. `POST /session?directory=...` 创建 Session。
+2. `GET /global/event` 建立 SSE 连接。
+3. `POST /session/:id/prompt_async?directory=...` 发送 Prompt。
+4. 过滤目标 Session 的事件，收到 `session.status` 的 `idle` 状态后结束。
+5. `GET /session/:id/message?directory=...` 回读最终消息。
+
+### 实际请求与响应
+
+| 操作 | 实际结果 |
+|---|---|
+| `GET /global/health` | HTTP 200，`{"healthy":true,"version":"1.18.11"}` |
+| `POST /session` | HTTP 200，Session ID `ses_038a3daa2ffepds97I1dEfA1kk` |
+| `POST /session/:id/prompt_async` | HTTP 204 |
+| OpenAI-compatible 模型请求 | `POST /v1/chat/completions`，`stream=true`、`include_usage=true` |
+| SSE 完成条件 | 目标 Session 依次出现 `busy`，最终出现 `idle` |
+| 模型流式文本 | `message.part.delta`：`hello from s2` |
+| 消息回读 | 用户消息与 Assistant 文本均存在 |
+
+Go 客户端共记录 76 个全局 SSE 事件，其中与完成链路直接相关的事件包括：
+
+- `session.status`：4 条，最后一条为目标 Session 的 `idle`。
+- `message.part.delta`：1 条，文本为 `hello from s2`。
+- `message.part.updated`：5 条，包含 step-start、text、step-finish 和 patch Part。
+- `message.updated`：4 条。
+- `session.diff`：1 条。
+
+未出现 `session.error`。OpenCode 内部日志记录 Session 创建、全局事件连接和 Agent Loop 启动，无 ERROR。
+
+### S2 门禁对照
+
+| 门禁要求 | 状态 | 证据 |
+|---|---|---|
+| 创建 Session | 满足 | HTTP 200 和非空 Session ID |
+| 发送异步 Prompt | 满足 | HTTP 204 |
+| 接收 SSE | 满足 | `events.jsonl` 共 76 条事件 |
+| 接收模型流式回答 | 满足 | `message.part.delta` 为 `hello from s2` |
+| 完成一轮 Agent 会话 | 满足 | 目标 Session 最终进入 `idle`，消息可回读 |
+| 记录实际协议结构 | 满足 | 请求、事件、消息和日志均保存为原始证据 |
+
+S2 验证的是 OpenCode Runtime 到 Go 客户端的完整协议与状态链路，不评价模型内容质量。模型端使用本地确定性协议桩是为了让结果可重复、无需公网和真实 API Key。
+
+---
+
 ## 原始证据文件
 
 | 文件 | 说明 |
@@ -170,9 +221,17 @@ INFO loading opencode.jsonc
 | `docs/spike-artifacts/s1-20260803-175535/server-stdout.log` | Server stdout |
 | `docs/spike-artifacts/s1-20260803-175535/opencode-internal.log` | OpenCode 内部日志（3 行 INFO，零 ERROR） |
 | `docs/spike-artifacts/s1-20260803-175535/traffic-*.pcap` | 逐接口 tcpdump 原始抓包（9 个接口） |
+| `docs/spike-artifacts/s2/opencode.json` | 本地 OpenAI-compatible Provider 配置，API Key 仅引用环境变量 |
+| `docs/spike-artifacts/s2/fake-openai-server.py` | 确定性流式模型协议桩 |
+| `docs/spike-artifacts/s2-20260803/health.json` | OpenCode 健康响应 |
+| `docs/spike-artifacts/s2-20260803/client.log` | Go 客户端 Session、Prompt 和完成摘要 |
+| `docs/spike-artifacts/s2-20260803/events.jsonl` | 原始全局 SSE 事件 |
+| `docs/spike-artifacts/s2-20260803/messages.json` | Session 最终消息回读 |
+| `docs/spike-artifacts/s2-20260803/fake-model-requests.jsonl` | OpenCode 发给模型端的原始流式请求 |
+| `docs/spike-artifacts/s2-20260803/opencode-internal.log` | OpenCode 内部日志 |
 
 ---
 
 ## 未开始的验证
 
-S2～S6 尚未执行；没有创建 `docs/spike-results.json`。
+S3～S6 尚未执行；在六项 Spike 完成前不创建全通过的 `docs/spike-results.json`。

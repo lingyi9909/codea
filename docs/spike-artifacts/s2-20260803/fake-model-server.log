@@ -1,0 +1,3 @@
+fake OpenAI-compatible server listening on 127.0.0.1:49220
+"GET /v1/models HTTP/1.1" 200 -
+"POST /v1/chat/completions HTTP/1.1" 200 -
