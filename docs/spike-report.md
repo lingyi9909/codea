@@ -2,7 +2,7 @@
 
 ## 当前结论
 
-**S1～S4 判定：PASS。** S1 已证明离线启动；S2 已完成 Session/SSE 链路；S3 已验证 Tool Permission；S4 已验证结构化 Reasoning 与 Answer 分离。
+**S1～S5 判定：PASS。** S1 已证明离线启动；S2 已完成 Session/SSE；S3 已验证 Tool Permission；S4 已验证 Reasoning；S5 已验证 Skill 来源隔离。
 
 | Spike | 状态 | 说明 |
 |---|---|---|
@@ -10,7 +10,7 @@
 | S2 Session + Prompt + SSE | **PASS** | Session 200、Prompt 204、收到目标 Session 的流式文本和 idle |
 | S3 Tool Approval | **PASS** | `permission.asked` 可接收，`once/reject` 均正确执行 |
 | S4 Reasoning | **PASS** | 独立 `reasoning` 与 `text` Part，无需 `<think>` 拆分 |
-| S5 Skill 来源隔离 | NOT_RUN | 待开始 |
+| S5 Skill 来源隔离 | **PASS** | 隔离模式只加载内置与批准配置目录 Skill |
 | S6 模式隔离 | NOT_RUN | 待开始 |
 
 **关键发现**：初版验证使用了不存在的环境变量名（`OPENCODE_SKIP_MODEL_FETCH`），导致 OpenCode 仍发起 `models.opencode.ai` 请求。v1.18.11 官方已支持 `OPENCODE_DISABLE_MODELS_FETCH=1` 禁用该请求，无需 Patch。
@@ -258,6 +258,32 @@ S4 结论：v1.18.11 能将兼容模型的 `reasoning_content` 转换为结构�
 
 ---
 
+## S5 证据
+
+在配置目录、项目目录、用户 OpenCode 目录、Claude 兼容目录和 Agents 兼容目录同时放置唯一命名的测试 Skill，并通过 `GET /skill` 读取真实 Runtime 注册结果。
+
+隔离组使用独立 HOME/XDG，并设置：
+
+```text
+OPENCODE_CONFIG_DIR=<approved-config>
+OPENCODE_DISABLE_EXTERNAL_SKILLS=1
+OPENCODE_DISABLE_PROJECT_CONFIG=1
+OPENCODE_DISABLE_CLAUDE_CODE=1
+```
+
+| 来源 | 隔离组 | 无隔离对照组 |
+|---|---|---|
+| OpenCode 内置 `customize-opencode` | 发现 | 发现 |
+| 配置目录 `config-approved` | 发现 | 发现 |
+| 项目 `.opencode` | 未发现 | 发现 |
+| 用户 `.config/opencode` | 未发现 | 发现 |
+| `~/.claude/skills` | 未发现 | 发现 |
+| 项目 `.agents/skills` | 未发现 | 发现 |
+
+结论：无需 Patch。企业隔离必须组合独立 HOME/XDG、指定 `OPENCODE_CONFIG_DIR` 和上述三个禁用开关；内置 `customize-opencode` 属于 Runtime 固有 Skill，不是外部注入。
+
+---
+
 ## 原始证据文件
 
 | 文件 | 说明 |
@@ -292,9 +318,12 @@ S4 结论：v1.18.11 能将兼容模型的 `reasoning_content` 转换为结构�
 | `docs/spike-artifacts/s4-20260803/key-events.jsonl` | Reasoning/Text Part 与状态事件 |
 | `docs/spike-artifacts/s4-20260803/client.log` | 客户端分类摘要 |
 | `docs/spike-artifacts/s4-20260803/opencode-internal.log` | S4 OpenCode 内部日志 |
+| `docs/spike-artifacts/s5-20260803/isolated-skill-names.txt` | 隔离组 Skill 名称清单 |
+| `docs/spike-artifacts/s5-20260803/control-skill-names.txt` | 无隔离对照组 Skill 名称清单 |
+| `docs/spike-artifacts/s5-20260803/isolated-opencode.log` | S5 隔离组 Runtime 日志 |
 
 ---
 
 ## 未开始的验证
 
-S5～S6 尚未执行；在六项 Spike 完成前不创建全通过的 `docs/spike-results.json`。
+S6 尚未执行；在六项 Spike 完成前不创建全通过的 `docs/spike-results.json`。

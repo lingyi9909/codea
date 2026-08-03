@@ -4,7 +4,7 @@
 
 **Status:** in_progress
 
-**Current step:** 5 — S5 Skill 来源隔离
+**Current step:** 6 — S6 双模式基础隔离
 
 **Date:** 2026-08-03
 
@@ -70,13 +70,21 @@
 - 最终结果：reasoning=`considering options`，answer=`final answer`，Session idle。
 - 不存在 `<think>` 标签；客户端应按 Part 类型分流。
 
+### S5 Skill 来源隔离 — PASS
+
+- 同时构造配置目录、项目、用户、Claude 和 Agents 五类 Skill 来源。
+- 隔离组只发现 OpenCode 内置 `customize-opencode` 与批准的 `config-approved`。
+- 无隔离对照组重新发现四个未批准 Skill，证明夹具有效且隔离开关生效。
+- 必需组合：独立 HOME/XDG、`OPENCODE_CONFIG_DIR`、`OPENCODE_DISABLE_EXTERNAL_SKILLS=1`、`OPENCODE_DISABLE_PROJECT_CONFIG=1`、`OPENCODE_DISABLE_CLAUDE_CODE=1`。
+- 无需 OpenCode Patch。
+
 ## 下一步
 
-S5：Skill 来源隔离验证。
+S6：General Compatible / Enterprise 模式隔离验证。
 
 ## Gate 结论
 
-- **Verification (S1–S4):** `pass`
+- **Verification (S1–S5):** `pass`
 - **Task Gate:** `not_evaluated`（待 S1–S6 全部通过）
 - **Human acceptance:** `false`
 - **Task 1:** `in_progress`
