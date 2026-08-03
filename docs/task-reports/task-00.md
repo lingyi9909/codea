@@ -2,7 +2,7 @@
 
 **Task:** 0
 
-**Status:** awaiting_acceptance
+**Status:** completed
 
 **Date:** 2026-08-02
 
@@ -51,12 +51,12 @@ Go 构建和测试由用户在包含 checkpoint `97ea4b8e7f6d86a97e17781bb858b5f
 ## 未解决问题与恢复建议
 
 - **阻塞项：**无。
-- **下一步：**等待用户人工验收 Task 0；验收前保持停止。
+- **下一步：**Task 0 已人工验收通过，可以按状态机开始 Task 1。
 - **范围边界：**未开始 Task 1。
 
 ## Gate 结论
 
 - **Verification:** `pass`
 - **Task Gate:** `pass`
-- **Human acceptance:** `false`
-- **Task 0:** `awaiting_acceptance`
+- **Human acceptance:** `true`（用户于 2026-08-03 明确验收通过）
+- **Task 0:** `completed`

@@ -6,7 +6,7 @@
 
 **Architecture:** C+ 混合模式 — OpenCode（anomalyco/opencode）作为独立 Agent Runtime（`opencode serve`），Go TUI（Bubble Tea + Lip Gloss）通过 HTTP/SSE 与 Runtime 通信。RuntimeClient 抽象层隔离协议差异。企业能力（Reviewer/UT/API Doc）通过 Agent + Skill + 专用 Tool 组合实现，不侵入 OpenCode Core。离线发行包包含预编译 TUI、OpenCode 二进制、自包含 Plugin Bundle 和全部配置。
 
-**Tech Stack:** Go 1.22+ (TUI), Bubble Tea + Lip Gloss + Glamour, TypeScript (Plugin, target bun), OpenCode Runtime (锁定版本, anomalyco/opencode), DeepSeek (开发), 私有模型 (内网)
+**Tech Stack:** Go 1.26.5 (TUI), Bubble Tea + Lip Gloss + Glamour, TypeScript (Plugin, target bun), OpenCode Runtime (锁定版本, anomalyco/opencode), DeepSeek (开发), 私有模型 (内网)
 
 ## Global Constraints
 

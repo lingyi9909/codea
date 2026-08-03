@@ -101,7 +101,7 @@ feat: <task description>
 
 ## 技术栈
 
-- **TUI**：Go 1.22+ / Bubble Tea / Lip Gloss / Glamour
+- **TUI**：Go 1.26.5 / Bubble Tea / Lip Gloss / Glamour
 - **Runtime**：OpenCode（锁定版本，`opencode serve`）
 - **Plugin**：TypeScript（ESM，target bun，自包含 Bundle）
 - **企业 Tool**：TypeScript Plugin（7 个专用 Tool）
