@@ -2,13 +2,13 @@
 
 **Task:** 1
 
-**Status:** in_progress
+**Status:** awaiting_acceptance
 
-**Current step:** 7 — Phase 0 收尾与机器门禁
+**Current step:** 10 — 等待人工验收
 
 **Date:** 2026-08-03
 
-**Checkpoint:** `40f2aa05fcc3c69e813600ee3c93878c52645cae`
+**Checkpoint:** `a970135ddfb8e744d3211ddc269c3b1032142d47`
 
 ## 已完成内容
 
@@ -93,11 +93,11 @@
 
 ## 下一步
 
-运行 Task 1 全量验证与 Phase 0 Gate，完成后进入人工验收。
+等待人工验收 Task 1；验收前不得开始 Task 2。
 
 ## Gate 结论
 
 - **Verification (S1–S6):** `pass`
-- **Task Gate:** `not_evaluated`（待最终全量验证）
+- **Task Gate:** `pass`
 - **Human acceptance:** `false`
-- **Task 1:** `in_progress`
+- **Task 1:** `awaiting_acceptance`

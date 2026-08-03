@@ -6,13 +6,13 @@
 - 工作分支：`develop`，后续直接在该分支按顺序修改，不另建功能分支
 - 技术设计与主实施计划：已评审通过
 - 执行状态机制设计与实施计划：已评审通过
-- 当前执行阶段：Task E0、Task 0 已人工验收通过；Task 1 S1、S2 已通过，当前 Step 3（S3）
-- 唯一下一步：执行 S3 Tool Approval 批准与拒绝验证
+- 当前执行阶段：Task E0、Task 0 已人工验收通过；Task 1 S1～S6 与机器门禁已通过，当前等待人工验收
+- 唯一下一步：人工验收 Task 1
 - 边界：Task 1 的 S1～S6 全部通过并进入 `awaiting_acceptance` 后停止，人工验收前不得开始 Task 2
 - 已知非阻塞改进：项目全部完成时补充校验终态 `current.task = 21` 的一致性
 - Go 基线：项目统一使用 Go 1.26.5
 
-当前仓库已包含 `docs/execution-state.yaml` 及其校验器。状态文件将 Task 0 标记为 `completed` 并记录人工验收，当前 Task 1 Step 3 为 `in_progress`（S1、S2 已通过）；版本锁定、S1 离线验证和 S2 全链路证据已经持久化。
+当前仓库已包含 `docs/execution-state.yaml` 及其校验器。Task 1 的六项 Spike、OpenAPI、Golden SSE、机器结果和 Phase 0 Gate 均已持久化，状态为 `awaiting_acceptance`。
 
 ## 2. 权威文档与读取顺序
 
@@ -117,15 +117,15 @@ Task Gate 状态：
 9. API Key 不得写入普通配置或日志。
 10. 状态文件、Task 报告、验证证据和实际 Git Commit 必须一致。
 
-## 7. 当前执行点：Task 1 Step 3
+## 7. 当前执行点：Task 1 等待人工验收
 
 Task E0 和 Task 0 已人工验收通过。Task 1 已锁定 OpenCode v1.18.11（commit `012c2f57f976489d88bd4598a056b4bdcdd428ee`），官方 Linux x64 和 macOS arm64 制品 SHA-256 校验一致。
 
 S1（Server 离线启动）已通过。在 macOS arm64 上使用正确的 `OPENCODE_DISABLE_MODELS_FETCH=1` 环境变量完成真实断网验证（关闭全部外部接口 + 全接口 tcpdump + 隔离沙箱）。内部日志仅 3 行 INFO，零 ERROR，零 `models.opencode.ai` 请求；全接口抓包无 OpenCode 相关出站流量。详细证据见 `docs/spike-report.md` 和 `docs/spike-artifacts/s1-20260803-175535/`。
 
-S2（Session + Prompt + SSE 全链路）已通过。真实 OpenCode v1.18.11 Runtime 使用本地 OpenAI-compatible 流式协议桩完成 Session 200、Prompt 204、SSE 流式文本和目标 Session idle；最终消息可回读，未出现 `session.error`。详细证据见 `docs/spike-report.md` 和 `docs/spike-artifacts/s2-20260803/`。
+S2～S6 均已通过：Session/SSE、Tool Approval 批准与拒绝、结构化 Reasoning、Skill 来源隔离及三模式隔离均有真实 Runtime 证据。完整结果见 `docs/spike-report.md`、`docs/spike-results.json` 和 `docs/spike-artifacts/`。
 
-当前进入 S3（Tool Approval 批准与拒绝验证），S4～S6 待开始。S1～S6 全部通过并经人工验收后才能开始 Task 2。
+`scripts/run-phase0-gates.sh` 已返回全 PASS；锁定版本 OpenAPI 和 Golden SSE 已固化。当前必须停止开发并等待人工验收，验收前不得开始 Task 2。
 
 ## 8. E0 验收后的 Task 0
 
@@ -196,4 +196,4 @@ Task 0 验收后，Task 1 执行 S1～S6：
 
 ## 11. 当前交接结论
 
-Task E0 和 Task 0 已人工验收通过；Go 基线统一为 1.26.5。当前进入 Task 1 的 Phase 0 S1～S6，只有六项 Spike 全部通过并经人工验收后才能开始 Task 2。任何阶段均不得一次性开发完整 V1。
+Task E0 和 Task 0 已人工验收通过；Go 基线统一为 1.26.5。Task 1 的 S1～S6、自动验证和 Task Gate 已通过，当前为 `awaiting_acceptance`。人工验收前不得开始 Task 2。
