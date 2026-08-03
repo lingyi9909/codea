@@ -67,6 +67,15 @@ data["tasks"]["0"].update({
     "taskGateStatus": "pass",
     "humanAccepted": False,
 })
+for task_id in map(str, range(1, 22)):
+    data["tasks"][task_id].update({
+        "status": "pending",
+        "completedSteps": [],
+        "verificationStatus": "not_run",
+        "taskGateStatus": "not_evaluated",
+        "humanAccepted": False,
+        "checkpoint": None,
+    })
 
 duplicate = copy.deepcopy(data)
 duplicate["current"]["status"] = "in_progress"

@@ -6,13 +6,13 @@
 - 工作分支：`develop`，后续直接在该分支按顺序修改，不另建功能分支
 - 技术设计与主实施计划：已评审通过
 - 执行状态机制设计与实施计划：已评审通过
-- 当前执行阶段：Task E0、Task 0 已人工验收通过；Task 1 尚未开始
-- 唯一下一步：开始 Task 1 Step 1，锁定 OpenCode 版本并执行断网启动验证
+- 当前执行阶段：Task E0、Task 0 已人工验收通过；Task 1 Step 1 正在执行
+- 唯一下一步：锁定 OpenCode 版本并执行断网启动验证，保存版本、commit、启动日志和网络观测证据
 - 边界：Task 1 的 S1～S6 全部通过并进入 `awaiting_acceptance` 后停止，人工验收前不得开始 Task 2
 - 已知非阻塞改进：项目全部完成时补充校验终态 `current.task = 21` 的一致性
 - Go 基线：项目统一使用 Go 1.26.5
 
-当前仓库已包含 `docs/execution-state.yaml` 及其校验器。状态文件将 Task 0 标记为 `completed` 并记录人工验收，当前指向尚未开始的 Task 1 Step 1。
+当前仓库已包含 `docs/execution-state.yaml` 及其校验器。状态文件将 Task 0 标记为 `completed` 并记录人工验收，当前 Task 1 Step 1 为 `in_progress`。
 
 ## 2. 权威文档与读取顺序
 
