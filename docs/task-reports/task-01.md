@@ -4,11 +4,11 @@
 
 **Status:** in_progress
 
-**Current step:** 2 — S2 Session + Prompt + SSE 全链路
+**Current step:** 3 — S3 Tool Approval 批准与拒绝
 
 **Date:** 2026-08-03
 
-**Checkpoint:** `06bb850e6876014e4024fdd98d6744ba2b0626a7`
+**Checkpoint:** `7d96468b415f6ef6c09206bacc59eae61b60221a`
 
 ## 已完成内容
 
@@ -38,13 +38,28 @@
 
 初版使用了不存在的环境变量名（`OPENCODE_SKIP_MODEL_FETCH`、`OPENCODE_DISABLE_AUTO_UPDATE`、`OPENCODE_SKIP_WEB_UI`、`OPENCODE_OFFLINE_MODE`），导致 OpenCode 仍请求 `models.opencode.ai`。经上游源码（`flag.ts`、`models-dev.ts`）确认正确变量名后修正。
 
+### S2 Session + Prompt + SSE — PASS
+
+- 新增 Go Spike 客户端 `tui/cmd/spike-s2/`，按 TDD 验证 SSE JSON 解码、目标 Session 过滤和 idle 完成条件。
+- 使用真实 OpenCode v1.18.11 Runtime 与本地 OpenAI-compatible 流式协议桩完成确定性验证。
+- 实际链路结果：
+  - `POST /session`：HTTP 200，返回非空 Session ID。
+  - `GET /global/event`：建立全局 SSE。
+  - `POST /session/:id/prompt_async`：HTTP 204。
+  - 共记录 76 条 SSE，目标 Session 从 busy 进入 idle。
+  - `message.part.delta` 返回 `hello from s2`。
+  - `GET /session/:id/message` 可回读用户消息和 Assistant 回答。
+- 未出现 `session.error`；OpenCode 内部日志无 ERROR。
+- 原始证据：`docs/spike-artifacts/s2-20260803/`。
+- 该 Spike 验证 Runtime 协议与状态链路；本地模型协议桩不用于评价模型质量。
+
 ## 下一步
 
-S2：Go Session + Prompt + SSE 全链路验证。
+S3：Tool Approval 批准与拒绝验证。
 
 ## Gate 结论
 
-- **Verification (S1):** `pass`
+- **Verification (S1–S2):** `pass`
 - **Task Gate:** `not_evaluated`（待 S1–S6 全部通过）
 - **Human acceptance:** `false`
 - **Task 1:** `in_progress`
