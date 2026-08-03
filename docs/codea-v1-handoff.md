@@ -6,13 +6,13 @@
 - 工作分支：`develop`，后续直接在该分支按顺序修改，不另建功能分支
 - 技术设计与主实施计划：已评审通过
 - 执行状态机制设计与实施计划：已评审通过
-- 当前执行阶段：Task E0、Task 0 已人工验收通过；Task 1 Step 1 正在执行
-- 唯一下一步：锁定 OpenCode 版本并执行断网启动验证，保存版本、commit、启动日志和网络观测证据
+- 当前执行阶段：Task E0、Task 0 已人工验收通过；Task 1 Step 1 因执行环境不允许网络隔离和网络调用观测而阻塞
+- 唯一下一步：在允许关闭公网或创建无出站网络 Sandbox 的环境，补做 OpenCode v1.18.11 的 S1 断网启动与 DNS/HTTP 观测
 - 边界：Task 1 的 S1～S6 全部通过并进入 `awaiting_acceptance` 后停止，人工验收前不得开始 Task 2
 - 已知非阻塞改进：项目全部完成时补充校验终态 `current.task = 21` 的一致性
 - Go 基线：项目统一使用 Go 1.26.5
 
-当前仓库已包含 `docs/execution-state.yaml` 及其校验器。状态文件将 Task 0 标记为 `completed` 并记录人工验收，当前 Task 1 Step 1 为 `in_progress`。
+当前仓库已包含 `docs/execution-state.yaml` 及其校验器。状态文件将 Task 0 标记为 `completed` 并记录人工验收，当前 Task 1 Step 1 为 `blocked`；版本锁定和本地启动证据已经持久化，无须重做。
 
 ## 2. 权威文档与读取顺序
 
@@ -128,6 +128,8 @@ Task E0 已完成实现和自动验证，交付物为：
 - `AGENTS.md`、`CLAUDE.md` 和主实施计划中的恢复与验收规则
 
 E0 已按计划完成 RED → GREEN 测试、状态校验、Git 检查和人工验收。Task 0 的计划文件均已补齐，状态校验测试回归已修复；用户在 checkpoint `97ea4b8e7f6d86a97e17781bb858b5f90ad81b20` 上执行 `make build`、运行生成的 `build/codea`，并执行 `go test ./...`，结果符合 Task 0 骨架验收标准，且已明确人工验收通过。下一步从 Task 1 Step 1 开始。
+
+Task 1 已锁定 OpenCode v1.18.11（commit `012c2f57f976489d88bd4598a056b4bdcdd428ee`），官方 Linux x64 制品 SHA-256 与实测一致，本地 Server 启动和 `/global/health` 通过。当前容器对 `unshare -n`、`bwrap --unshare-net` 和 `ptrace/strace` 均返回 `Operation not permitted`，无法形成真实断网和出站网络观测证据，因此 S1 保持阻塞，S2～S6 未开始。详细证据见 `docs/spike-report.md`。
 
 ## 8. E0 验收后的 Task 0
 
