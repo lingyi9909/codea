@@ -2,47 +2,49 @@
 
 **Task:** 1
 
-**Status:** blocked
+**Status:** in_progress
 
-**Current step:** 1 — S1 Server 离线启动
+**Current step:** 2 — S2 Session + Prompt + SSE 全链路
 
 **Date:** 2026-08-03
 
-**Checkpoint:** `f09d9b8262d03438fee4728e551f889d03179c93`
+**Checkpoint:** `30e72e67487a68ce57c72aa7bc1db2e45221fa36`
 
 ## 已完成内容
 
-- 锁定 OpenCode `v1.18.11`，Tag commit 为 `012c2f57f976489d88bd4598a056b4bdcdd428ee`。
-- 下载官方 `opencode-linux-x64.tar.gz`，官方与实测 SHA-256 均为 `a4dffcc00a5a93256c6bd06aa0c984320528f564db52a1f4becd5c7de9fb59a1`。
-- 在独立配置目录和离线相关开关下启动 Server。
-- 使用临时 Basic Auth 调用 `/global/health`，返回 `healthy: true`、`version: 1.18.11`。
-- 更新 `runtime/version.json` 和 `runtime/capabilities.yaml` 的锁定版本。
-- 保存原始版本、启动和健康检查证据，详见 `docs/spike-report.md`。
+### S1 Server 离线启动 — PASS
 
-## 阻塞项
+- 锁定 OpenCode v1.18.11，Linux x64 和 macOS arm64 制品 SHA-256 校验一致。
+- 在 macOS arm64 上完成真实断网验证：
+  - 关闭 en0-6/awdl0/llw0/bridge0/ap1 全部外部接口
+  - 完全隔离沙箱：独立 `$HOME`、`XDG_*`、`OPENCODE_CONFIG_DIR`
+  - tcpdump 9 接口持续抓包
+  - trap 机制保证断网后无论成功失败都恢复网络
+- 使用正确的官方环境变量：
+  - `OPENCODE_DISABLE_MODELS_FETCH=1`（核心——禁用 models.opencode.ai 请求）
+  - `OPENCODE_DISABLE_AUTOUPDATE=1`
+  - `OPENCODE_DISABLE_EMBEDDED_WEB_UI=1`
+  - `OPENCODE_DISABLE_LSP_DOWNLOAD=1`
+  - `OPENCODE_DISABLE_DEFAULT_PLUGINS=1`
+  - `OPENCODE_DISABLE_EXTERNAL_SKILLS=1`
+  - `OPENCODE_DISABLE_PROJECT_CONFIG=1`
+  - `OPENCODE_DISABLE_CLAUDE_CODE=1`
+- 验证结果：
+  - 健康检查：`{"healthy":true,"version":"1.18.11"}`
+  - 内部日志：3 行 INFO，零 ERROR，零 `models.opencode.ai`
+  - tcpdump：31 包全在 en0 且时间戳在断网前，来自非 OpenCode 进程；其余接口零包
 
-S1 必须证明 OpenCode 在真实断网环境启动，并确认启动期间没有公网 DNS/HTTP 请求。当前容器：
+### 初版问题与修正
 
-- `unshare -n`：`Operation not permitted`
-- `bwrap --unshare-net`：`Operation not permitted`
-- `strace`：`PTRACE_TRACEME: Operation not permitted`
+初版使用了不存在的环境变量名（`OPENCODE_SKIP_MODEL_FETCH`、`OPENCODE_DISABLE_AUTO_UPDATE`、`OPENCODE_SKIP_WEB_UI`、`OPENCODE_OFFLINE_MODE`），导致 OpenCode 仍请求 `models.opencode.ai`。经上游源码（`flag.ts`、`models-dev.ts`）确认正确变量名后修正。
 
-因此无法完成必要的网络隔离和调用观测。仅凭本地启动成功不足以将 S1 标记为 `pass`。
+## 下一步
 
-## 恢复动作
-
-在允许控制网络和抓包的环境，使用已锁定的 v1.18.11 制品补做：
-
-1. 禁止 OpenCode 进程访问公网。
-2. 启动 `opencode serve --hostname 127.0.0.1 --port 49321`。
-3. 调用 `/global/health` 并保存响应。
-4. 保存 DNS、HTTP、HTTPS 出站观测，确认没有公网请求。
-5. 证据通过后将 S1 标记为 `pass`，再开始 S2。
+S2：Go Session + Prompt + SSE 全链路验证。
 
 ## Gate 结论
 
-- **Verification:** `unable_to_run`
-- **Task Gate:** `unable_to_evaluate`
+- **Verification (S1):** `pass`
+- **Task Gate:** `not_evaluated`（待 S1–S6 全部通过）
 - **Human acceptance:** `false`
-- **Task 1:** `blocked`
-- **S2–S6:** 未开始
+- **Task 1:** `in_progress`

@@ -2,20 +2,18 @@
 
 ## 当前结论
 
-**S1 判定：FAIL。** OpenCode v1.18.11 在断网环境下能够启动并通过 `/global/health`，但内部日志确认启动时两次尝试访问 `GET https://models.opencode.ai/api.json`，不满足 S1 门禁「启动成功，不访问公网」。
+**S1 判定：PASS。** 使用正确的 `OPENCODE_DISABLE_MODELS_FETCH=1` 后，OpenCode v1.18.11 在真实断网 + 完全隔离沙箱环境下启动成功，内部日志零 ERROR、零 `models.opencode.ai` 请求，全接口抓包无 OpenCode 相关出站流量。
 
 | Spike | 状态 | 说明 |
 |---|---|---|
-| S1 Server 离线启动 | **FAIL** | 内部日志确认收到 `models.opencode.ai` 请求；v1.18.11 无支持的离线配置 |
-| S2 Session + Prompt + SSE | NOT_RUN | S1 未通过，不得继续 |
-| S3 Tool Approval | NOT_RUN | S1 未通过，不得继续 |
-| S4 Reasoning | NOT_RUN | S1 未通过，不得继续 |
-| S5 Skill 来源隔离 | NOT_RUN | S1 未通过，不得继续 |
-| S6 模式隔离 | NOT_RUN | S1 未通过，不得继续 |
+| S1 Server 离线启动 | **PASS** | 真实断网 + 正确环境变量，内部日志无公网请求 |
+| S2 Session + Prompt + SSE | NOT_RUN | 待开始 |
+| S3 Tool Approval | NOT_RUN | 待开始 |
+| S4 Reasoning | NOT_RUN | 待开始 |
+| S5 Skill 来源隔离 | NOT_RUN | 待开始 |
+| S6 模式隔离 | NOT_RUN | 待开始 |
 
-**阻塞原因**：OpenCode v1.18.11 在启动时硬编码请求 `https://models.opencode.ai/api.json` 以获取模型列表缓存。CLI 参数、环境变量和配置文件中均未提供禁用该请求的机制。上游有同类问题报告（[anomalyco/opencode#10766](https://github.com/anomalyco/opencode/issues/10766)、[anomalyco/opencode#16117](https://github.com/anomalyco/opencode/issues/16117)），表明这是上游已知但尚未解决的限制。
-
-**解决方向**：需要对 OpenCode v1.18.11 打最小 Patch，在启动路径中跳过 `models.dev` 的模型目录获取，或提供可配置的禁用开关。
+**关键发现**：初版验证使用了不存在的环境变量名（`OPENCODE_SKIP_MODEL_FETCH`），导致 OpenCode 仍发起 `models.opencode.ai` 请求。v1.18.11 官方已支持 `OPENCODE_DISABLE_MODELS_FETCH=1` 禁用该请求，无需 Patch。
 
 ---
 
@@ -107,7 +105,7 @@ timestamp=2026-08-03T06:58:03.235Z level=ERROR run=24ea301a message="Failed to f
 - `en0` 被关闭后不产生流量是预期结果，不是「没有请求」的证据
 - 出站请求的实际判定必须结合 OpenCode 内部日志
 
-### S1 门禁对照
+### S1 门禁对照（修正版验证）
 
 | 门禁要求 | 状态 | 证据 |
 |----------|------|------|
@@ -115,33 +113,46 @@ timestamp=2026-08-03T06:58:03.235Z level=ERROR run=24ea301a message="Failed to f
 | 独立沙箱环境 | 满足 | 全新 `$HOME` + `XDG_*` + `OPENCODE_CONFIG_DIR` |
 | 版本锁定 + SHA-256 一致 | 满足 | v1.18.11，linux/darwin 校验一致 |
 | Server 启动成功 | 满足 | `{"healthy":true,"version":"1.18.11"}` |
-| **不访问公网** | **不满足** | 内部日志两次 `GET https://models.opencode.ai/api.json` |
-| 无公网 DNS 请求 | **无法判定** | tcpdump 仅覆盖 en0，utun 未监听 |
-| 无公网 HTTP/HTTPS 出站 | **不满足** | 同上，内部日志已证明请求尝试 |
+| 不访问公网 | **满足** | 内部日志零 `models.opencode.ai`，零 ERROR |
+| 无公网 DNS 请求 | 满足 | 全接口抓包无 OpenCode 相关 DNS 查询 |
+| 无公网 HTTP/HTTPS 出站 | 满足 | 全接口抓包无 OpenCode 相关 HTTP/HTTPS 流量 |
 
-### 离线配置调查
+### 初版失败原因
 
-针对「v1.18.11 是否有受支持的配置禁用模型目录获取」进行了以下调查：
+初版验证使用以下**不存在**的环境变量，导致 OpenCode 仍发起 `models.opencode.ai` 请求：
 
-1. **CLI 参数**：`opencode serve --help` 无离线相关参数，`--pure` 仅禁用外部 Plugin，不跳过模型获取。
-2. **环境变量**：`OPENCODE_OFFLINE_MODE`、`OPENCODE_SKIP_MODEL_FETCH` 等变量（由我们自行尝试设置）对 v1.18.11 无效——这些变量在 OpenCode 源码中不存在。
-3. **配置文件**：OpenCode 尝试加载 `config.json`、`opencode.json`、`opencode.jsonc`，但无文档说明可禁用模型目录获取的配置键。
-4. **上游 Issue**：
-   - [Failed to fetch models.dev](https://github.com/anomalyco/opencode/issues/10766) — 同类问题报告
-   - [Offline mode proposal](https://github.com/anomalyco/opencode/issues/16117) — 离线模式提议，尚未合并
+| 错误变量（不存在） | 正确变量（v1.18.11 官方支持） |
+|-------------------|------------------------------|
+| `OPENCODE_SKIP_MODEL_FETCH` | `OPENCODE_DISABLE_MODELS_FETCH` |
+| `OPENCODE_DISABLE_AUTO_UPDATE` | `OPENCODE_DISABLE_AUTOUPDATE` |
+| `OPENCODE_SKIP_WEB_UI` | `OPENCODE_DISABLE_EMBEDDED_WEB_UI` |
+| `OPENCODE_OFFLINE_MODE` | （不存在于 v1.18.11） |
 
-**结论**：v1.18.11 没有受支持的方式禁用 `models.opencode.ai` 请求。需要最小 Patch。
+官方文档参考：`packages/web/src/content/docs/cli.mdx`、`packages/core/src/flag/flag.ts`、`packages/core/src/models-dev.ts`
 
-### 测试脚本已知缺陷
+### 修正版验证（s1-20260803-175535）
 
-当前 `docs/spike-artifacts/s1-network-test.sh` 存在以下问题，需在下次验证前修复：
+**环境变量**：
+```bash
+OPENCODE_DISABLE_MODELS_FETCH=1
+OPENCODE_DISABLE_AUTOUPDATE=1
+OPENCODE_DISABLE_EMBEDDED_WEB_UI=1
+OPENCODE_DISABLE_LSP_DOWNLOAD=1
+OPENCODE_DISABLE_DEFAULT_PLUGINS=1
+OPENCODE_DISABLE_EXTERNAL_SKILLS=1
+OPENCODE_DISABLE_PROJECT_CONFIG=1
+OPENCODE_DISABLE_CLAUDE_CODE=1
+```
 
-1. **无 `trap` 机制**：`set -e` 下任何步骤失败（如断网后 OpenCode 未启动）会直接退出，网络接口无法恢复。
-2. **抓包覆盖不全**：仅监听 `en0`，未覆盖保持活跃的 `utun0-5` 接口。应监听所有接口或至少 `en0` + `utun*`。
-3. **未保存完整运行日志**：脚本 stdout/stderr 未重定向到文件，无法回溯执行过程以验证步骤是否全部完成。
-4. **仅保存 stdout 而非内部日志**：之前将 Server 的一行 stdout 当作「Server 日志（完整）」，遗漏了 `$XDG_DATA_HOME/opencode/log/opencode.log` 中的内部日志（含两次模型请求的 ERROR 记录）。
+**内部日志**（3 行，全部 INFO）：
+```
+INFO loading config.json
+INFO loading opencode.json
+INFO loading opencode.jsonc
+```
+零 ERROR，零 `models.opencode.ai`。
 
-下次运行前需修复以上四项，并将完整执行日志和 OpenCode 内部日志一并保存为证据。
+**tcpdump**：9 个接口合计 31 包，全部在 `en0` 上，时间戳在 `ifconfig down` 前（17:55:35-36），来自 jsss/xray 等非 OpenCode 进程。其余 8 个接口（awdl0/llw0/utun0-5）零包。
 
 ---
 
@@ -152,27 +163,16 @@ timestamp=2026-08-03T06:58:03.235Z level=ERROR run=24ea301a message="Failed to f
 | `docs/spike-artifacts/s1-release.json` | 版本锁定结构化数据 |
 | `docs/spike-artifacts/s1-server.log` | Linux 容器 Server stdout |
 | `docs/spike-artifacts/s1-health.json` | Linux 容器健康检查响应 |
-| `docs/spike-artifacts/s1-offline-real.pcap` | macOS tcpdump（en0 only，4 包） |
-| `docs/spike-artifacts/s1-offline-real-server.log` | macOS Server stdout（1 行） |
-| `docs/spike-artifacts/s1-offline-real-health.json` | macOS 健康检查响应 |
-| `docs/spike-artifacts/s1-tcpdump.log` | tcpdump 进程输出 |
-| `docs/spike-artifacts/s1-network-test.sh` | 测试脚本 |
-
-以下文件位于沙箱中，未提交到仓库（路径见报告内文）：
-
-- `$XDG_DATA_HOME/opencode/log/opencode.log` — OpenCode 内部日志（含 models.dev 错误）
-
----
-
-## 下一步
-
-1. **确认 Patch 策略**：评估对 OpenCode v1.18.11 打最小 Patch 以跳过模型目录获取的可行性和工作量。如可行，Patch 应确保在离线配置下 `models.opencode.ai` 请求不被发起，OpenCode 内部日志不出现相关 ERROR。
-2. **修复测试脚本**：补齐 trap、全接口抓包、完整执行日志保存。
-3. **重新验证**：Patch 后在新隔离沙箱中运行，确认健康检查通过 + 内部日志无公网请求 + 全接口抓包无 DNS/HTTP 出站。
-4. **通过后更新状态**：S1 → PASS，Task 1 → in_progress Step 2。
+| `docs/spike-artifacts/s1-network-test.sh` | 修正版测试脚本（trap + 全接口 + 正确环境变量） |
+| `docs/spike-artifacts/s1-20260803-175535/` | 修正版验证完整证据目录 |
+| `docs/spike-artifacts/s1-20260803-175535/execution.log` | 脚本完整执行日志 |
+| `docs/spike-artifacts/s1-20260803-175535/health.json` | 健康检查响应 |
+| `docs/spike-artifacts/s1-20260803-175535/server-stdout.log` | Server stdout |
+| `docs/spike-artifacts/s1-20260803-175535/opencode-internal.log` | OpenCode 内部日志（3 行 INFO，零 ERROR） |
+| `docs/spike-artifacts/s1-20260803-175535/traffic-*.pcap` | 逐接口 tcpdump 原始抓包（9 个接口） |
 
 ---
 
 ## 未开始的验证
 
-S2～S6 尚未执行；没有创建 `docs/spike-results.json`，也没有将任何未验证 Spike 写成 `pass`。
+S2～S6 尚未执行；没有创建 `docs/spike-results.json`。

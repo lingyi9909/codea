@@ -1,0 +1,142 @@
+=== S1 Offline Startup Verification ===
+=== Run ID: s1-20260803-175535 ===
+=== 2026年 8月 3日 星期一 17时55分35秒 CST ===
+
+=== Environment ===
+OPENCODE_DISABLE_MODELS_FETCH=1
+OPENCODE_DISABLE_AUTOUPDATE=1
+
+=== Active interfaces (before) ===
+lo0
+anpi2
+anpi0
+anpi1
+en4
+en5
+en6
+en1
+en2
+en3
+bridge0
+ap1
+en0
+awdl0
+llw0
+utun0
+utun1
+utun2
+utun3
+utun4
+utun5
+
+=== Starting tcpdump on all external interfaces ===
+  tcpdump on en0 PID=12514
+  tcpdump on awdl0 PID=12516
+  tcpdump on llw0 PID=12518
+  tcpdump on utun0 PID=12520
+  tcpdump on utun1 PID=12522
+  tcpdump on utun2 PID=12528
+  tcpdump on utun3 PID=12532
+  tcpdump on utun4 PID=12535
+  tcpdump on utun5 PID=12539
+
+=== Disabling external interfaces ===
+  en0: down
+  en1: down
+  en2: down
+  en3: down
+  en4: down
+  en5: down
+  en6: down
+  awdl0: down
+  llw0: down
+  bridge0: down
+  ap1: down
+
+=== Remaining active interfaces ===
+lo0
+anpi2
+anpi0
+anpi1
+utun0
+utun1
+utun2
+utun3
+utun4
+utun5
+
+=== Starting OpenCode Server ===
+OpenCode PID=12618
+
+=== Health check ===
+{"healthy":true,"version":"1.18.11"}
+=== Waiting 20s for any delayed outbound attempts ===
+
+=== Stopping OpenCode ===
+
+=== Stopping tcpdump ===
+
+=== Collecting OpenCode internal log ===
+  saved (       3 lines)
+
+============================================
+=== RESULTS ===
+============================================
+
+--- Health check ---
+{"healthy":true,"version":"1.18.11"}
+--- Server stdout ---
+opencode server listening on http://127.0.0.1:49325
+
+--- OpenCode internal log ---
+timestamp=2026-08-03T09:55:37.734Z level=INFO run=3790dd1d message=loading path=/Users/zhangzhanhui/Documents/job/codea/docs/spike-artifacts/s1-sandbox/config/opencode/config.json
+timestamp=2026-08-03T09:55:37.735Z level=INFO run=3790dd1d message=loading path=/Users/zhangzhanhui/Documents/job/codea/docs/spike-artifacts/s1-sandbox/config/opencode/opencode.json
+timestamp=2026-08-03T09:55:37.736Z level=INFO run=3790dd1d message=loading path=/Users/zhangzhanhui/Documents/job/codea/docs/spike-artifacts/s1-sandbox/config/opencode/opencode.jsonc
+
+  [PASS] zero models.opencode.ai requests
+  [PASS] zero ERROR entries
+
+--- Traffic summary ---
+  awdl0: 0 packets
+  en0: 31 packets
+    DNS: 1  HTTP/HTTPS: 0  <-- CHECK
+  llw0: 0 packets
+  utun0: 0 packets
+  utun1: 0 packets
+  utun2: 0 packets
+  utun3: 0 packets
+  utun4: 0 packets
+  utun5: 0 packets
+  TOTAL: 31 packets
+
+--- Evidence files ---
+total 200
+drwxr-xr-x@ 24 root          staff    768  8月  3 17:56 .
+drwxr-xr-x@ 19 zhangzhanhui  staff    608  8月  3 17:55 ..
+-rw-r--r--@  1 root          staff   2391  8月  3 17:56 execution.log
+-rw-r--r--@  1 root          staff     36  8月  3 17:55 health.json
+-rw-r--r--@  1 root          staff    545  8月  3 17:56 opencode-internal.log
+-rw-r--r--@  1 root          staff     52  8月  3 17:55 server-stdout.log
+-rw-r--r--@  1 root          staff    163  8月  3 17:56 tcpdump-awdl0.log
+-rw-r--r--@  1 root          staff    163  8月  3 17:56 tcpdump-en0.log
+-rw-r--r--@  1 root          staff    162  8月  3 17:56 tcpdump-llw0.log
+-rw-r--r--@  1 root          staff    165  8月  3 17:56 tcpdump-utun0.log
+-rw-r--r--@  1 root          staff    165  8月  3 17:56 tcpdump-utun1.log
+-rw-r--r--@  1 root          staff    165  8月  3 17:56 tcpdump-utun2.log
+-rw-r--r--@  1 root          staff    165  8月  3 17:56 tcpdump-utun3.log
+-rw-r--r--@  1 root          staff    165  8月  3 17:56 tcpdump-utun4.log
+-rw-r--r--@  1 root          staff    165  8月  3 17:56 tcpdump-utun5.log
+-rw-r--r--@  1 root          staff     24  8月  3 17:56 traffic-awdl0.pcap
+-rw-r--r--@  1 root          staff  12459  8月  3 17:56 traffic-en0.pcap
+-rw-r--r--@  1 root          staff     24  8月  3 17:56 traffic-llw0.pcap
+-rw-r--r--@  1 root          staff     24  8月  3 17:56 traffic-utun0.pcap
+-rw-r--r--@  1 root          staff     24  8月  3 17:56 traffic-utun1.pcap
+-rw-r--r--@  1 root          staff     24  8月  3 17:56 traffic-utun2.pcap
+-rw-r--r--@  1 root          staff     24  8月  3 17:56 traffic-utun3.pcap
+-rw-r--r--@  1 root          staff     24  8月  3 17:56 traffic-utun4.pcap
+-rw-r--r--@  1 root          staff     24  8月  3 17:56 traffic-utun5.pcap
+
+=== DONE ===
+=== cleanup: restoring network ===
+=== cleanup: restoring network ===
+=== cleanup: done ===
