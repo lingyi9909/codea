@@ -117,19 +117,13 @@ Task Gate 状态：
 9. API Key 不得写入普通配置或日志。
 10. 状态文件、Task 报告、验证证据和实际 Git Commit 必须一致。
 
-## 7. 当前执行点：Task 1 Step 1
+## 7. 当前执行点：Task 1 Step 2
 
-Task E0 已完成实现和自动验证，交付物为：
+Task E0 和 Task 0 已人工验收通过。Task 1 已锁定 OpenCode v1.18.11（commit `012c2f57f976489d88bd4598a056b4bdcdd428ee`），官方 Linux x64 和 macOS arm64 制品 SHA-256 校验一致。
 
-- `docs/execution-state.yaml`
-- `docs/task-reports/README.md`
-- `scripts/check-execution-state.sh`
-- `tests/execution-state/state_validator_test.sh`
-- `AGENTS.md`、`CLAUDE.md` 和主实施计划中的恢复与验收规则
+S1（Server 离线启动）已通过。在 macOS arm64 上使用正确的 `OPENCODE_DISABLE_MODELS_FETCH=1` 环境变量完成真实断网验证（关闭全部外部接口 + 全接口 tcpdump + 隔离沙箱）。内部日志仅 3 行 INFO，零 ERROR，零 `models.opencode.ai` 请求；全接口抓包无 OpenCode 相关出站流量。详细证据见 `docs/spike-report.md` 和 `docs/spike-artifacts/s1-20260803-175535/`。
 
-E0 已按计划完成 RED → GREEN 测试、状态校验、Git 检查和人工验收。Task 0 的计划文件均已补齐，状态校验测试回归已修复；用户在 checkpoint `97ea4b8e7f6d86a97e17781bb858b5f90ad81b20` 上执行 `make build`、运行生成的 `build/codea`，并执行 `go test ./...`，结果符合 Task 0 骨架验收标准，且已明确人工验收通过。下一步从 Task 1 Step 1 开始。
-
-Task 1 已锁定 OpenCode v1.18.11（commit `012c2f57f976489d88bd4598a056b4bdcdd428ee`），官方 Linux x64 制品 SHA-256 与实测一致，本地 Server 启动和 `/global/health` 通过。当前容器对 `unshare -n`、`bwrap --unshare-net` 和 `ptrace/strace` 均返回 `Operation not permitted`，无法形成真实断网和出站网络观测证据，因此 S1 保持阻塞，S2～S6 未开始。详细证据见 `docs/spike-report.md`。
+当前进入 S2（Session + Prompt + SSE 全链路验证），S3～S6 待开始。S1～S6 全部通过并经人工验收后才能开始 Task 2。
 
 ## 8. E0 验收后的 Task 0
 
