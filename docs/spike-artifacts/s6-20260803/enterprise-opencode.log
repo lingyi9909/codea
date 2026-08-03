@@ -1,0 +1,3 @@
+timestamp=2026-08-03T15:15:30.437Z level=INFO run=d8a068aa message=loading path=/tmp/codea-s6-run.GeOEsB/enterprise/xdg/opencode/config.json
+timestamp=2026-08-03T15:15:30.439Z level=INFO run=d8a068aa message=loading path=/tmp/codea-s6-run.GeOEsB/enterprise/xdg/opencode/opencode.json
+timestamp=2026-08-03T15:15:30.439Z level=INFO run=d8a068aa message=loading path=/tmp/codea-s6-run.GeOEsB/enterprise/xdg/opencode/opencode.jsonc

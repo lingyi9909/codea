@@ -4,7 +4,7 @@
 
 **Status:** in_progress
 
-**Current step:** 6 — S6 双模式基础隔离
+**Current step:** 7 — Phase 0 收尾与机器门禁
 
 **Date:** 2026-08-03
 
@@ -78,13 +78,26 @@
 - 必需组合：独立 HOME/XDG、`OPENCODE_CONFIG_DIR`、`OPENCODE_DISABLE_EXTERNAL_SKILLS=1`、`OPENCODE_DISABLE_PROJECT_CONFIG=1`、`OPENCODE_DISABLE_CLAUDE_CODE=1`。
 - 无需 OpenCode Patch。
 
+### S6 双模式基础隔离 — PASS
+
+- Enterprise：只加载批准配置 Skill 与 Runtime 内置 Skill，不注入项目 Skill。
+- General Compatible：加载合法项目 Skill，仍隔离用户/Claude/Agents 来源。
+- General Strict（V1 默认）：不注入项目 Skill。
+- 三组均使用独立 Runtime 实例和真实 `/skill` API，结果精确匹配预期集合。
+
+### Phase 0 收尾
+
+- `docs/spike-results.json` 已记录 S1～S6 全 PASS。
+- `scripts/run-phase0-gates.sh` 已按 TDD 实现，缺失 S6 会失败，真实结果会通过。
+- 固化 OpenCode v1.18.11 OpenAPI 3.1 文档及 76 条 Golden SSE。
+
 ## 下一步
 
-S6：General Compatible / Enterprise 模式隔离验证。
+运行 Task 1 全量验证与 Phase 0 Gate，完成后进入人工验收。
 
 ## Gate 结论
 
-- **Verification (S1–S5):** `pass`
-- **Task Gate:** `not_evaluated`（待 S1–S6 全部通过）
+- **Verification (S1–S6):** `pass`
+- **Task Gate:** `not_evaluated`（待最终全量验证）
 - **Human acceptance:** `false`
 - **Task 1:** `in_progress`

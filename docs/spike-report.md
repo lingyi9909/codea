@@ -2,7 +2,7 @@
 
 ## 当前结论
 
-**S1～S5 判定：PASS。** S1 已证明离线启动；S2 已完成 Session/SSE；S3 已验证 Tool Permission；S4 已验证 Reasoning；S5 已验证 Skill 来源隔离。
+**S1～S6 判定：PASS。** 六个 Phase 0 技术假设均已通过真实 Runtime 或隔离对照验证，可以执行机器门禁。
 
 | Spike | 状态 | 说明 |
 |---|---|---|
@@ -11,7 +11,7 @@
 | S3 Tool Approval | **PASS** | `permission.asked` 可接收，`once/reject` 均正确执行 |
 | S4 Reasoning | **PASS** | 独立 `reasoning` 与 `text` Part，无需 `<think>` 拆分 |
 | S5 Skill 来源隔离 | **PASS** | 隔离模式只加载内置与批准配置目录 Skill |
-| S6 模式隔离 | NOT_RUN | 待开始 |
+| S6 模式隔离 | **PASS** | Enterprise/General Compatible/General Strict 三模式符合预期 |
 
 **关键发现**：初版验证使用了不存在的环境变量名（`OPENCODE_SKIP_MODEL_FETCH`），导致 OpenCode 仍发起 `models.opencode.ai` 请求。v1.18.11 官方已支持 `OPENCODE_DISABLE_MODELS_FETCH=1` 禁用该请求，无需 Patch。
 
@@ -284,6 +284,22 @@ OPENCODE_DISABLE_CLAUDE_CODE=1
 
 ---
 
+## S6 证据
+
+使用同一组 Skill 夹具和真实 `/skill` API，分别启动三个独立 Runtime Profile：
+
+| 模式 | 实际发现的 Skill | 项目 Skill |
+|---|---|---|
+| Enterprise | `config-approved`、`customize-opencode` | 未注入 |
+| General Compatible | 上述两项 + `project-unapproved` | 已加载 |
+| General Strict（V1 默认） | `config-approved`、`customize-opencode` | 未注入 |
+
+三种模式均继续隔离用户、Claude 和 Agents 兼容来源。General Compatible 的测试项目 Skill 具有合法目录名和 frontmatter，并被 Runtime 成功解析；后续正式实现仍需在启动前接入 Codea Skill 校验器。
+
+S6 结论：基础双模式隔离无需 Patch，可通过独立 Runtime Profile 和启动环境变量实现；Enterprise 与 General Strict 禁用项目配置，General Compatible 仅开放通过校验的项目 Skill 来源。
+
+---
+
 ## 原始证据文件
 
 | 文件 | 说明 |
@@ -321,9 +337,14 @@ OPENCODE_DISABLE_CLAUDE_CODE=1
 | `docs/spike-artifacts/s5-20260803/isolated-skill-names.txt` | 隔离组 Skill 名称清单 |
 | `docs/spike-artifacts/s5-20260803/control-skill-names.txt` | 无隔离对照组 Skill 名称清单 |
 | `docs/spike-artifacts/s5-20260803/isolated-opencode.log` | S5 隔离组 Runtime 日志 |
+| `docs/spike-artifacts/s6-20260803/enterprise-skill-names.txt` | Enterprise Skill 清单 |
+| `docs/spike-artifacts/s6-20260803/general-compatible-skill-names.txt` | General Compatible Skill 清单 |
+| `docs/spike-artifacts/s6-20260803/general-strict-skill-names.txt` | General Strict Skill 清单 |
+| `runtime/openapi/opencode-1.18.11.json` | 锁定版本 OpenAPI 3.1 文档 |
+| `runtime/openapi/golden-sse-s2.jsonl` | 76 条完整会话 Golden SSE |
 
 ---
 
-## 未开始的验证
+## Phase 0 机器结果
 
-S6 尚未执行；在六项 Spike 完成前不创建全通过的 `docs/spike-results.json`。
+`docs/spike-results.json` 记录 S1～S6 全部为 `pass`，由 `scripts/run-phase0-gates.sh` 唯一消费；缺失、失败或未知值均返回非零退出码。
