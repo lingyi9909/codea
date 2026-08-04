@@ -6,13 +6,13 @@
 - 工作分支：`develop`，后续直接在该分支按顺序修改，不另建功能分支
 - 技术设计与主实施计划：已评审通过
 - 执行状态机制设计与实施计划：已评审通过
-- 当前执行阶段：Task E0、Task 0、Task 1 已人工验收通过；Task 1 状态为 `completed`
-- 唯一下一步：按主实施计划开始 Task 2 Step 1，审阅固化的 OpenAPI Spec 并确认关键接口结构
-- 边界：Task 2 仅执行 OpenAPI Spec 生成 DTO 与 Client 的计划范围，完成后仍须进入人工验收门禁
+- 当前执行阶段：Task E0、Task 0、Task 1 已人工验收通过；Task 2 已完成自动验证并处于 `awaiting_acceptance`
+- 唯一下一步：人工验收 Task 2 的 OpenAPI 生成器、锁定 DTO、HTTP Client 与验证证据
+- 边界：Task 2 人工验收前不得开始 Task 3
 - 已知非阻塞改进：项目全部完成时补充校验终态 `current.task = 21` 的一致性
 - Go 基线：项目统一使用 Go 1.26.5
 
-当前仓库已包含 `docs/execution-state.yaml` 及其校验器。Task 1 的六项 Spike、OpenAPI、Golden SSE、机器结果和 Phase 0 Gate 均已持久化；新 macOS S1 证据已补齐全部活动接口与显式时间窗，Task 1 已人工验收通过，可以开始 Task 2。
+当前仓库已包含 `docs/execution-state.yaml` 及其校验器。Task 1 的六项 Spike、OpenAPI、Golden SSE、机器结果和 Phase 0 Gate 均已持久化并通过人工验收。Task 2 已从锁定 v1.18.11 OpenAPI 3.1.0 Spec 生成 DTO，并完成使用生成 DTO 的 HTTP Client；自动验证与 Task Gate 已通过，等待人工验收。
 
 ## 2. 权威文档与读取顺序
 
@@ -117,7 +117,7 @@ Task Gate 状态：
 9. API Key 不得写入普通配置或日志。
 10. 状态文件、Task 报告、验证证据和实际 Git Commit 必须一致。
 
-## 7. 当前执行点：Task 1 已完成，准备开始 Task 2
+## 7. 当前执行点：Task 2 等待人工验收
 
 Task E0 和 Task 0 已人工验收通过。Task 1 已锁定 OpenCode v1.18.11（commit `012c2f57f976489d88bd4598a056b4bdcdd428ee`）。Linux x64、macOS arm64/x64、Windows x64 四个精确 CLI 资产均已实际下载，SHA-256 与官方 Release digest 一致。
 
@@ -125,7 +125,9 @@ S1 旧运行因没有抓取当时仍活跃的 `anpi0-2`，且没有显式进程�
 
 S2～S6 均已通过：Session/SSE、Tool Approval 批准与拒绝、结构化 Reasoning、Skill 来源隔离及三模式隔离均有真实 Runtime 证据。S5/S6 已补充统一可重跑脚本、五类配置夹具和五份原始 `/skill` JSON。完整结果见 `docs/spike-report.md`、`docs/spike-results.json` 和 `docs/spike-artifacts/`。
 
-S5/S6 可复现证据和四平台哈希已经闭环。S1～S6 与 Phase 0 Gate 全部 PASS，Task 1 已于 2026-08-04 通过人工验收并标记为 `completed`；下一步按主实施计划开始 Task 2 Step 1。
+S5/S6 可复现证据和四平台哈希已经闭环。S1～S6 与 Phase 0 Gate 全部 PASS，Task 1 已于 2026-08-04 通过人工验收并标记为 `completed`。
+
+Task 2 已完成锁定 Spec 审阅、OpenAPI 代码生成器、472 个组件与 162 条路径的 DTO 生成，以及 Health、Session、Prompt、Permission、Abort 和 Agent List HTTP Client。Permission Client 使用非废弃 `/permission/{requestID}/reply`；完整 Go 测试、Race Detector、vet、build、生成一致性和状态门禁均通过。代码 checkpoint 为 `0316ed0c3b64a9f2169a2ea11e946ae1000ae7c8`，当前唯一下一步是人工验收 Task 2。
 
 ## 8. E0 验收后的 Task 0
 
@@ -196,4 +198,4 @@ Task 0 验收后，Task 1 执行 S1～S6：
 
 ## 11. 当前交接结论
 
-Task E0、Task 0 和 Task 1 已人工验收通过；Go 基线统一为 1.26.5。Task 1 的 S1～S6、OpenAPI、Golden SSE、版本哈希及 Phase 0 Gate 全部通过并已标记为 `completed`。当前可按主实施计划开始 Task 2 Step 1。
+Task E0、Task 0 和 Task 1 已人工验收通过；Go 基线统一为 1.26.5。Task 2 已完成自动验证与 Task Gate，当前为 `awaiting_acceptance`。人工验收前不得开始 Task 3。
