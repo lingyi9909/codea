@@ -2,13 +2,13 @@
 
 **Task:** 1
 
-**Status:** awaiting_acceptance
+**Status:** completed
 
-**Current step:** 10 — 等待人工验收
+**Current step:** 10 — 人工验收通过，Task 正式结束
 
 **Date:** 2026-08-04
 
-**Checkpoint:** `a6755287dd4ab984c47517b9acdd7320776c39cf`
+**Checkpoint:** `50e32c2673d1324c040d5c2296b25196307a4662`
 
 ## 已完成内容
 
@@ -138,12 +138,12 @@
 ## 未解决问题与恢复建议
 
 - **阻塞项：**无。
-- **下一步：**等待人工验收 Task 1。
-- **范围边界：**人工验收前不得开始 Task 2。
+- **下一步：**按主实施计划开始 Task 2 Step 1。
+- **范围边界：**Task 2 仅从固化的 OpenAPI Spec 生成 DTO 与 Client，不扩大范围。
 
 ## Gate 结论
 
 - **Verification (S1–S6):** `pass`
 - **Task Gate:** `pass`
-- **Human acceptance:** `false`
-- **Task 1:** `awaiting_acceptance`
+- **Human acceptance:** `true`（用户于 2026-08-04 明确验收通过）
+- **Task 1:** `completed`
