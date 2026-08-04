@@ -1,0 +1,187 @@
+=== S1 Offline Startup Verification ===
+=== Run ID: s1-20260804-111618 ===
+=== 2026年 8月 4日 星期二 11时16分18秒 CST ===
+
+=== Environment ===
+OPENCODE_DISABLE_MODELS_FETCH=1
+OPENCODE_DISABLE_AUTOUPDATE=1
+
+=== Active interfaces (before) ===
+anpi2
+anpi0
+anpi1
+en4
+en5
+en6
+en1
+en2
+en3
+bridge0
+ap1
+en0
+awdl0
+llw0
+utun0
+utun1
+utun2
+utun3
+utun4
+utun5
+
+=== Starting tcpdump on all external interfaces ===
+  tcpdump on anpi2 PID=22361
+  tcpdump on anpi0 PID=22362
+  tcpdump on anpi1 PID=22363
+  tcpdump on en4 PID=22364
+  tcpdump on en5 PID=22365
+  tcpdump on en6 PID=22366
+  tcpdump on en1 PID=22367
+  tcpdump on en2 PID=22368
+  tcpdump on en3 PID=22369
+  tcpdump on bridge0 PID=22370
+  tcpdump on ap1 PID=22371
+  tcpdump on en0 PID=22372
+  tcpdump on awdl0 PID=22373
+  tcpdump on llw0 PID=22374
+  tcpdump on utun0 PID=22375
+  tcpdump on utun1 PID=22376
+  tcpdump on utun2 PID=22377
+  tcpdump on utun3 PID=22378
+  tcpdump on utun4 PID=22379
+  tcpdump on utun5 PID=22380
+
+=== Disabling external interfaces ===
+  anpi2: down
+  anpi0: down
+  anpi1: down
+  en4: down
+  en5: down
+  en6: down
+  en1: down
+  en2: down
+  en3: down
+  bridge0: down
+  ap1: down
+  en0: down
+  awdl0: down
+  llw0: down
+  utun0: down
+  utun1: down
+  utun2: down
+  utun3: down
+  utun4: down
+  utun5: down
+
+=== Remaining active interfaces ===
+lo0
+
+=== Starting OpenCode Server ===
+OpenCode PID=22487
+
+=== Health check ===
+{"healthy":true,"version":"1.18.11"}
+=== Waiting 20s for any delayed outbound attempts ===
+
+=== Stopping OpenCode ===
+
+=== Stopping tcpdump ===
+
+=== Collecting OpenCode internal log ===
+  saved (       3 lines)
+
+============================================
+=== RESULTS ===
+============================================
+
+--- Health check ---
+{"healthy":true,"version":"1.18.11"}
+--- Server stdout ---
+opencode server listening on http://127.0.0.1:49325
+
+--- OpenCode internal log ---
+timestamp=2026-08-04T03:16:21.187Z level=INFO run=17b75692 message=loading path=/Users/zhangzhanhui/Documents/job/codea/docs/spike-artifacts/s1-sandbox/config/opencode/config.json
+timestamp=2026-08-04T03:16:21.188Z level=INFO run=17b75692 message=loading path=/Users/zhangzhanhui/Documents/job/codea/docs/spike-artifacts/s1-sandbox/config/opencode/opencode.json
+timestamp=2026-08-04T03:16:21.188Z level=INFO run=17b75692 message=loading path=/Users/zhangzhanhui/Documents/job/codea/docs/spike-artifacts/s1-sandbox/config/opencode/opencode.jsonc
+
+--- Automated evidence verdict ---
+[PASS] health response is healthy
+[PASS] zero models.opencode.ai requests
+[PASS] zero ERROR entries
+[PASS] traffic window is 1785813380.841484 through 1785813405.927638
+[PASS] anpi2 contains no DNS/HTTP/HTTPS traffic (packets=0)
+[PASS] anpi0 contains no DNS/HTTP/HTTPS traffic (packets=0)
+[PASS] anpi1 contains no DNS/HTTP/HTTPS traffic (packets=0)
+[PASS] en4 contains no DNS/HTTP/HTTPS traffic (packets=0)
+[PASS] en5 contains no DNS/HTTP/HTTPS traffic (packets=0)
+[PASS] en6 contains no DNS/HTTP/HTTPS traffic (packets=0)
+[PASS] en1 contains no DNS/HTTP/HTTPS traffic (packets=0)
+[PASS] en2 contains no DNS/HTTP/HTTPS traffic (packets=0)
+[PASS] en3 contains no DNS/HTTP/HTTPS traffic (packets=0)
+[PASS] bridge0 contains no DNS/HTTP/HTTPS traffic (packets=0)
+[PASS] ap1 contains no DNS/HTTP/HTTPS traffic (packets=0)
+[PASS] en0 contains no DNS/HTTP/HTTPS traffic (packets=0)
+[PASS] awdl0 contains no DNS/HTTP/HTTPS traffic (packets=0)
+[PASS] llw0 contains no DNS/HTTP/HTTPS traffic (packets=0)
+[PASS] utun0 contains no DNS/HTTP/HTTPS traffic (packets=0)
+[PASS] utun1 contains no DNS/HTTP/HTTPS traffic (packets=0)
+[PASS] utun2 contains no DNS/HTTP/HTTPS traffic (packets=0)
+[PASS] utun3 contains no DNS/HTTP/HTTPS traffic (packets=0)
+[PASS] utun4 contains no DNS/HTTP/HTTPS traffic (packets=0)
+[PASS] utun5 contains no DNS/HTTP/HTTPS traffic (packets=0)
+S1 evidence validation passed.
+
+--- Evidence files ---
+total 368
+drwxr-xr-x@ 48 root          staff  1536  8月  4 11:16 .
+drwxr-xr-x@ 30 zhangzhanhui  staff   960  8月  4 11:16 ..
+-rw-r--r--@  1 root          staff   105  8月  4 11:16 capture-interfaces.txt
+-rw-r--r--@  1 root          staff  3865  8月  4 11:16 execution.log
+-rw-r--r--@  1 root          staff    36  8月  4 11:16 health.json
+-rw-r--r--@  1 root          staff   545  8月  4 11:16 opencode-internal.log
+-rw-r--r--@  1 root          staff    52  8月  4 11:16 server-stdout.log
+-rw-r--r--@  1 root          staff   282  8月  4 11:16 tcpdump-anpi0.log
+-rw-r--r--@  1 root          staff   282  8月  4 11:16 tcpdump-anpi1.log
+-rw-r--r--@  1 root          staff   282  8月  4 11:16 tcpdump-anpi2.log
+-rw-r--r--@  1 root          staff   161  8月  4 11:16 tcpdump-ap1.log
+-rw-r--r--@  1 root          staff   163  8月  4 11:16 tcpdump-awdl0.log
+-rw-r--r--@  1 root          staff   165  8月  4 11:16 tcpdump-bridge0.log
+-rw-r--r--@  1 root          staff   161  8月  4 11:16 tcpdump-en0.log
+-rw-r--r--@  1 root          staff   161  8月  4 11:16 tcpdump-en1.log
+-rw-r--r--@  1 root          staff   161  8月  4 11:16 tcpdump-en2.log
+-rw-r--r--@  1 root          staff   161  8月  4 11:16 tcpdump-en3.log
+-rw-r--r--@  1 root          staff   161  8月  4 11:16 tcpdump-en4.log
+-rw-r--r--@  1 root          staff   161  8月  4 11:16 tcpdump-en5.log
+-rw-r--r--@  1 root          staff   161  8月  4 11:16 tcpdump-en6.log
+-rw-r--r--@  1 root          staff   162  8月  4 11:16 tcpdump-llw0.log
+-rw-r--r--@  1 root          staff   165  8月  4 11:16 tcpdump-utun0.log
+-rw-r--r--@  1 root          staff   165  8月  4 11:16 tcpdump-utun1.log
+-rw-r--r--@  1 root          staff   165  8月  4 11:16 tcpdump-utun2.log
+-rw-r--r--@  1 root          staff   165  8月  4 11:16 tcpdump-utun3.log
+-rw-r--r--@  1 root          staff   165  8月  4 11:16 tcpdump-utun4.log
+-rw-r--r--@  1 root          staff   165  8月  4 11:16 tcpdump-utun5.log
+-rw-r--r--@  1 root          staff    24  8月  4 11:16 traffic-anpi0.pcap
+-rw-r--r--@  1 root          staff    24  8月  4 11:16 traffic-anpi1.pcap
+-rw-r--r--@  1 root          staff    24  8月  4 11:16 traffic-anpi2.pcap
+-rw-r--r--@  1 root          staff    24  8月  4 11:16 traffic-ap1.pcap
+-rw-r--r--@  1 root          staff    24  8月  4 11:16 traffic-awdl0.pcap
+-rw-r--r--@  1 root          staff    24  8月  4 11:16 traffic-bridge0.pcap
+-rw-r--r--@  1 root          staff    24  8月  4 11:16 traffic-en0.pcap
+-rw-r--r--@  1 root          staff    24  8月  4 11:16 traffic-en1.pcap
+-rw-r--r--@  1 root          staff    24  8月  4 11:16 traffic-en2.pcap
+-rw-r--r--@  1 root          staff    24  8月  4 11:16 traffic-en3.pcap
+-rw-r--r--@  1 root          staff    24  8月  4 11:16 traffic-en4.pcap
+-rw-r--r--@  1 root          staff    24  8月  4 11:16 traffic-en5.pcap
+-rw-r--r--@  1 root          staff    24  8月  4 11:16 traffic-en6.pcap
+-rw-r--r--@  1 root          staff    24  8月  4 11:16 traffic-llw0.pcap
+-rw-r--r--@  1 root          staff    24  8月  4 11:16 traffic-utun0.pcap
+-rw-r--r--@  1 root          staff    24  8月  4 11:16 traffic-utun1.pcap
+-rw-r--r--@  1 root          staff    24  8月  4 11:16 traffic-utun2.pcap
+-rw-r--r--@  1 root          staff    24  8月  4 11:16 traffic-utun3.pcap
+-rw-r--r--@  1 root          staff    24  8月  4 11:16 traffic-utun4.pcap
+-rw-r--r--@  1 root          staff    24  8月  4 11:16 traffic-utun5.pcap
+-rw-r--r--@  1 root          staff    71  8月  4 11:16 validation-window.json
+
+=== DONE: PASS ===
+=== cleanup: restoring network ===
+=== cleanup: restoring network ===
+=== cleanup: done ===
