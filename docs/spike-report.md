@@ -2,11 +2,11 @@
 
 ## 当前结论
 
-**当前判定：S1 BLOCKED；S2～S6 PASS。** 人工复审确认旧 S1 证据缺少全部活动接口 manifest 和显式进程启动时间窗，不能继续作为完整门禁证据。新脚本与判定器已修复，必须在 macOS arm64 上重新采集后才能恢复 S1 PASS。
+**当前判定：S1～S6 全部 PASS。** S1 已于 2026-08-04 在 macOS arm64 使用新版脚本重新采集：覆盖全部 20 个活动外部接口，保存显式验证时间窗、健康响应、内部日志和逐接口 pcap；仓库内置判定器独立复核通过。
 
 | Spike | 状态 | 说明 |
 |---|---|---|
-| S1 Server 离线启动 | **BLOCKED** | 新脚本已就绪；等待 macOS 全活动接口 + 显式时间窗的真实重跑 |
+| S1 Server 离线启动 | **PASS** | macOS 新证据覆盖 20 个活动外部接口；显式时间窗内零 DNS/HTTP/HTTPS，健康检查通过且内部日志零 ERROR |
 | S2 Session + Prompt + SSE | **PASS** | Session 200、Prompt 204、收到目标 Session 的流式文本和 idle |
 | S3 Tool Approval | **PASS** | `permission.asked` 可接收，`once/reject` 均正确执行 |
 | S4 Reasoning | **PASS** | 独立 `reasoning` 与 `text` Part，无需 `<think>` 拆分 |
@@ -158,7 +158,20 @@ INFO loading opencode.jsonc
 
 **自动判定**：`scripts/check-s1-offline-evidence.sh` 统一检查健康响应、内部日志、显式验证时间窗、活动接口 manifest 和逐接口 pcap。发现 `models.opencode.ai`、任意 `ERROR`、窗口内 DNS/HTTP/HTTPS 流量、manifest 中任一接口缺少 pcap 或其他证据缺失时返回 1；`tests/phase0/check_s1_offline_evidence_test.sh` 覆盖这些失败分支、窗口前流量和干净通过分支。`docs/spike-artifacts/s1-network-test.sh` 动态抓取所有活动非 `lo0` 接口、保存显式时间窗、清理 OpenCode/tcpdump 子进程，并只恢复脚本实际关闭的接口。
 
-**旧证据为何不再用于通过门禁**：`s1-20260803-175535` 没有 `capture-interfaces.txt` 和 `validation-window.json`；执行日志显示 `anpi0-2` 当时仍活跃但未抓包。旧 pcap 中唯一 DNS 包早于首条 Runtime 日志，但没有独立的进程启动时间戳可以证明它位于启动前。因此旧证据保留为历史材料，S1 状态改为 BLOCKED，等待新脚本在 macOS 上重跑。
+**旧证据为何不再用于通过门禁**：`s1-20260803-175535` 没有 `capture-interfaces.txt` 和 `validation-window.json`；执行日志显示 `anpi0-2` 当时仍活跃但未抓包。旧 pcap 中唯一 DNS 包早于首条 Runtime 日志，但没有独立的进程启动时间戳可以证明它位于启动前。因此旧证据仅保留为历史材料，不用于最终 S1 判定。
+
+### 最终复核（s1-20260804-111618）
+
+2026-08-04 在 macOS arm64 使用新版脚本完成真实断网重跑，证据目录为 `docs/spike-artifacts/s1-20260804-111618/`：
+
+- `capture-interfaces.txt` 记录 20 个活动外部接口：`anpi0-2`、`en0-6`、`bridge0`、`ap1`、`awdl0`、`llw0`、`utun0-5`；关闭后只剩 `lo0`。
+- `validation-window.json` 明确记录验证时间窗 `1785813380.841484`～`1785813405.927638`。
+- 健康检查返回 `{"healthy":true,"version":"1.18.11"}`，Server 监听 `127.0.0.1:49325`。
+- OpenCode 内部日志仅 3 行 INFO，零 `models.opencode.ai`，零 ERROR。
+- manifest 中每个接口均有对应 pcap；时间窗内 20 个接口全部为零 DNS/HTTP/HTTPS 流量。
+- `bash scripts/check-s1-offline-evidence.sh docs/spike-artifacts/s1-20260804-111618` 返回 0，最终输出 `S1 evidence validation passed.`。
+
+最终结论：新版原始证据补齐了旧运行缺失的接口覆盖和显式时间窗，S1 恢复为 PASS。
 
 ---
 
@@ -325,6 +338,7 @@ S6 结论：基础双模式隔离无需 Patch，可通过独立 Runtime Profile 
 | `docs/spike-artifacts/s1-20260803-175535/server-stdout.log` | Server stdout |
 | `docs/spike-artifacts/s1-20260803-175535/opencode-internal.log` | OpenCode 内部日志（3 行 INFO，零 ERROR） |
 | `docs/spike-artifacts/s1-20260803-175535/traffic-*.pcap` | 逐接口 tcpdump 原始抓包（9 个接口） |
+| `docs/spike-artifacts/s1-20260804-111618/` | 最终 macOS 重跑证据：20 接口 manifest、显式时间窗、健康响应、内部日志和逐接口 pcap |
 | `docs/spike-artifacts/s2/opencode.json` | 本地 OpenAI-compatible Provider 配置，API Key 仅引用环境变量 |
 | `docs/spike-artifacts/s2/fake-openai-server.py` | 确定性流式模型协议桩 |
 | `docs/spike-artifacts/s2-20260803/health.json` | OpenCode 健康响应 |
@@ -360,4 +374,4 @@ S6 结论：基础双模式隔离无需 Patch，可通过独立 Runtime Profile 
 
 ## Phase 0 机器结果
 
-`docs/spike-results.json` 当前记录 S1 为 `blocked`、S2～S6 为 `pass`。`scripts/run-phase0-gates.sh` 必须返回非零；只有新的 macOS S1 证据通过并将 S1 恢复为 `pass` 后，Phase 0 机器门禁才允许通过。
+`docs/spike-results.json` 当前记录 S1～S6 全部为 `pass`。新 macOS S1 证据已通过独立判定，`scripts/run-phase0-gates.sh` 返回 0，Phase 0 机器门禁通过。

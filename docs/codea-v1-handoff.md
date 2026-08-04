@@ -6,13 +6,13 @@
 - 工作分支：`develop`，后续直接在该分支按顺序修改，不另建功能分支
 - 技术设计与主实施计划：已评审通过
 - 执行状态机制设计与实施计划：已评审通过
-- 当前执行阶段：Task E0、Task 0 已人工验收通过；Task 1 的代码/证据结构问题已修复，但 S1 等待 macOS 新证据，状态为 `blocked`
-- 唯一下一步：在 macOS arm64 执行新版 `docs/spike-artifacts/s1-network-test.sh` 并提交完整结果目录
+- 当前执行阶段：Task E0、Task 0 已人工验收通过；Task 1 S1～S6 与机器门禁已通过，状态为 `awaiting_acceptance`
+- 唯一下一步：人工验收 Task 1
 - 边界：Task 1 的 S1～S6 全部通过并进入 `awaiting_acceptance` 后停止，人工验收前不得开始 Task 2
 - 已知非阻塞改进：项目全部完成时补充校验终态 `current.task = 21` 的一致性
 - Go 基线：项目统一使用 Go 1.26.5
 
-当前仓库已包含 `docs/execution-state.yaml` 及其校验器。Task 1 从 `awaiting_acceptance` 合法恢复后因缺少可接受的新 S1 运行证据进入 `blocked`，未开始 Task 2。
+当前仓库已包含 `docs/execution-state.yaml` 及其校验器。Task 1 的六项 Spike、OpenAPI、Golden SSE、机器结果和 Phase 0 Gate 均已持久化；新 macOS S1 证据已补齐全部活动接口与显式时间窗，当前等待人工验收，未开始 Task 2。
 
 ## 2. 权威文档与读取顺序
 
@@ -117,15 +117,15 @@ Task Gate 状态：
 9. API Key 不得写入普通配置或日志。
 10. 状态文件、Task 报告、验证证据和实际 Git Commit 必须一致。
 
-## 7. 当前执行点：Task 1 等待 macOS S1 重跑
+## 7. 当前执行点：Task 1 等待人工验收
 
 Task E0 和 Task 0 已人工验收通过。Task 1 已锁定 OpenCode v1.18.11（commit `012c2f57f976489d88bd4598a056b4bdcdd428ee`）。Linux x64、macOS arm64/x64、Windows x64 四个精确 CLI 资产均已实际下载，SHA-256 与官方 Release digest 一致。
 
-S1 旧运行曾显示健康检查成功、内部日志零 ERROR/公网请求，但人工复审发现旧脚本没有抓取当时仍活跃的 `anpi0-2`，且没有显式进程启动时间窗，因此旧证据不能继续支撑 PASS。新版脚本已动态覆盖全部活动非 `lo0` 接口、保存 manifest/时间窗、可靠清理子进程并传播失败退出码；等待在 macOS arm64 上重跑。
+S1 旧运行因没有抓取当时仍活跃的 `anpi0-2`，且没有显式进程启动时间窗，仅保留为历史材料。2026-08-04 的新 macOS arm64 运行已动态覆盖全部 20 个活动非 `lo0` 接口，保存 manifest、显式时间窗、健康响应、内部日志和逐接口 pcap；独立判定器确认零公网请求、零 ERROR、零 DNS/HTTP/HTTPS 流量，S1 为 PASS。
 
 S2～S6 均已通过：Session/SSE、Tool Approval 批准与拒绝、结构化 Reasoning、Skill 来源隔离及三模式隔离均有真实 Runtime 证据。S5/S6 已补充统一可重跑脚本、五类配置夹具和五份原始 `/skill` JSON。完整结果见 `docs/spike-report.md`、`docs/spike-results.json` 和 `docs/spike-artifacts/`。
 
-S5/S6 可复现证据和四平台哈希已经闭环。当前唯一外部阻塞是 macOS S1 新运行；新证据通过、Phase 0 Gate 恢复全 PASS 并回到 `awaiting_acceptance` 后，才可再次提交人工验收。此前不得开始 Task 2。
+S5/S6 可复现证据和四平台哈希已经闭环。S1～S6 与 Phase 0 Gate 全部 PASS，Task 1 当前为 `awaiting_acceptance`；人工验收前不得开始 Task 2。
 
 ## 8. E0 验收后的 Task 0
 
@@ -196,4 +196,4 @@ Task 0 验收后，Task 1 执行 S1～S6：
 
 ## 11. 当前交接结论
 
-Task E0 和 Task 0 已人工验收通过；Go 基线统一为 1.26.5。Task 1 当前为 `blocked`，唯一恢复条件是 macOS 使用新版 S1 脚本产出完整、通过的真实断网证据。重新进入 `awaiting_acceptance` 且人工验收前不得开始 Task 2。
+Task E0 和 Task 0 已人工验收通过；Go 基线统一为 1.26.5。Task 1 的 S1～S6、OpenAPI、Golden SSE、版本哈希及 Phase 0 Gate 全部通过，当前为 `awaiting_acceptance`。人工验收前保持停止，不得开始 Task 2。

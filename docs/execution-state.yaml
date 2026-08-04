@@ -4,15 +4,24 @@ plan: docs/superpowers/plans/2026-07-30-codea-v1-plan.md
 current:
   task: 1
   step: 10
-  status: blocked
-  nextAction: 在 macOS arm64 执行新版 docs/spike-artifacts/s1-network-test.sh，提交全活动接口 manifest、显式验证时间窗、内部日志、健康响应和逐接口 pcap
+  status: awaiting_acceptance
+  nextAction: 等待人工验收 Task 1
 checkpoint:
-  commit: c8cb81d34d25f6a5b9973231c1726f99264a57f0
-  updatedAt: "2026-08-04T02:50:29Z"
+  commit: a6755287dd4ab984c47517b9acdd7320776c39cf
+  updatedAt: "2026-08-04T03:46:22Z"
 verification:
-  status: unable_to_run
+  status: pass
   commands:
+    - command: go1.26.5 test ./... and build ./cmd/codea ./cmd/parity-runner ./cmd/spike-s2 ./cmd/spike-s3 ./cmd/spike-s4
+      exitCode: 0
+      result: pass
+    - command: bash tests/execution-state/state_validator_test.sh
+      exitCode: 0
+      result: pass
     - command: bash tests/phase0/check_s1_offline_evidence_test.sh
+      exitCode: 0
+      result: pass
+    - command: bash scripts/check-s1-offline-evidence.sh docs/spike-artifacts/s1-20260804-111618
       exitCode: 0
       result: pass
     - command: bash tests/phase0/run_skill_isolation_spikes_test.sh
@@ -28,17 +37,38 @@ verification:
       exitCode: 0
       result: pass
     - command: sudo bash docs/spike-artifacts/s1-network-test.sh (fresh macOS arm64 run)
-      exitCode: 2
-      result: unable_to_run
-  errorSummary: "当前执行环境为 Linux，不能执行需要 macOS ifconfig/tcpdump 的真实断网重跑；旧证据缺少 anpi0-2 抓包和显式进程启动时间窗，不能继续判定 S1 PASS。"
-  recoveryAdvice: "在 macOS arm64 使用新版 S1 脚本重跑；脚本必须返回 0，capture-interfaces.txt 中每个接口必须有 pcap，内部日志不得出现公网请求或 ERROR。"
+      exitCode: 0
+      result: pass
+    - command: bash tests/phase0/run_phase0_gates_test.sh && ./scripts/run-phase0-gates.sh
+      exitCode: 0
+      result: pass
+    - command: find scripts tests docs/spike-artifacts packaging -type f -name '*.sh' -print0 | xargs -0 -n1 bash -n
+      exitCode: 0
+      result: pass
+    - command: python3 OpenAPI 3.1.0, 76-line Golden SSE, S1-S6 JSON and version-lock integrity assertions
+      exitCode: 0
+      result: pass
+    - command: ./scripts/check-execution-state.sh
+      exitCode: 0
+      result: pass
+    - command: git cat-file and merge-base checkpoint validation
+      exitCode: 0
+      result: pass
+    - command: repository credential pattern scan
+      exitCode: 0
+      result: pass
+    - command: git diff --check
+      exitCode: 0
+      result: pass
+  errorSummary: ""
+  recoveryAdvice: ""
 taskGate:
-  status: unable_to_evaluate
+  status: pass
 humanAcceptance:
   accepted: false
 tasks:
   "0": {status: completed, completedSteps: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: 97ea4b8e7f6d86a97e17781bb858b5f90ad81b20, report: docs/task-reports/task-00.md}
-  "1": {status: blocked, completedSteps: [1, 2, 3, 4, 5, 6, 7, 8, 9], verificationStatus: unable_to_run, taskGateStatus: unable_to_evaluate, humanAccepted: false, checkpoint: c8cb81d34d25f6a5b9973231c1726f99264a57f0, report: docs/task-reports/task-01.md}
+  "1": {status: awaiting_acceptance, completedSteps: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], verificationStatus: pass, taskGateStatus: pass, humanAccepted: false, checkpoint: a6755287dd4ab984c47517b9acdd7320776c39cf, report: docs/task-reports/task-01.md}
   "2": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-02.md}
   "3": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-03.md}
   "4": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-04.md}
