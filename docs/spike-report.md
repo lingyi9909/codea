@@ -19,7 +19,7 @@
 
 ## S1 证据
 
-### 1. 版本锁定（Linux 容器，2026-08-03）
+### 1. 版本锁定（2026-08-04 复核）
 
 | 项目 | 值 |
 |------|-----|
@@ -27,10 +27,12 @@
 | Release | `v1.18.11` |
 | Tag commit | `012c2f57f976489d88bd4598a056b4bdcdd428ee` |
 | Release 时间 | `2026-08-01T11:44:45Z` |
-| linux-x64 SHA-256 | `a4dffcc00a5a93256c6bd06aa0c984320528f564db52a1f4becd5c7de9fb59a1` |
-| darwin-arm64 SHA-256 | `188ff6a716bcd40e33ac62f17f4aec9bd760164fa6a2cde66f779a5db4abc7ce` |
+| linux-x64 `opencode-linux-x64.tar.gz` | `a4dffcc00a5a93256c6bd06aa0c984320528f564db52a1f4becd5c7de9fb59a1` |
+| darwin-arm64 `opencode-darwin-arm64.zip` | `188ff6a716bcd40e33ac62f17f4aec9bd760164fa6a2cde66f779a5db4abc7ce` |
+| darwin-x64 `opencode-darwin-x64.zip` | `95953ab2aca4322b90690bf34697cc9b47b6a7c72f78e7c469056fb589124d31` |
+| windows-x64 `opencode-windows-x64.zip` | `f3a5ea814aecc692a4e04259d9005283f364225b38456c90f9a47b7a9d83c0e9` |
 
-结构化证据：`docs/spike-artifacts/s1-release.json`
+四个官方资产均已实际下载到临时目录并执行 `sha256sum`；结果逐项等于 GitHub Release API 返回的 digest。结构化证据：`runtime/version.json`、`docs/spike-artifacts/s1-release.json`、`docs/spike-artifacts/s1-release-checksums.txt`。
 
 ### 2. Linux 容器本地启动（2026-08-03）
 
@@ -111,7 +113,7 @@ timestamp=2026-08-03T06:58:03.235Z level=ERROR run=24ea301a message="Failed to f
 |----------|------|------|
 | 真实断网环境 | 满足 | en0-6/awdl0/llw0/bridge0/ap1 全部 down |
 | 独立沙箱环境 | 满足 | 全新 `$HOME` + `XDG_*` + `OPENCODE_CONFIG_DIR` |
-| 版本锁定 + SHA-256 一致 | 满足 | v1.18.11，linux/darwin 校验一致 |
+| 版本锁定 + SHA-256 完整 | 满足 | 四个平台的精确资产名、大小、下载 URL 和 SHA-256 均已锁定，无占位符 |
 | Server 启动成功 | 满足 | `{"healthy":true,"version":"1.18.11"}` |
 | 不访问公网 | **满足** | 内部日志零 `models.opencode.ai`，零 ERROR |
 | 无公网 DNS 请求 | 满足 | 全接口抓包无 OpenCode 相关 DNS 查询 |
@@ -153,6 +155,8 @@ INFO loading opencode.jsonc
 零 ERROR，零 `models.opencode.ai`。
 
 **tcpdump**：9 个接口合计 31 包，全部在 `en0` 上，时间戳在 `ifconfig down` 前（17:55:35-36），来自 jsss/xray 等非 OpenCode 进程。其余 8 个接口（awdl0/llw0/utun0-5）零包。
+
+**自动判定**：`scripts/check-s1-offline-evidence.sh` 统一检查健康响应、内部日志和逐接口 pcap，并只统计 Runtime 验证时间窗内的数据包。新运行由采集脚本保存 `validation-window.json`；旧证据从内部日志首条 Runtime 时间戳建立保守起点。发现 `models.opencode.ai`、任意 `ERROR`、窗口内 DNS/HTTP/HTTPS 流量或证据缺失时返回 1；`tests/phase0/check_s1_offline_evidence_test.sh` 覆盖全部失败分支、窗口前流量和干净通过分支。旧证据经内置 pcap 解析器复核，31 个 `en0` 包均在 Runtime 时间窗前，窗口内为 0 包。`docs/spike-artifacts/s1-network-test.sh` 最终以判定器的退出码退出，不再只打印 `[FAIL]`。
 
 ---
 
@@ -282,6 +286,8 @@ OPENCODE_DISABLE_CLAUDE_CODE=1
 
 结论：无需 Patch。企业隔离必须组合独立 HOME/XDG、指定 `OPENCODE_CONFIG_DIR` 和上述三个禁用开关；内置 `customize-opencode` 属于 Runtime 固有 Skill，不是外部注入。
 
+2026-08-04 使用 `scripts/run-skill-isolation-spikes.sh` 和锁定的 Linux x64 v1.18.11 Runtime 完整重跑。脚本从 `tests/fixtures/skill-isolation/` 创建五类真实 Skill，保存未修改的 `/skill` JSON，再由 JSON 机械生成名称清单并做精确集合断言。隔离组原始响应包含 2 项，对照组包含 6 项；全部证据位于 `docs/spike-artifacts/s5-s6-20260803-rerun/s5/`。
+
 ---
 
 ## S6 证据
@@ -298,6 +304,8 @@ OPENCODE_DISABLE_CLAUDE_CODE=1
 
 S6 结论：基础双模式隔离无需 Patch，可通过独立 Runtime Profile 和启动环境变量实现；Enterprise 与 General Strict 禁用项目配置，General Compatible 仅开放通过校验的项目 Skill 来源。
 
+同一次真实重跑依次启动 Enterprise、General Compatible、General Strict 三个独立 Profile，原始 `/skill` 响应分别包含 2、3、2 项，且名称清单均由原始 JSON 机械生成。配置夹具副本及 SHA-256 manifest 一并保存在 `docs/spike-artifacts/s5-s6-20260803-rerun/`，可独立复核。
+
 ---
 
 ## 原始证据文件
@@ -305,6 +313,7 @@ S6 结论：基础双模式隔离无需 Patch，可通过独立 Runtime Profile 
 | 文件 | 说明 |
 |------|------|
 | `docs/spike-artifacts/s1-release.json` | 版本锁定结构化数据 |
+| `docs/spike-artifacts/s1-release-checksums.txt` | 四个平台官方 CLI 资产的实际下载 SHA-256 输出 |
 | `docs/spike-artifacts/s1-server.log` | Linux 容器 Server stdout |
 | `docs/spike-artifacts/s1-health.json` | Linux 容器健康检查响应 |
 | `docs/spike-artifacts/s1-network-test.sh` | 修正版测试脚本（trap + 全接口 + 正确环境变量） |
@@ -334,12 +343,14 @@ S6 结论：基础双模式隔离无需 Patch，可通过独立 Runtime Profile 
 | `docs/spike-artifacts/s4-20260803/key-events.jsonl` | Reasoning/Text Part 与状态事件 |
 | `docs/spike-artifacts/s4-20260803/client.log` | 客户端分类摘要 |
 | `docs/spike-artifacts/s4-20260803/opencode-internal.log` | S4 OpenCode 内部日志 |
-| `docs/spike-artifacts/s5-20260803/isolated-skill-names.txt` | 隔离组 Skill 名称清单 |
-| `docs/spike-artifacts/s5-20260803/control-skill-names.txt` | 无隔离对照组 Skill 名称清单 |
-| `docs/spike-artifacts/s5-20260803/isolated-opencode.log` | S5 隔离组 Runtime 日志 |
-| `docs/spike-artifacts/s6-20260803/enterprise-skill-names.txt` | Enterprise Skill 清单 |
-| `docs/spike-artifacts/s6-20260803/general-compatible-skill-names.txt` | General Compatible Skill 清单 |
-| `docs/spike-artifacts/s6-20260803/general-strict-skill-names.txt` | General Strict Skill 清单 |
+| `scripts/run-skill-isolation-spikes.sh` | S5/S6 可重复执行入口，创建夹具、启动五个 Profile、保存原始响应并断言集合 |
+| `tests/fixtures/skill-isolation/` | 配置、项目、用户、Claude、Agents 五类原始 Skill 夹具 |
+| `docs/spike-artifacts/s5-s6-20260803-rerun/fixture-manifest.txt` | 本次重跑夹具 SHA-256 manifest |
+| `docs/spike-artifacts/s5-s6-20260803-rerun/execution.log` | 锁定 Runtime 五 Profile 真实重跑的完整判定输出 |
+| `docs/spike-artifacts/s5-s6-20260803-rerun/s5/*-skill-response.json` | S5 隔离组与对照组原始 `/skill` JSON 响应 |
+| `docs/spike-artifacts/s5-s6-20260803-rerun/s6/*-skill-response.json` | S6 三 Profile 原始 `/skill` JSON 响应 |
+| `docs/spike-artifacts/s5-s6-20260803-rerun/s5/` | S5 health、Runtime 日志和机械生成的名称清单 |
+| `docs/spike-artifacts/s5-s6-20260803-rerun/s6/` | S6 health、Runtime 日志和机械生成的名称清单 |
 | `runtime/openapi/opencode-1.18.11.json` | 锁定版本 OpenAPI 3.1 文档 |
 | `runtime/openapi/golden-sse-s2.jsonl` | 76 条完整会话 Golden SSE |
 

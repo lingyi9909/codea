@@ -101,6 +101,7 @@ ifconfig -u | grep -E '^[a-z]' | cut -d: -f1
 # --- 6. 启动 OpenCode ---
 echo ""
 echo "=== Starting OpenCode Server ==="
+VALIDATION_START=$(python3 -c 'import time; print(time.time())')
 "$OP" serve --hostname 127.0.0.1 --port 49325 \
   > "$RESULT_DIR/server-stdout.log" 2>&1 &
 OP_PID=$!
@@ -116,6 +117,17 @@ echo
 
 echo "=== Waiting 20s for any delayed outbound attempts ==="
 sleep 20
+VALIDATION_END=$(python3 -c 'import time; print(time.time())')
+python3 - "$RESULT_DIR/validation-window.json" "$VALIDATION_START" "$VALIDATION_END" <<'PY'
+import json
+import pathlib
+import sys
+
+pathlib.Path(sys.argv[1]).write_text(json.dumps({
+    "startEpoch": float(sys.argv[2]),
+    "endEpoch": float(sys.argv[3]),
+}, indent=2) + "\n")
+PY
 
 # --- 8. 停止 OpenCode ---
 echo ""
@@ -158,43 +170,24 @@ cat "$RESULT_DIR/server-stdout.log" 2>/dev/null || echo "(missing)"
 
 echo ""
 echo "--- OpenCode internal log ---"
-if [ -f "$RESULT_DIR/opencode-internal.log" ]; then
-  cat "$RESULT_DIR/opencode-internal.log"
-  echo ""
-  if grep -q "models.opencode.ai" "$RESULT_DIR/opencode-internal.log" 2>/dev/null; then
-    echo "  [FAIL] models.opencode.ai requests found"
-  else
-    echo "  [PASS] zero models.opencode.ai requests"
-  fi
-  if grep -q "ERROR" "$RESULT_DIR/opencode-internal.log" 2>/dev/null; then
-    echo "  [FAIL] ERROR entries found"
-  else
-    echo "  [PASS] zero ERROR entries"
-  fi
-else
-  echo "  (no internal log)"
-fi
+cat "$RESULT_DIR/opencode-internal.log" 2>/dev/null || echo "(missing)"
 
 echo ""
-echo "--- Traffic summary ---"
-total_pkts=0
-for f in "$RESULT_DIR"/traffic-*.pcap; do
-  [ -f "$f" ] || continue
-  iface=$(basename "$f" .pcap | sed 's/traffic-//')
-  count=$(tcpdump -r "$f" 2>/dev/null | wc -l | tr -d ' ')
-  echo "  $iface: $count packets"
-  total_pkts=$((total_pkts + count))
-  dns=$(tcpdump -r "$f" -n 'port 53' 2>/dev/null | wc -l | tr -d ' ')
-  http=$(tcpdump -r "$f" -n 'port 80 or port 443' 2>/dev/null | wc -l | tr -d ' ')
-  if [ "$dns" -gt 0 ] 2>/dev/null || [ "$http" -gt 0 ] 2>/dev/null; then
-    echo "    DNS: $dns  HTTP/HTTPS: $http  <-- CHECK"
-  fi
-done
-echo "  TOTAL: $total_pkts packets"
+echo "--- Automated evidence verdict ---"
+if "$REPO/scripts/check-s1-offline-evidence.sh" "$RESULT_DIR"; then
+  validation_status=0
+else
+  validation_status=$?
+fi
 
 echo ""
 echo "--- Evidence files ---"
 ls -la "$RESULT_DIR"/
 
 echo ""
-echo "=== DONE ==="
+if [ "$validation_status" -eq 0 ]; then
+  echo "=== DONE: PASS ==="
+else
+  echo "=== DONE: FAIL ==="
+fi
+exit "$validation_status"

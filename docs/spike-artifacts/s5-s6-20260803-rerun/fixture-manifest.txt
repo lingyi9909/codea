@@ -1,0 +1,5 @@
+sha256:0af7affd180ca6e835b52f5475a393c949576aa7aa07a7247c79565f5e7a406b  agents-unapproved/SKILL.md
+sha256:995c4e623665790f0e3df43f9dedf5177605b077ffc141deecc70040c1e6559e  claude-unapproved/SKILL.md
+sha256:56a3e3489e430b488eb4f2153f8e1531f268d5a1780d392e722d91a118bf2ec6  config-approved/SKILL.md
+sha256:285792f98ad0b54b7fd191efb98f41fade1337241c04a1ca89bd624a4efb1a62  project-unapproved/SKILL.md
+sha256:13ebed62c8d23b51f8ec686a83550a24b0f22a5a8cce1f5269f181a63b485b67  user-unapproved/SKILL.md

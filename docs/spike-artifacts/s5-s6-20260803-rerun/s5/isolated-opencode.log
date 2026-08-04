@@ -1,0 +1,3 @@
+timestamp=2026-08-04T02:38:37.120Z level=INFO run=6b3feaf1 message=loading path=/tmp/codea-skill-isolation.XLC0BA/isolated/xdg-config/opencode/config.json
+timestamp=2026-08-04T02:38:37.124Z level=INFO run=6b3feaf1 message=loading path=/tmp/codea-skill-isolation.XLC0BA/isolated/xdg-config/opencode/opencode.json
+timestamp=2026-08-04T02:38:37.136Z level=INFO run=6b3feaf1 message=loading path=/tmp/codea-skill-isolation.XLC0BA/isolated/xdg-config/opencode/opencode.jsonc

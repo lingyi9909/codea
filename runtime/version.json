@@ -2,15 +2,36 @@
   "openCodeVersion": "1.18.11",
   "openCodeCommit": "012c2f57f976489d88bd4598a056b4bdcdd428ee",
   "openCodeRepo": "https://github.com/anomalyco/opencode",
+  "releaseMetadataSource": "https://api.github.com/repos/anomalyco/opencode/releases/tags/v1.18.11",
   "lockedAt": "2026-08-03",
   "spikeHost": {
     "platform": "linux-x64",
-    "asset": "opencode-linux-x64.tar.gz",
-    "checksum": "sha256:a4dffcc00a5a93256c6bd06aa0c984320528f564db52a1f4becd5c7de9fb59a1"
+    "extractedBinaryChecksum": "sha256:8eb15fe87080dd11aa095cc0391eb3536d55a46fa9e4427c6a8b664d390ac089"
   },
   "platforms": {
-    "darwin-arm64": {"checksum": "TBD-by-spike"},
-    "darwin-x64": {"checksum": "TBD-by-spike"},
-    "windows-x64": {"checksum": "TBD-by-spike"}
+    "linux-x64": {
+      "asset": "opencode-linux-x64.tar.gz",
+      "size": 59324965,
+      "checksum": "sha256:a4dffcc00a5a93256c6bd06aa0c984320528f564db52a1f4becd5c7de9fb59a1",
+      "url": "https://github.com/anomalyco/opencode/releases/download/v1.18.11/opencode-linux-x64.tar.gz"
+    },
+    "darwin-arm64": {
+      "asset": "opencode-darwin-arm64.zip",
+      "size": 44962786,
+      "checksum": "sha256:188ff6a716bcd40e33ac62f17f4aec9bd760164fa6a2cde66f779a5db4abc7ce",
+      "url": "https://github.com/anomalyco/opencode/releases/download/v1.18.11/opencode-darwin-arm64.zip"
+    },
+    "darwin-x64": {
+      "asset": "opencode-darwin-x64.zip",
+      "size": 47202037,
+      "checksum": "sha256:95953ab2aca4322b90690bf34697cc9b47b6a7c72f78e7c469056fb589124d31",
+      "url": "https://github.com/anomalyco/opencode/releases/download/v1.18.11/opencode-darwin-x64.zip"
+    },
+    "windows-x64": {
+      "asset": "opencode-windows-x64.zip",
+      "size": 59459659,
+      "checksum": "sha256:f3a5ea814aecc692a4e04259d9005283f364225b38456c90f9a47b7a9d83c0e9",
+      "url": "https://github.com/anomalyco/opencode/releases/download/v1.18.11/opencode-windows-x64.zip"
+    }
   }
 }

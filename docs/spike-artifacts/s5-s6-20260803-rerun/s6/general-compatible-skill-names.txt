@@ -1,0 +1,3 @@
+config-approved
+customize-opencode
+project-unapproved

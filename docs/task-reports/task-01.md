@@ -2,9 +2,9 @@
 
 **Task:** 1
 
-**Status:** awaiting_acceptance
+**Status:** in_progress
 
-**Current step:** 10 — 等待人工验收
+**Current step:** 10 — 修复人工验收阻断项并重新执行门禁
 
 **Date:** 2026-08-03
 
@@ -14,7 +14,7 @@
 
 ### S1 Server 离线启动 — PASS
 
-- 锁定 OpenCode v1.18.11，Linux x64 和 macOS arm64 制品 SHA-256 校验一致。
+- 锁定 OpenCode v1.18.11；Linux x64、macOS arm64/x64、Windows x64 四个平台精确资产、大小、URL 和 SHA-256 均已记录并通过实际下载复核。
 - 在 macOS arm64 上完成真实断网验证：
   - 关闭 en0-6/awdl0/llw0/bridge0/ap1 全部外部接口
   - 完全隔离沙箱：独立 `$HOME`、`XDG_*`、`OPENCODE_CONFIG_DIR`
@@ -33,6 +33,7 @@
   - 健康检查：`{"healthy":true,"version":"1.18.11"}`
   - 内部日志：3 行 INFO，零 ERROR，零 `models.opencode.ai`
   - tcpdump：31 包全在 en0 且时间戳在断网前，来自非 OpenCode 进程；其余接口零包
+- 新增独立 S1 证据判定器及回归测试；检测到公网主机、ERROR、DNS/HTTP(S) 流量、健康失败或证据缺失时必定非零退出。
 
 ### 初版问题与修正
 
@@ -77,6 +78,7 @@
 - 无隔离对照组重新发现四个未批准 Skill，证明夹具有效且隔离开关生效。
 - 必需组合：独立 HOME/XDG、`OPENCODE_CONFIG_DIR`、`OPENCODE_DISABLE_EXTERNAL_SKILLS=1`、`OPENCODE_DISABLE_PROJECT_CONFIG=1`、`OPENCODE_DISABLE_CLAUDE_CODE=1`。
 - 无需 OpenCode Patch。
+- 已提交可重跑脚本、五类原始 Skill 夹具、完整原始 `/skill` JSON、health、Runtime 日志和夹具 SHA-256 manifest；隔离组 2 项、对照组 6 项的结果可从 JSON 独立推导。
 
 ### S6 双模式基础隔离 — PASS
 
@@ -84,6 +86,7 @@
 - General Compatible：加载合法项目 Skill，仍隔离用户/Claude/Agents 来源。
 - General Strict（V1 默认）：不注入项目 Skill。
 - 三组均使用独立 Runtime 实例和真实 `/skill` API，结果精确匹配预期集合。
+- 三组完整原始 `/skill` JSON 已保存；Enterprise/General Compatible/General Strict 分别为 2/3/2 项，并由 runner 做精确集合断言。
 
 ### Phase 0 收尾
 
@@ -93,11 +96,11 @@
 
 ## 下一步
 
-等待人工验收 Task 1；验收前不得开始 Task 2。
+完成本轮全量验证并重新进入人工验收；此前不得开始 Task 2。
 
 ## Gate 结论
 
-- **Verification (S1–S6):** `pass`
-- **Task Gate:** `pass`
+- **Verification (S1–S6):** `not_run`（等待本轮修复后的全量重跑）
+- **Task Gate:** `not_evaluated`
 - **Human acceptance:** `false`
-- **Task 1:** `awaiting_acceptance`
+- **Task 1:** `in_progress`

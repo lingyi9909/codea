@@ -1,0 +1,6 @@
+agents-unapproved
+claude-unapproved
+config-approved
+customize-opencode
+project-unapproved
+user-unapproved

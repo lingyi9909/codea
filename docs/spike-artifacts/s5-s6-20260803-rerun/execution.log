@@ -1,0 +1,6 @@
+[PASS] isolated: config-approved,customize-opencode
+[PASS] control: agents-unapproved,claude-unapproved,config-approved,customize-opencode,project-unapproved,user-unapproved
+[PASS] enterprise: config-approved,customize-opencode
+[PASS] general-compatible: config-approved,customize-opencode,project-unapproved
+[PASS] general-strict: config-approved,customize-opencode
+S5/S6 Skill isolation spikes passed. Evidence: docs/spike-artifacts/s5-s6-20260803-rerun
