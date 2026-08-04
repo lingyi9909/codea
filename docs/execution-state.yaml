@@ -3,9 +3,9 @@ project: codea-v1
 plan: docs/superpowers/plans/2026-07-30-codea-v1-plan.md
 current:
   task: 2
-  step: 1
+  step: 2
   status: in_progress
-  nextAction: 审阅固化的 OpenAPI Spec，确认 Task 2 六类关键接口的真实路径与结构
+  nextAction: 按 TDD 编写 OpenAPI 生成器失败测试，再实现 Spec 驱动的 DTO 生成
 checkpoint:
   commit: 9546c7ca45228751d62ad83422aa5d947897242f
   updatedAt: "2026-08-04T05:44:13Z"
@@ -21,7 +21,7 @@ humanAcceptance:
 tasks:
   "0": {status: completed, completedSteps: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: 97ea4b8e7f6d86a97e17781bb858b5f90ad81b20, report: docs/task-reports/task-00.md}
   "1": {status: completed, completedSteps: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: 50e32c2673d1324c040d5c2296b25196307a4662, report: docs/task-reports/task-01.md}
-  "2": {status: in_progress, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: 9546c7ca45228751d62ad83422aa5d947897242f, report: docs/task-reports/task-02.md}
+  "2": {status: in_progress, completedSteps: [1], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: 9546c7ca45228751d62ad83422aa5d947897242f, report: docs/task-reports/task-02.md}
   "3": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-03.md}
   "4": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-04.md}
   "5": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-05.md}
