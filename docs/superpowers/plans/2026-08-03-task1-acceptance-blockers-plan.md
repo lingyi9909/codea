@@ -84,5 +84,5 @@
 - Produces: a truthful `awaiting_acceptance` state only if every fresh verification exits 0.
 
 - [ ] Run Go 1.26.5 tests/build, all Phase 0 shell tests, real Phase 0 gate, JSON checks, shell syntax, state validation, credential scan, and `git diff --check` after the fresh macOS S1 run.
-- [ ] Commit the evidence checkpoint, update checkpoint references to that real commit, and commit the state/report closure.
+- [x] Commit the evidence checkpoint, update checkpoint references to that real commit, and commit the state/report closure.
 - [ ] Fetch and fast-forward push `develop`; verify remote SHA equals local SHA.
