@@ -14,6 +14,12 @@ version = json.loads(version_path.read_text())
 evidence = json.loads(evidence_path.read_text())
 
 required = {"linux-x64", "darwin-arm64", "darwin-x64", "windows-x64"}
+official = {
+    "linux-x64": ("opencode-linux-x64.tar.gz", 59324965, "a4dffcc00a5a93256c6bd06aa0c984320528f564db52a1f4becd5c7de9fb59a1"),
+    "darwin-arm64": ("opencode-darwin-arm64.zip", 44962786, "188ff6a716bcd40e33ac62f17f4aec9bd760164fa6a2cde66f779a5db4abc7ce"),
+    "darwin-x64": ("opencode-darwin-x64.zip", 47202037, "95953ab2aca4322b90690bf34697cc9b47b6a7c72f78e7c469056fb589124d31"),
+    "windows-x64": ("opencode-windows-x64.zip", 59459659, "f3a5ea814aecc692a4e04259d9005283f364225b38456c90f9a47b7a9d83c0e9"),
+}
 platforms = version.get("platforms", {})
 assert set(platforms) == required, f"platform lock must contain exactly {sorted(required)}"
 assert version.get("openCodeVersion") == "1.18.11"
@@ -29,6 +35,10 @@ for platform in sorted(required):
     assert re.fullmatch(r"sha256:[0-9a-f]{64}", item["checksum"]), f"invalid checksum for {platform}"
     assert "TBD" not in json.dumps(item)
     assert item["url"] == f"https://github.com/anomalyco/opencode/releases/download/v1.18.11/{item['asset']}"
+    official_name, official_size, official_digest = official[platform]
+    assert item["asset"] == official_name, f"wrong official asset for {platform}"
+    assert item["size"] == official_size, f"wrong official asset size for {platform}"
+    assert item["checksum"] == f"sha256:{official_digest}", f"wrong official digest for {platform}"
     assets.append(item["asset"])
     expected_lines.append(f"{item['checksum'].removeprefix('sha256:')}  {item['asset']}")
     recorded = evidence["assets"][platform]

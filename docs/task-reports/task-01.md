@@ -2,17 +2,17 @@
 
 **Task:** 1
 
-**Status:** in_progress
+**Status:** blocked
 
-**Current step:** 10 — 修复人工验收阻断项并重新执行门禁
+**Current step:** 10 — 等待 macOS 使用新 S1 脚本重新采集证据
 
 **Date:** 2026-08-03
 
-**Checkpoint:** `a970135ddfb8e744d3211ddc269c3b1032142d47`
+**Checkpoint:** `7dceaf10a66b682835b4e4ac63c8a4bad1573d95`
 
 ## 已完成内容
 
-### S1 Server 离线启动 — PASS
+### S1 Server 离线启动 — BLOCKED
 
 - 锁定 OpenCode v1.18.11；Linux x64、macOS arm64/x64、Windows x64 四个平台精确资产、大小、URL 和 SHA-256 均已记录并通过实际下载复核。
 - 在 macOS arm64 上完成真实断网验证：
@@ -33,7 +33,9 @@
   - 健康检查：`{"healthy":true,"version":"1.18.11"}`
   - 内部日志：3 行 INFO，零 ERROR，零 `models.opencode.ai`
   - tcpdump：31 包全在 en0 且时间戳在断网前，来自非 OpenCode 进程；其余接口零包
-- 新增独立 S1 证据判定器及回归测试；检测到公网主机、ERROR、DNS/HTTP(S) 流量、健康失败或证据缺失时必定非零退出。
+- 新增独立 S1 证据判定器及回归测试；检测到公网主机、ERROR、时间窗内 DNS/HTTP(S) 流量、活动接口缺少 pcap、健康失败或证据缺失时必定非零退出。
+- 新脚本动态记录并抓取全部活动非 `lo0` 接口，保存显式进程验证时间窗；异常退出会终止 OpenCode/tcpdump，并只恢复脚本实际关闭的接口。
+- 人工复审确认旧证据缺少 `anpi0-2` 抓包和显式启动时间窗，因此上述旧运行结果不再足以支撑 S1 PASS。需要在 macOS arm64 上重新执行新脚本。
 
 ### 初版问题与修正
 
@@ -96,11 +98,11 @@
 
 ## 下一步
 
-完成本轮全量验证并重新进入人工验收；此前不得开始 Task 2。
+在 macOS arm64 仓库根目录执行 `sudo bash docs/spike-artifacts/s1-network-test.sh`，提交新生成的完整证据目录；随后运行全量门禁并重新进入人工验收。此前不得开始 Task 2。
 
 ## Gate 结论
 
-- **Verification (S1–S6):** `not_run`（等待本轮修复后的全量重跑）
-- **Task Gate:** `not_evaluated`
+- **Verification (S1–S6):** `unable_to_run`（当前 Linux 环境不能执行 macOS 真实断网重跑）
+- **Task Gate:** `unable_to_evaluate`
 - **Human acceptance:** `false`
-- **Task 1:** `in_progress`
+- **Task 1:** `blocked`

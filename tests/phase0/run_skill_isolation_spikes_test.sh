@@ -29,6 +29,7 @@ from urllib.parse import urlparse
 
 port = int(sys.argv[1])
 profile = sys.argv[2]
+import os
 names = {
     "control": ["customize-opencode", "claude-unapproved", "agents-unapproved", "user-unapproved", "project-unapproved", "config-approved"],
     "isolated": ["customize-opencode", "config-approved"],
@@ -36,12 +37,14 @@ names = {
     "general-compatible": ["config-approved", "customize-opencode", "project-unapproved"],
     "general-strict": ["config-approved", "customize-opencode"],
 }[profile]
+if os.environ.get("FAKE_WRONG_PROFILE") == profile:
+    names.append("unexpected-skill")
 
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         path = urlparse(self.path).path
         if path == "/global/health":
-            payload = {"healthy": True, "version": "1.18.11"}
+            payload = {"healthy": True, "version": os.environ.get("FAKE_HEALTH_VERSION", "1.18.11")}
         elif path == "/skill":
             payload = [{"name": name, "description": "fixture", "location": f"/fixture/{name}/SKILL.md", "content": f"raw {name}"} for name in names]
         else:
@@ -82,5 +85,25 @@ test -s "$output/fixture-manifest.txt"
 grep -q 'config-approved/SKILL.md' "$output/fixture-manifest.txt"
 diff -u <(printf '%s\n' config-approved customize-opencode) "$output/s6/enterprise-skill-names.txt"
 diff -u <(printf '%s\n' config-approved customize-opencode project-unapproved) "$output/s6/general-compatible-skill-names.txt"
+
+if FAKE_SKILL_SERVER="$test_root/fake-server.py" \
+  FAKE_HEALTH_VERSION=9.9.9 \
+  OPENCODE_BIN="$test_root/fake-opencode" \
+  OUTPUT_DIR="$test_root/wrong-version" \
+  PORT=49571 \
+    "$repo_root/scripts/run-skill-isolation-spikes.sh" >/dev/null 2>&1; then
+  echo 'expected wrong Runtime version to fail' >&2
+  exit 1
+fi
+
+if FAKE_SKILL_SERVER="$test_root/fake-server.py" \
+  FAKE_WRONG_PROFILE=enterprise \
+  OPENCODE_BIN="$test_root/fake-opencode" \
+  OUTPUT_DIR="$test_root/wrong-set" \
+  PORT=49572 \
+    "$repo_root/scripts/run-skill-isolation-spikes.sh" >/dev/null 2>&1; then
+  echo 'expected unexpected Skill set to fail' >&2
+  exit 1
+fi
 
 echo 'Skill isolation spike runner tests passed'

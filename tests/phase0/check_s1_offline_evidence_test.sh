@@ -49,6 +49,7 @@ new_fixture() {
   printf '%s\n' '{"healthy":true,"version":"1.18.11"}' >"$dir/health.json"
   printf '%s\n' 'timestamp=x level=INFO message=ready' >"$dir/opencode-internal.log"
   printf '%s\n' '{"startEpoch":10,"endEpoch":20}' >"$dir/validation-window.json"
+  printf '%s\n' en0 >"$dir/capture-interfaces.txt"
   write_pcap "$dir/traffic-en0.pcap"
   printf '%s\n' "$dir"
 }
@@ -75,6 +76,10 @@ forbidden=$(new_fixture forbidden-host)
 printf '%s\n' 'timestamp=x level=INFO url=https://models.opencode.ai' >"$forbidden/opencode-internal.log"
 expect_fail 'forbidden public host' "$forbidden"
 
+forbidden_case=$(new_fixture forbidden-host-case)
+printf '%s\n' 'timestamp=x level=INFO url=https://MODELS.OPENCODE.AI' >"$forbidden_case/opencode-internal.log"
+expect_fail 'case-insensitive forbidden public host' "$forbidden_case"
+
 error_log=$(new_fixture error-log)
 printf '%s\n' 'timestamp=x level=ERROR message=boom' >"$error_log/opencode-internal.log"
 expect_fail 'runtime ERROR' "$error_log"
@@ -94,6 +99,10 @@ expect_pass "$before_window"
 missing=$(new_fixture missing-pcap)
 rm "$missing/traffic-en0.pcap"
 expect_fail 'missing pcap evidence' "$missing"
+
+missing_interface=$(new_fixture missing-interface)
+printf '%s\n' en0 en1 >"$missing_interface/capture-interfaces.txt"
+expect_fail 'missing pcap for a captured interface' "$missing_interface"
 
 unhealthy=$(new_fixture unhealthy)
 printf '%s\n' '{"healthy":false}' >"$unhealthy/health.json"

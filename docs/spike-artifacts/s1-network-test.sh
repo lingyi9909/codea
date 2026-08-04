@@ -10,18 +10,33 @@ OP="$ARTIFACTS/opencode"
 RUN_ID="s1-$(date +%Y%m%d-%H%M%S)"
 RESULT_DIR="$ARTIFACTS/$RUN_ID"
 EXEC_LOG="$RESULT_DIR/execution.log"
+OP_PID=""
+TCPDUMP_PIDS=()
+DISABLED_INTERFACES=()
+CAPTURE_INTERFACES=()
 
-# --- trap: 无论如何恢复网络 ---
+# --- trap: 无论如何停止子进程并恢复脚本实际关闭的接口 ---
 cleanup() {
   echo "=== cleanup: restoring network ===" | tee -a "$EXEC_LOG" 2>/dev/null || true
-  for iface in en0 en1 en2 en3 en4 en5 en6 awdl0 llw0 bridge0 ap1; do
-    if ifconfig "$iface" >/dev/null 2>&1; then
-      sudo ifconfig "$iface" up 2>/dev/null || true
-    fi
+  if [ -n "$OP_PID" ]; then
+    kill "$OP_PID" 2>/dev/null || true
+    wait "$OP_PID" 2>/dev/null || true
+    OP_PID=""
+  fi
+  for pid in "${TCPDUMP_PIDS[@]}"; do
+    sudo kill "$pid" 2>/dev/null || true
+    wait "$pid" 2>/dev/null || true
   done
+  TCPDUMP_PIDS=()
+  for iface in "${DISABLED_INTERFACES[@]}"; do
+    sudo ifconfig "$iface" up 2>/dev/null || true
+  done
+  DISABLED_INTERFACES=()
   echo "=== cleanup: done ==="
 }
-trap cleanup EXIT INT TERM
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 # --- 初始化 ---
 rm -rf "$RESULT_DIR"
@@ -68,28 +83,43 @@ echo "OPENCODE_DISABLE_AUTOUPDATE=$OPENCODE_DISABLE_AUTOUPDATE"
 # --- 3. 断网前接口 ---
 echo ""
 echo "=== Active interfaces (before) ==="
-ifconfig -u | grep -E '^[a-z]' | cut -d: -f1
+while IFS= read -r iface; do
+  [ "$iface" = "lo0" ] && continue
+  CAPTURE_INTERFACES+=("$iface")
+  echo "$iface"
+done < <(ifconfig -u | grep -E '^[a-zA-Z0-9]' | cut -d: -f1)
+if [ "${#CAPTURE_INTERFACES[@]}" -eq 0 ]; then
+  echo "[FAIL] no active non-loopback interfaces found" >&2
+  exit 1
+fi
+printf '%s\n' "${CAPTURE_INTERFACES[@]}" >"$RESULT_DIR/capture-interfaces.txt"
 
 # --- 4. 全接口抓包 ---
 echo ""
 echo "=== Starting tcpdump on all external interfaces ==="
-TCPDUMP_PIDS=()
-for iface in en0 awdl0 llw0 utun0 utun1 utun2 utun3 utun4 utun5; do
-  if ifconfig "$iface" >/dev/null 2>&1; then
-    sudo tcpdump -i "$iface" -n -w "$RESULT_DIR/traffic-$iface.pcap" \
-      > "$RESULT_DIR/tcpdump-$iface.log" 2>&1 &
-    TCPDUMP_PIDS+=($!)
-    echo "  tcpdump on $iface PID=$!"
-  fi
+for iface in "${CAPTURE_INTERFACES[@]}"; do
+  sudo tcpdump -i "$iface" -n -w "$RESULT_DIR/traffic-$iface.pcap" \
+    > "$RESULT_DIR/tcpdump-$iface.log" 2>&1 &
+  TCPDUMP_PIDS+=($!)
+  echo "  tcpdump on $iface PID=$!"
 done
 sleep 1
+for pid in "${TCPDUMP_PIDS[@]}"; do
+  if ! kill -0 "$pid" 2>/dev/null; then
+    echo "[FAIL] tcpdump process exited before validation started: PID=$pid" >&2
+    exit 1
+  fi
+done
 
 # --- 5. 关闭外部网络 ---
 echo ""
 echo "=== Disabling external interfaces ==="
-for iface in en0 en1 en2 en3 en4 en5 en6 awdl0 llw0 bridge0 ap1; do
-  if ifconfig "$iface" >/dev/null 2>&1; then
-    sudo ifconfig "$iface" down 2>/dev/null && echo "  $iface: down" || true
+for iface in "${CAPTURE_INTERFACES[@]}"; do
+  if sudo ifconfig "$iface" down 2>/dev/null; then
+    DISABLED_INTERFACES+=("$iface")
+    echo "  $iface: down"
+  else
+    echo "  $iface: remained up (captured)"
   fi
 done
 sleep 1
@@ -111,7 +141,7 @@ sleep 5
 # --- 7. 健康检查 ---
 echo ""
 echo "=== Health check ==="
-curl -sf -u codea:test-s1-offline http://127.0.0.1:49325/global/health \
+curl -sf --max-time 5 -u codea:test-s1-offline http://127.0.0.1:49325/global/health \
   | tee "$RESULT_DIR/health.json"
 echo
 
@@ -132,17 +162,29 @@ PY
 # --- 8. 停止 OpenCode ---
 echo ""
 echo "=== Stopping OpenCode ==="
+if ! kill -0 "$OP_PID" 2>/dev/null; then
+  echo "[FAIL] OpenCode exited during validation" >&2
+  exit 1
+fi
 kill $OP_PID 2>/dev/null || true
 wait $OP_PID 2>/dev/null || true
+OP_PID=""
 sleep 2
 
 # --- 9. 停止抓包 ---
 echo ""
 echo "=== Stopping tcpdump ==="
 for pid in "${TCPDUMP_PIDS[@]}"; do
+  if ! kill -0 "$pid" 2>/dev/null; then
+    echo "[FAIL] tcpdump process exited during validation: PID=$pid" >&2
+    exit 1
+  fi
+done
+for pid in "${TCPDUMP_PIDS[@]}"; do
   sudo kill "$pid" 2>/dev/null || true
   wait "$pid" 2>/dev/null || true
 done
+TCPDUMP_PIDS=()
 
 # --- 10. 收集内部日志 ---
 echo ""

@@ -148,10 +148,31 @@ run_profile() {
 
   ready=0
   for _ in $(seq 1 50); do
+    if ! kill -0 "$server_pid" 2>/dev/null; then
+      wait "$server_pid" 2>/dev/null || true
+      server_pid=""
+      echo "OpenCode exited before becoming healthy for profile $profile" >&2
+      return 1
+    fi
     if curl -fsS --max-time 1 -u codea:skill-isolation-fixture \
       "http://127.0.0.1:$port/global/health" >"$health" 2>/dev/null; then
-      ready=1
-      break
+      if python3 - "$health" <<'PY'
+import json
+import pathlib
+import sys
+
+try:
+    payload = json.loads(pathlib.Path(sys.argv[1]).read_text())
+except Exception:
+    raise SystemExit(1)
+raise SystemExit(0 if payload.get("healthy") is True and payload.get("version") == "1.18.11" else 1)
+PY
+      then
+        ready=1
+        break
+      fi
+      echo "Unexpected health response for profile $profile" >&2
+      return 1
     fi
     sleep 0.2
   done

@@ -44,7 +44,7 @@ internal_log="$result_dir/opencode-internal.log"
 if [ ! -f "$internal_log" ]; then
   fail "OpenCode internal log is missing"
 else
-  if grep -q 'models\.opencode\.ai' "$internal_log"; then
+  if grep -qiF 'models.opencode.ai' "$internal_log"; then
     fail "models.opencode.ai request found"
   else
     pass "zero models.opencode.ai requests"
@@ -101,14 +101,33 @@ else
   pass "traffic window is $window_start through $window_end"
 fi
 
+manifest="$result_dir/capture-interfaces.txt"
+capture_interfaces=()
+if [ ! -s "$manifest" ]; then
+  fail "capture interface manifest is missing or empty"
+else
+  while IFS= read -r iface; do
+    [ -n "$iface" ] || continue
+    if [[ ! "$iface" =~ ^[A-Za-z0-9._-]+$ ]]; then
+      fail "capture interface manifest contains an invalid name: $iface"
+      continue
+    fi
+    capture_interfaces+=("$iface")
+  done <"$manifest"
+  if [ "${#capture_interfaces[@]}" -eq 0 ]; then
+    fail "capture interface manifest contains no valid interfaces"
+  fi
+fi
+
 if [ ! -f "$pcap_summary" ]; then
   fail "pcap analyzer is missing: $pcap_summary"
 else
-  found_pcap=0
-  for pcap in "$result_dir"/traffic-*.pcap; do
-    [ -f "$pcap" ] || continue
-    found_pcap=1
-    iface=$(basename "$pcap" .pcap | sed 's/^traffic-//')
+  for iface in "${capture_interfaces[@]}"; do
+    pcap="$result_dir/traffic-$iface.pcap"
+    if [ ! -f "$pcap" ]; then
+      fail "$iface packet capture is missing"
+      continue
+    fi
     if ! read -r dns web packet_count < <(python3 "$pcap_summary" "$pcap" "$window_start" "$window_end"); then
       fail "$iface packet capture could not be parsed"
       continue
@@ -119,9 +138,6 @@ else
       pass "$iface contains no DNS/HTTP/HTTPS traffic (packets=$packet_count)"
     fi
   done
-  if [ "$found_pcap" -eq 0 ]; then
-    fail "packet capture evidence is missing"
-  fi
 fi
 
 if [ "$failures" -gt 0 ]; then
