@@ -1,12 +1,12 @@
 # Codea V1 执行状态机制设计
 
-日期：2026-08-01
+日期：2026-08-01；2026-08-08 升级 schema v2
 
 状态：设计评审通过，允许执行配套实施计划
 
 ## 1. 目标
 
-为 Codea V1 的 Task 0～Task 21 提供可恢复、可审计的执行进度记录。会话中断、执行模型更换或任务阻塞后，接手者能够确定当前 Task、当前 Step、最近验证结果和下一步操作，避免重复执行或越过门禁。
+为 Codea V1 的显式 `taskOrder` 提供可恢复、可审计的执行进度记录。会话中断、执行模型更换或任务阻塞后，接手者能够确定当前 Task、当前 Step、最近验证结果和下一步操作，避免重复执行或越过门禁。schema v2 在 Task 2 与 Task 3 之间插入 Task 2A，不重新编号 Task 3～21。
 
 该机制只管理研发计划的执行状态，不属于 Codea 产品运行时，也不代替 Git 历史、实施计划或 Task 验收报告。
 
@@ -63,16 +63,19 @@ Task Gate 状态：
 
 ## 4. 状态文件结构
 
+以下 YAML 为结构节选；实际文件必须包含 `taskOrder` 中的全部 Task：
+
 ```yaml
-schemaVersion: 1
+schemaVersion: 2
 project: codea-v1
 plan: docs/superpowers/plans/2026-07-30-codea-v1-plan.md
+taskOrder: ["0", "1", "2", "2A", "3", "4", "...", "21"]
 
 current:
-  task: 0
+  task: "2A"
   step: 1
   status: pending
-  nextAction: Start Task 0 Step 1
+  nextAction: 等待 Runtime Abstraction Rebaseline 人工验收
 
 checkpoint:
   commit: d8e1bd6b23b9b5a573eaeaff5bbc9bf7350f6632
@@ -99,19 +102,19 @@ tasks:
     humanAccepted: false
     checkpoint: d8e1bd6b23b9b5a573eaeaff5bbc9bf7350f6632
     report: docs/task-reports/task-00.md
-  "1":
+  "2A":
     status: pending
     completedSteps: []
     verificationStatus: not_run
     taskGateStatus: not_evaluated
     humanAccepted: false
     checkpoint: null
-    report: docs/task-reports/task-01.md
+    report: docs/task-reports/task-02A.md
 ```
 
 以上 Commit 和时间仅为格式示例，初始化时必须写入实际值。
 
-`tasks` 必须包含 Task 0～Task 21。只有当前 Task 记录 Step 级进度；已经完成的 Task 保留状态、完成步骤、验证结果、Task Gate、人工验收、检查点和报告路径。
+`taskOrder` 必须精确为 `0, 1, 2, 2A, 3, ..., 21`，不得重复、遗漏或自行排序。`tasks` 的 key 必须与 `taskOrder` 完全一致。只有当前 Task 记录 Step 级进度；已经完成的 Task 保留状态、完成步骤、验证结果、Task Gate、人工验收、检查点和报告路径。
 
 ## 5. 更新规则
 
@@ -121,7 +124,7 @@ tasks:
 4. 恢复 `blocked` 状态前，不得清除原始错误证据；修复后重新执行对应验证。
 5. 当前 Task 的全部实现、自动验证和 Task Gate 均通过后，状态改为 `awaiting_acceptance`。
 6. 只有人工明确验收后，才能将 Task 改为 `completed` 并把下一个 Task 改为 `in_progress`。
-7. 同一时间最多一个 Task 和一个 Step 处于 `in_progress`。
+7. 同一时间最多一个 Task 和一个 Step 处于 `in_progress`；执行顺序只由 `taskOrder` 决定，不得用整数排序推断。
 8. 不得跳过 `pending` Task，不得从 `blocked` 或 `awaiting_acceptance` 直接进入下一 Task。
 
 ## 6. 中断恢复流程
@@ -138,7 +141,7 @@ tasks:
 
 ## 7. Task 验收
 
-每个 Task 完成后生成 `docs/task-reports/task-XX.md`，沿用项目交接文档中的交付模板，至少包含：
+每个 Task 完成后生成 `docs/task-reports/task-XX.md`；Task 2A 使用 `docs/task-reports/task-02A.md`。报告沿用项目交接文档中的交付模板，至少包含：
 
 - Task 编号与名称
 - 完成内容
@@ -155,8 +158,9 @@ Task 报告、状态文件和实际 Git Commit 必须相互一致。
 
 `scripts/check-execution-state.sh` 至少校验：
 
-- YAML 可以解析且 `schemaVersion` 受支持。
-- Task 0～Task 21 全部存在。
+- YAML 可以解析且 `schemaVersion = 2`。
+- `taskOrder` 精确包含 Task 0、1、2、2A、3～21，顺序正确且无重复。
+- `tasks` 与 `taskOrder` 完全一致。
 - 状态值属于允许枚举。
 - 最多一个 Task 为 `in_progress`、`blocked` 或 `awaiting_acceptance`。
 - `current.status` 必须和 `tasks[current.task].status` 一致。

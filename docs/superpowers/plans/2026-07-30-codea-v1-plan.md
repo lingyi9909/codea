@@ -4,7 +4,7 @@
 
 **Goal:** 构建企业内网 AI 编码助手 Codea V1，基于 OpenCode Runtime + Go TUI，提供双模式（Native-Compatible + Enterprise-Controlled）的代码审查、单元测试生成、API 文档生成能力，支持离线发行、升级回滚和私有模型。
 
-**Architecture:** C+ 混合模式 — OpenCode（anomalyco/opencode）作为独立 Agent Runtime（`opencode serve`），Go TUI（Bubble Tea + Lip Gloss）通过 HTTP/SSE 与 Runtime 通信。RuntimeClient 抽象层隔离协议差异。企业能力（Reviewer/UT/API Doc）通过 Agent + Skill + 专用 Tool 组合实现，不侵入 OpenCode Core。离线发行包包含预编译 TUI、OpenCode 二进制、自包含 Plugin Bundle 和全部配置。
+**Architecture:** C+ 混合模式 — OpenCode（anomalyco/opencode）作为 V1 唯一 Agent Runtime（`opencode serve`），Go TUI（Bubble Tea + Lip Gloss）通过 Codea-owned `AgentRuntime` Contract 使用 OpenCodeAdapter。OpenCode DTO/HTTP/SSE 对象不得越过 Vendor Layer。企业能力（Reviewer/UT/API Doc）通过 Agent + Skill + 专用 Tool 组合实现，不侵入 OpenCode Core。离线发行包包含预编译 TUI、OpenCode 二进制、自包含 Plugin Bundle 和全部配置。
 
 **Tech Stack:** Go 1.26.5 (TUI), Bubble Tea + Lip Gloss + Glamour, TypeScript (Plugin, target bun), OpenCode Runtime (锁定版本, anomalyco/opencode), DeepSeek (开发), 私有模型 (内网)
 
@@ -26,6 +26,9 @@
 - TUI 最低终端要求 70×20
 - V1 平台: macOS arm64/x64 + Windows x64；Linux deferred
 - OpenCode API/DTO 以锁定版本的 `/doc` OpenAPI 3.1 为准，从 spec 生成，不手写猜测
+- 2026-08-08 Architecture Rebaseline 后的执行顺序为 Task 0 → 1 → 2 → 2A → 3 → ... → 21，以 `docs/execution-state.yaml.taskOrder` 为准
+- Task 2A 的权威设计与实施步骤分别为 `docs/superpowers/specs/2026-08-08-codea-runtime-abstraction-rebaseline-design.md` 和 `docs/superpowers/plans/2026-08-08-codea-runtime-abstraction-rebaseline-plan.md`
+- V1 只实现 OpenCode；不得在 Task 2A 加入 OMP、Runtime Router、Runtime Selector 或热切换
 
 ---
 
@@ -50,11 +53,11 @@ codea/
 │   │   │   ├── metrics.go
 │   │   │   └── feedback.go
 │   │   ├── runtime/                  # 领域接口与模型
-│   │   │   ├── client.go             # RuntimeClient 接口
+│   │   │   ├── client.go             # AgentRuntime 接口
 │   │   │   ├── events.go             # 统一事件模型
 │   │   │   └── models.go             # 领域模型
 │   │   ├── opencode/                 # OpenCode 适配层
-│   │   │   ├── adapter.go            # RuntimeClient 实现
+│   │   │   ├── adapter.go            # AgentRuntime 实现
 │   │   │   ├── http_client.go        # HTTP API 客户端
 │   │   │   ├── sse_client.go         # SSE 客户端
 │   │   │   ├── event_mapper.go       # 事件映射
@@ -834,7 +837,58 @@ git commit -m "feat: OpenAPI spec-based DTO generation and reviewed client DTOs"
 
 ---
 
-### Task 3: Capability Inventory + Parity Harness
+### Task 2A: Runtime Abstraction Rebaseline
+
+**Goal:** 在 Task 3 前把 Task 2 的 OpenCode Vendor Client 收敛到 Codea-owned `AgentRuntime` 后面，建立领域模型、全局 Event/Raw 映射、Approval、RuntimeCapabilities 与依赖边界门禁。
+
+**Authoritative design:** `docs/superpowers/specs/2026-08-08-codea-runtime-abstraction-rebaseline-design.md`
+
+**Authoritative implementation plan:** `docs/superpowers/plans/2026-08-08-codea-runtime-abstraction-rebaseline-plan.md`
+
+**Required output:**
+
+- `tui/internal/runtime` 不依赖 OpenCode，拥有 AgentRuntime、Domain Model、Event、Approval 和 RuntimeCapabilities。
+- `tui/internal/opencode` 使用 Task 2 DTO/Client 实现 AgentRuntime。
+- `Subscribe(ctx)` 忠实表达 `/global/event` 全局事件流；不得伪装为 session-scoped Transport。
+- once/always/reject 与 message 正确映射到非废弃 Permission Reply；不得伪造 `remember`。
+- Golden SSE 每条事件均为映射事件或 Raw Event，Raw payload 不丢失并遵守 DLP/16KB/内存边界。
+- Import graph Required Gate 证明 Application/TUI/Harness/Agent/Policy 的 Vendor DTO leakage 为 0。
+- Task 2 全部测试、Go 1.26.5 test/race/vet/build、Windows x64 cross-build、真实 OpenCode Adapter smoke 与状态门禁通过。
+- 自动验证与 Task Gate 通过后进入 `awaiting_acceptance`；人工验收前 Task 3 保持 `pending`。
+
+**Explicit exclusions:** OMP、Runtime Router/Selector、热切换、Swarm、Agent Graph、完整 Tool Runtime、Sandbox 重构和任何新业务 Agent。
+
+---
+
+### Task 3: Capability Inventory + Parity Harness (Rebaselined)
+
+**Goal:** 在 Task 2A Contract 之上加载产品 Capability Inventory、比较 OpenCodeAdapter 实际声明并运行真正的 Parity Harness。
+
+**Changes from the original draft:**
+
+- `runtime/capabilities.yaml` 继续表达 required/optional/deferred 产品要求；不得替代 `runtime.RuntimeCapabilities` 的实际能力声明。
+- Fake 测试实现 `runtime.AgentRuntime`，而不是复制一套手写 OpenCode HTTP JSON。
+- Parity Baseline/Candidate Runner 通过 AgentRuntime/Codea Event 运行，OpenCode DTO 不进入 `internal/capability` 或 `internal/parity`。
+- Fake Runtime 的 Session/Event 不得使用与锁定 v1.18.11 Spec 冲突的 `status/agent/created_at` 手写响应作为协议事实。
+- Required 场景仍必须有 Baseline、Candidate、Assertions 和至少一次重复；SilentLoss 必须导致失败。
+
+**Files:**
+
+- Create: `tui/internal/capability/inventory.go`
+- Create: `tui/internal/capability/compare.go`
+- Create: `tui/internal/parity/runner.go`
+- Create: `tui/internal/parity/scenario.go`
+- Create: `tui/internal/parity/result.go`
+- Create: `tui/tests/parity/capability_inventory_test.go`
+- Create: `tui/tests/fixtures/fake-runtime/fake_runtime.go`
+
+**Required Gate:** `cd tui && go test ./internal/capability/... ./internal/parity/... ./tests/parity/... -count=1`、Runtime boundary Gate、状态校验和人工验收全部通过。完成后不得自动开始 Task 4。
+
+---
+
+### Appendix A: Superseded Task 3 Draft — Do Not Execute
+
+以下原始 Task 3 草案保留为历史审计材料。其 Fake OpenCode HTTP Server 和手写 JSON 示例已被 2026-08-08 Architecture Rebaseline 取代，不得作为实现指令或协议事实。
 
 **Goal:** 建立能力清单加载/对比器，实现真正的 Parity 测试运行器（非 Skip）。
 
@@ -1330,7 +1384,37 @@ git commit -m "feat: capability inventory, real parity runner, and fake opencode
 
 ---
 
-### Task 4: RuntimeClient 接口与 OpenCodeAdapter
+### Task 4: Runtime Adapter Hardening and Recovery (Rebaselined)
+
+**Goal:** 在 Task 2A 已完成基础 Contract/Adapter/Mapper 后，补齐生产级 SSE 恢复、状态补偿、错误分类、背压与真实 Runtime 长连接验证。
+
+**Consumes:** Task 2A 的 `runtime.AgentRuntime`、OpenCodeAdapter、SSEClient、EventMapper 和 Raw Event Contract。
+
+**Produces:**
+
+- SSE 断开、Scanner 错误和认证失败均可观察，不被误报为正常流结束。
+- 按现有技术设计使用 500ms → 1s → 2s → 5s 有界退避重连，并响应 Context 取消。
+- 重连成功后通过 Session status/message history 补偿遗漏 Message/Part，去重后继续实时流。
+- Channel 背压策略有界且不静默丢弃；无法交付时产生明确 RuntimeError/compatibility evidence。
+- Transport/Auth/Protocol/Incompatible/Cancelled 错误可由 Application 稳定判断，同时保留 Vendor 错误 Raw details。
+- 真实 OpenCode 长连接、重连、补偿、Approval 与 Abort Contract 测试通过。
+
+**Files:**
+
+- Modify: `tui/internal/opencode/sse_client.go`
+- Modify: `tui/internal/opencode/adapter.go`
+- Create: `tui/internal/opencode/reconnect.go`
+- Create: `tui/internal/opencode/recovery.go`
+- Create: `tui/internal/runtime/errors.go`
+- Create: `tui/tests/contract/runtime_recovery_test.go`
+
+**Required Gate:** Go 1.26.5 test/race/vet/build、断线重连与补偿契约测试、Golden SSE 零丢失、Runtime boundary Gate、真实 OpenCode smoke、状态门禁及人工验收全部通过。不得重复创建 Task 2A 已交付的基础接口或 DTO Mapper。
+
+---
+
+### Appendix B: Superseded Task 4 Draft — Do Not Execute
+
+以下原始 Task 4 草案保留为历史审计材料。基础 RuntimeClient、手写示意 DTO、初版 SSE Client、EventMapper 和 OpenCodeAdapter 已前移并由 Task 2A 的 Spec 驱动计划取代，不得重复实现或照抄示意字段。
 
 **Goal:** 定义 RuntimeClient 接口、RuntimeEvent 统一事件模型，实现 OpenCodeAdapter（HTTP + SSE），使用 Task 2 生成的 DTO。
 

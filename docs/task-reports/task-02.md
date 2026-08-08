@@ -91,15 +91,15 @@ OpenCode Core 修改文件数：0，符合最多 5 个文件的约束。
 - 主计划中的 DTO 代码是示意结构，存在 `Session.status/agent/created_at`、Prompt `model.id`、Permission `remember` 等与锁定 Spec 不一致的字段；实现严格采用 v1.18.11 Spec，而非照抄示例。
 - 主计划表列出 session-scoped Permission 路径；Client 改用 Task 1 已实证且 Spec 未标记废弃的 `/permission/{requestID}/reply`。
 - OpenAPI union 在 Go 中没有直接等价类型；生成器将 union 容器保留为 `any`，同时生成其全部具体组件 DTO。Prompt `parts` 因此为 `[]any`，调用方使用生成的 `OpenCodeTextPartInput`、`OpenCodeFilePartInput`、`OpenCodeAgentPartInput` 或 `OpenCodeSubtaskPartInput` 填充，不猜测字段。
-- SSE 传输客户端与领域事件映射属于 Task 4；Task 2 只生成 `GlobalEvent` DTO，不提前实现 Task 4。
+- SSE 传输客户端与领域事件映射经 2026-08-08 Architecture Rebaseline 前移到 Task 2A；Task 2 只生成 `GlobalEvent` DTO，不提前实现 Adapter。
 
 ## 未解决问题与恢复建议
 
 - **阻塞项：**无。
-- **非阻塞边界：**union 容器依赖生成的具体变体 DTO；Task 4 Adapter 必须按锁定 Spec 做领域转换，不得直接向 TUI 暴露 OpenCode DTO。
+- **非阻塞边界：**union 容器依赖生成的具体变体 DTO；Task 2A OpenCodeAdapter 必须按锁定 Spec 做领域转换，不得直接向 TUI 暴露 OpenCode DTO。
 - **恢复点：**代码 checkpoint `0316ed0c3b64a9f2169a2ea11e946ae1000ae7c8`。
-- **下一步：**按用户要求保持 Task 3 为 `pending`，等待明确启动指令。
-- **范围边界：**本次仅记录 Task 2 人工验收，不执行 Task 3。
+- **下一步：**等待 2026-08-08 Runtime Abstraction Rebaseline 文档人工验收，再按门禁执行 Task 2A。
+- **范围边界：**Task 2 本身已经结束；Task 2A 是后续独立 Task，不修改 Task 2 代码成果。
 
 ## Gate 结论
 

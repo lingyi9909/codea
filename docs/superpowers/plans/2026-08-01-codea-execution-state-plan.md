@@ -1,5 +1,7 @@
 # Codea V1 Execution State Implementation Plan
 
+> **Historical E0 plan:** 本文记录 schema v1 的初始建设过程，不得在当前仓库重新执行其中的 schema v1 模板或硬编码整数排序。2026-08-08 起，当前权威状态模型为 `docs/superpowers/specs/2026-08-01-codea-execution-state-design.md` 的 schema v2、显式 `taskOrder` 与仓库现有校验器。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 在 Task 0 开始前建立可版本化、可校验、可恢复的研发执行状态，并把恢复与人工验收规则接入现有实施计划。

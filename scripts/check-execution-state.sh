@@ -31,12 +31,17 @@ task_states = {"pending", "in_progress", "blocked", "awaiting_acceptance", "comp
 verification_states = {"not_run", "pass", "fail", "unable_to_run"}
 task_gate_states = {"not_evaluated", "pass", "fail", "unable_to_evaluate"}
 
-if state.get("schemaVersion") != 1:
-    raise SystemExit("FAIL: schemaVersion must be 1")
+if state.get("schemaVersion") != 2:
+    raise SystemExit("FAIL: schemaVersion must be 2")
+
+expected_task_order = ["0", "1", "2", "2A"] + [str(i) for i in range(3, 22)]
+task_order = state.get("taskOrder")
+if task_order != expected_task_order:
+    raise SystemExit("FAIL: taskOrder must match the Codea V1 execution order")
 
 tasks = state.get("tasks")
-if not isinstance(tasks, dict) or set(tasks) != {str(i) for i in range(22)}:
-    raise SystemExit("FAIL: tasks must contain exactly Task 0 through Task 21")
+if not isinstance(tasks, dict) or set(tasks) != set(task_order):
+    raise SystemExit("FAIL: tasks must contain exactly every task in taskOrder")
 
 for task_id, task in tasks.items():
     if task.get("status") not in task_states:
@@ -82,7 +87,7 @@ if not all_completed and current.get("status") == "pending" and active:
 if not all_completed and current.get("status") != "pending" and active != [current_id]:
     raise SystemExit("FAIL: current.task must be the unique active Task")
 
-first_incomplete = next((task_id for task_id in map(str, range(22)) if tasks[task_id]["status"] != "completed"), None)
+first_incomplete = next((task_id for task_id in task_order if tasks[task_id]["status"] != "completed"), None)
 if first_incomplete is not None and current_id != first_incomplete:
     raise SystemExit("FAIL: current.task must be the first incomplete Task")
 
@@ -97,7 +102,7 @@ if human_acceptance.get("accepted") != tasks[current_id]["humanAccepted"]:
     raise SystemExit("FAIL: current acceptance does not match current Task")
 
 seen_incomplete = False
-for task_id in map(str, range(22)):
+for task_id in task_order:
     status = tasks[task_id]["status"]
     if status != "completed":
         seen_incomplete = True

@@ -6,13 +6,13 @@
 - 工作分支：`develop`，后续直接在该分支按顺序修改，不另建功能分支
 - 技术设计与主实施计划：已评审通过
 - 执行状态机制设计与实施计划：已评审通过
-- 当前执行阶段：Task E0、Task 0、Task 1、Task 2 已人工验收通过；Task 2 状态为 `completed`
-- 唯一下一步：等待用户明确指令后再开始 Task 3
-- 边界：按用户要求，Task 3 保持 `pending`，本次不启动
+- 当前执行阶段：Task E0、Task 0、Task 1、Task 2 已人工验收通过；Architecture Rebaseline 文档已落库，Task 2A 保持 `pending`
+- 唯一下一步：人工验收 Runtime Abstraction Rebaseline 设计与 Task 2A 实施计划
+- 边界：Rebaseline 文档人工验收前不得开始 Task 2A 实现；Task 2A 人工验收前不得开始 Task 3
 - 已知非阻塞改进：项目全部完成时补充校验终态 `current.task = 21` 的一致性
 - Go 基线：项目统一使用 Go 1.26.5
 
-当前仓库已包含 `docs/execution-state.yaml` 及其校验器。Task 1 的六项 Spike、OpenAPI、Golden SSE、机器结果和 Phase 0 Gate 均已持久化并通过人工验收。Task 2 已从锁定 v1.18.11 OpenAPI 3.1.0 Spec 生成 DTO，并完成使用生成 DTO 的 HTTP Client；自动验证、Task Gate 与人工验收均已通过。Task 3 尚未启动。
+当前仓库已包含 schema v2 `docs/execution-state.yaml` 及其校验器，显式执行顺序为 Task 0 → 1 → 2 → 2A → 3 → ... → 21。Task 1 的六项 Spike、OpenAPI、Golden SSE、机器结果和 Phase 0 Gate 均已持久化并通过人工验收。Task 2 的 Spec-driven DTO 与 HTTP Client 已通过自动验证、Task Gate 和人工验收。Task 2A 尚未开始实现，Task 3 保持 `pending`。
 
 ## 2. 权威文档与读取顺序
 
@@ -22,13 +22,16 @@
 2. `CLAUDE.md`
 3. `docs/superpowers/specs/2026-07-30-codea-v1-design.md`
 4. `docs/superpowers/plans/2026-07-30-codea-v1-plan.md`
-5. `docs/superpowers/specs/2026-08-01-codea-execution-state-design.md`
-6. `docs/superpowers/plans/2026-08-01-codea-execution-state-plan.md`
+5. `docs/superpowers/specs/2026-08-08-codea-runtime-abstraction-rebaseline-design.md`
+6. `docs/superpowers/plans/2026-08-08-codea-runtime-abstraction-rebaseline-plan.md`
+7. `docs/superpowers/specs/2026-08-01-codea-execution-state-design.md`
+8. `docs/superpowers/plans/2026-08-01-codea-execution-state-plan.md`
 
 文档职责：
 
 - Codea 技术设计定义产品架构与不可违反的技术原则。
-- Codea 主实施计划定义 Task 0～Task 21 的内容、顺序和验收标准。
+- Codea 主实施计划定义 Task 0～Task 21 的内容；2026-08-08 Rebaseline 在 Task 2 与 Task 3 之间插入 Task 2A，并重定 Task 3/4 边界。
+- Runtime Rebaseline 设计与计划定义 AgentRuntime、OpenCodeAdapter、Event/Raw、Approval、Capabilities、依赖门禁和 Task 2A Required Gate。
 - 执行状态设计定义状态含义、合法流转和中断恢复规则。
 - 执行状态实施计划定义 Task E0 的具体步骤。
 - Task E0 完成后，`docs/execution-state.yaml` 是执行位置的唯一机器可读状态源。
@@ -117,7 +120,7 @@ Task Gate 状态：
 9. API Key 不得写入普通配置或日志。
 10. 状态文件、Task 报告、验证证据和实际 Git Commit 必须一致。
 
-## 7. 当前执行点：Task 2 已完成，Task 3 暂不启动
+## 7. 当前执行点：Task 2 已完成，等待 Task 2A 方案人工验收
 
 Task E0 和 Task 0 已人工验收通过。Task 1 已锁定 OpenCode v1.18.11（commit `012c2f57f976489d88bd4598a056b4bdcdd428ee`）。Linux x64、macOS arm64/x64、Windows x64 四个精确 CLI 资产均已实际下载，SHA-256 与官方 Release digest 一致。
 
@@ -127,7 +130,9 @@ S2～S6 均已通过：Session/SSE、Tool Approval 批准与拒绝、结构化 R
 
 S5/S6 可复现证据和四平台哈希已经闭环。S1～S6 与 Phase 0 Gate 全部 PASS，Task 1 已于 2026-08-04 通过人工验收并标记为 `completed`。
 
-Task 2 已完成锁定 Spec 审阅、OpenAPI 代码生成器、472 个组件与 162 条路径的 DTO 生成，以及 Health、Session、Prompt、Permission、Abort 和 Agent List HTTP Client。Permission Client 使用非废弃 `/permission/{requestID}/reply`；完整 Go 测试、Race Detector、vet、build、生成一致性和状态门禁均通过。代码 checkpoint 为 `0316ed0c3b64a9f2169a2ea11e946ae1000ae7c8`，并于 2026-08-08 通过人工验收、标记为 `completed`。按用户要求，Task 3 保持 `pending`，等待明确启动指令。
+Task 2 已完成锁定 Spec 审阅、OpenAPI 代码生成器、472 个组件与 162 条路径的 DTO 生成，以及 Health、Session、Prompt、Permission、Abort 和 Agent List HTTP Client。Permission Client 使用非废弃 `/permission/{requestID}/reply`；完整 Go 测试、Race Detector、vet、build、生成一致性和状态门禁均通过。代码 checkpoint 为 `0316ed0c3b64a9f2169a2ea11e946ae1000ae7c8`，并于 2026-08-08 通过人工验收、标记为 `completed`。
+
+2026-08-08 Architecture Rebaseline 将现有 Task 2 产物定位为 OpenCode Vendor Layer，在 Task 3 前插入 Task 2A，用最小 Codea AgentRuntime、OpenCodeAdapter、Event/Approval Mapper、RuntimeCapabilities 与 Import Boundary 固化依赖方向。V1 仍只实现 OpenCode，不实现 OMP。当前等待 Rebaseline 文档人工验收；不得开始 Task 2A 代码。
 
 ## 8. E0 验收后的 Task 0
 
@@ -198,4 +203,4 @@ Task 0 验收后，Task 1 执行 S1～S6：
 
 ## 11. 当前交接结论
 
-Task E0、Task 0、Task 1 和 Task 2 已人工验收通过；Go 基线统一为 1.26.5。Task 2 已标记为 `completed`。Task 3 仍为 `pending`，按用户要求暂不启动。
+Task E0、Task 0、Task 1 和 Task 2 已人工验收通过；Go 基线统一为 1.26.5。执行状态已升级到 schema v2，Task 2A 为第一个未完成 Task，当前保持 `pending`。Rebaseline 文档人工验收前不得实现 Task 2A，Task 2A 人工验收前不得开始 Task 3。

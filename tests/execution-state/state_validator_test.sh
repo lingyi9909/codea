@@ -44,6 +44,52 @@ expect_pass() {
 
 "$CHECKER" "$STATE"
 
+# Schema v2 inserts Task 2A without renumbering Task 3 through Task 21. Build
+# this fixture independently so the test proves the validator understands the
+# explicit taskOrder before the repository state itself migrates.
+python3 - "$STATE" "$TMP_DIR/task-2a-valid.yaml" "$TMP_DIR/task-2a-missing-order.yaml" "$TMP_DIR/task-2a-order-mismatch.yaml" <<'PY'
+import copy
+import pathlib
+import sys
+import yaml
+
+source = pathlib.Path(sys.argv[1])
+valid_path = pathlib.Path(sys.argv[2])
+missing_order_path = pathlib.Path(sys.argv[3])
+order_mismatch_path = pathlib.Path(sys.argv[4])
+data = yaml.safe_load(source.read_text())
+
+task_order = ["0", "1", "2", "2A"] + [str(i) for i in range(3, 22)]
+data["schemaVersion"] = 2
+data["taskOrder"] = task_order
+data["current"].update({"task": "2A", "step": 1, "status": "pending"})
+data["verification"].update({"status": "not_run", "commands": []})
+data["taskGate"]["status"] = "not_evaluated"
+data["humanAcceptance"]["accepted"] = False
+data["tasks"]["2A"] = {
+    "status": "pending",
+    "completedSteps": [],
+    "verificationStatus": "not_run",
+    "taskGateStatus": "not_evaluated",
+    "humanAccepted": False,
+    "checkpoint": None,
+    "report": "docs/task-reports/task-02A.md",
+}
+valid_path.write_text(yaml.safe_dump(data, sort_keys=False))
+
+missing_order = copy.deepcopy(data)
+missing_order.pop("taskOrder")
+missing_order_path.write_text(yaml.safe_dump(missing_order, sort_keys=False))
+
+order_mismatch = copy.deepcopy(data)
+order_mismatch["taskOrder"].remove("2A")
+order_mismatch_path.write_text(yaml.safe_dump(order_mismatch, sort_keys=False))
+PY
+
+expect_pass "Task 2A schema v2 state" "$TMP_DIR/task-2a-valid.yaml" "Execution state is valid: Task 2A Step 1 (pending)"
+expect_fail "schema v2 requires taskOrder" "$TMP_DIR/task-2a-missing-order.yaml" "FAIL: taskOrder must match the Codea V1 execution order"
+expect_fail "taskOrder must cover every task" "$TMP_DIR/task-2a-order-mismatch.yaml" "FAIL: taskOrder must match the Codea V1 execution order"
+
 python3 - "$STATE" "$TMP_DIR" <<'PY'
 import copy
 import pathlib
@@ -67,7 +113,7 @@ data["tasks"]["0"].update({
     "taskGateStatus": "pass",
     "humanAccepted": False,
 })
-for task_id in map(str, range(1, 22)):
+for task_id in data["taskOrder"][1:]:
     data["tasks"][task_id].update({
         "status": "pending",
         "completedSteps": [],

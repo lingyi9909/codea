@@ -18,6 +18,8 @@
 - **项目交接**：`docs/codea-v1-handoff.md`
 - **技术设计**：`docs/superpowers/specs/2026-07-30-codea-v1-design.md`
 - **实施计划**：`docs/superpowers/plans/2026-07-30-codea-v1-plan.md`
+- **Runtime Rebaseline 设计**：`docs/superpowers/specs/2026-08-08-codea-runtime-abstraction-rebaseline-design.md`
+- **Task 2A 实施计划**：`docs/superpowers/plans/2026-08-08-codea-runtime-abstraction-rebaseline-plan.md`
 - **执行状态设计**：`docs/superpowers/specs/2026-08-01-codea-execution-state-design.md`
 - **执行状态计划**：`docs/superpowers/plans/2026-08-01-codea-execution-state-plan.md`
 
@@ -26,7 +28,7 @@
 1. **OpenCode Core 最小侵入** — Patch 不超过 5 个文件，每个 Patch 有说明和测试
 2. **Go TUI 不承担 Agent 逻辑** — TUI 只负责交互、流式展示、进程管理、Tool 审批；Agent Loop/Session/上下文管理由 OpenCode Runtime 负责
 3. **企业能力使用原生扩展** — Reviewer/UT/API Doc 通过 Agent + Skill + Tool 组合实现
-4. **RuntimeClient 隔离协议** — Go TUI 不直接依赖 OpenCode API 数据结构
+4. **AgentRuntime 隔离协议** — OpenCode 是 V1 唯一实现，但 Go TUI、Application、Harness、Agent 和 Policy 不直接依赖 OpenCode API/DTO/Event
 5. **OpenCode 原生能力不退化** — General 模式完整保留 OpenCode 能力，事件零静默丢弃
 
 ## 双模式架构
@@ -38,15 +40,17 @@
 
 ### 执行顺序
 
-先执行 Task E0 建立执行状态机制；E0 经人工验收后，再按主实施计划中的 Task 0 → Task 21 逐个执行：
+先执行 Task E0 建立执行状态机制；E0 经人工验收后，再按 `docs/execution-state.yaml.taskOrder` 逐个执行：Task 0 → 1 → 2 → 2A → 3 → ... → 21。
 
 | 阶段 | Tasks | 内容 |
 |------|-------|------|
 | Bootstrap | Task E0 | 执行状态、校验器、中断恢复与人工验收协议 |
 | Skeleton | Task 0 | 项目骨架与 Go Module 结构 |
 | Phase 0 | Task 1 | Spike S1-S6 验证 |
-| Phase 1 | Task 2-3 | OpenAPI 固化 + 能力盘点 + Parity Harness |
-| Phase 2 | Task 4-5 | RuntimeClient + Supervisor |
+| Phase 1 | Task 2 | OpenAPI 固化 + OpenCode Vendor Client |
+| Rebaseline | Task 2A | Codea Runtime Contract + OpenCodeAdapter + 边界门禁 |
+| Phase 1B | Task 3 | Capability Inventory + AgentRuntime Parity Harness |
+| Phase 2 | Task 4-5 | Runtime 恢复与补偿 + Supervisor |
 | Phase 3 | Task 6-9 | Reasoning + TUI + Session + General 对齐 |
 | Phase 4 | Task 10-11 | Skill/Plugin Manager + 模式隔离 |
 | Phase 5 | Task 12-13 | 安全/DLP/Dify + Enterprise Custom Tools |
@@ -78,7 +82,7 @@
 
 ### 每个 Task 的工作流
 
-以下流程适用于 Task 0～Task 21；Task E0 按执行状态计划单独完成，并在人工确认后结束 Bootstrap 阶段。
+以下流程适用于 `taskOrder` 中的全部 Task；Task E0 按执行状态计划单独完成，并在人工确认后结束 Bootstrap 阶段。
 
 1. 读取并校验执行状态，确认当前 Task、Step 和 checkpoint
 2. 阅读计划中对应 Task 的完整内容
@@ -131,16 +135,19 @@ Spike S1-S6 全部通过才能进入 Phase 1。结果记录在 `docs/spike-resul
 ## 关键接口
 
 ```go
-type RuntimeClient interface {
+type AgentRuntime interface {
     Health(ctx context.Context) (HealthInfo, error)
     CreateSession(ctx context.Context, request CreateSessionRequest) (Session, error)
-    SendPromptAsync(ctx context.Context, sessionID string, req PromptRequest) error
-    Subscribe(ctx context.Context) (<-chan RuntimeEvent, error)
-    ApprovePermission(ctx context.Context, sessionID string, permissionID string, decision PermissionDecision) error
-    AbortSession(ctx context.Context, sessionID string) error
+    Prompt(ctx context.Context, sessionID SessionID, req PromptRequest) error
+    Subscribe(ctx context.Context) (<-chan Event, error)
+    ReplyApproval(ctx context.Context, approvalID ApprovalID, decision ApprovalReply) error
+    Cancel(ctx context.Context, sessionID SessionID) error
     ListAgents(ctx context.Context) ([]Agent, error)
+    Capabilities() RuntimeCapabilities
 }
 ```
+
+`Subscribe` 对应 OpenCode `/global/event`，保持全局订阅。`Start/Stop` 属于 Task 5 `RuntimeSupervisor`，不得加入 AgentRuntime。`RuntimeCapabilities` 表示 Runtime 实际能力，`runtime/capabilities.yaml` 表示产品 required/optional/deferred 要求，两者不得混用。
 
 ## 项目结构
 

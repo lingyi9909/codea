@@ -1,9 +1,11 @@
 # Codea V1 — 技术设计文档
 
 产品范围：Codea V1
-文档版本：2.0
+文档版本：2.1
 日期：2026-07-30
-状态：设计评审通过，允许进入 Phase 0；关键能力以 Spike 和 Parity 门禁结果为准
+状态：基础设计评审通过；2026-08-08 Runtime Boundary 由 Architecture Rebaseline 补充，关键能力以 Spike 和 Parity 门禁结果为准
+
+> **2026-08-08 Architecture Rebaseline:** `docs/superpowers/specs/2026-08-08-codea-runtime-abstraction-rebaseline-design.md` 是 Runtime Boundary、AgentRuntime、Capabilities、Event/Raw、Approval 与 Task 2A/3/4 顺序的最新权威来源。发生冲突时以该文档为准。Codea V1 仍只实现 OpenCode，但 OpenCode DTO/Client/Event 不得越过 Vendor Adapter。
 
 ---
 
@@ -42,7 +44,7 @@ OpenCode 作为独立 Agent Runtime，本地启动 Server；Codea 使用 Go 开�
 │  │ • Doctor 诊断    • 配置管理                       │  │
 │  └──────────────────────┬────────────────────────────┘  │
 │                         │                               │
-│              RuntimeClient 抽象层                       │
+│              AgentRuntime 抽象层                        │
 │                         │                               │
 │       HTTP/OpenAPI + SSE + Local Authentication         │
 │                         │                               │
@@ -102,14 +104,14 @@ Go TUI 不负责：Agent Loop、消息历史管理、Tool 选择决策、上下�
 
 Code Reviewer、Unit Test Generator 和 API Documentation Generator 使用 Agent、Skill 和 Tool 组合实现；Dify、安全和审计能力使用 Plugin/Tool 实现，不侵入 OpenCode 核心流程。Agent、Skill、Tool 的安全扩展优先使用 OpenCode 原生机制；Go TUI 只负责配置和状态管理，不直接承载企业 Agent 执行逻辑。
 
-**原则 4：通过 RuntimeClient 隔离协议**
+**原则 4：通过 AgentRuntime 隔离协议**
 
-Go TUI 不直接依赖 OpenCode API 数据结构。通过 `RuntimeClient + OpenCodeAdapter` 将 OpenCode HTTP/SSE 事件转换为 Codea 内部统一模型，降低上游版本变化影响。
+Go TUI 不直接依赖 OpenCode API 数据结构。通过 Codea-owned `AgentRuntime + OpenCodeAdapter` 将 OpenCode HTTP/SSE 事件转换为 Codea 内部统一模型，降低上游版本变化影响。
 
 ```
 Go TUI
    ↓
-Codea RuntimeClient
+Codea AgentRuntime
    ↓
 OpenCodeAdapter
    ↓
@@ -234,11 +236,11 @@ codea/
 │   │   │   ├── keymap.go             # 快捷键定义
 │   │   │   └── page.go               # 页面状态枚举
 │   │   ├── runtime/                  # Codea 领域接口与模型
-│   │   │   ├── client.go             # RuntimeClient 接口
+│   │   │   ├── client.go             # AgentRuntime 接口
 │   │   │   ├── events.go             # Codea 统一事件
 │   │   │   └── models.go             # 领域模型
 │   │   ├── opencode/                 # OpenCode 适配层
-│   │   │   ├── adapter.go            # RuntimeClient 的 OpenCode 实现
+│   │   │   ├── adapter.go            # AgentRuntime 的 OpenCode 实现
 │   │   │   ├── http_client.go        # 普通 HTTP API
 │   │   │   ├── sse_client.go         # SSE 连接、重连和取消
 │   │   │   ├── event_mapper.go       # OpenCode 事件 → 内部事件
@@ -538,28 +540,26 @@ Runtime 状态枚举：
 | 获取消息列表 | `GET /session/:id/message` | 重连后补偿 |
 | 获取指定消息 | `GET /session/:id/message/:messageID` | |
 | 中止任务 | `POST /session/:id/abort` | |
-| 响应权限申请 | `POST /session/:id/permissions/:permissionID` | Tool 审批 |
+| 响应权限申请 | `POST /permission/{requestID}/reply` | 当前非废弃 Tool 审批端点 |
 
 Go TUI 侧自己生成 messageID，关联 prompt_async 请求与后续 SSE 事件。
 
-RuntimeClient 接口抽象：
+AgentRuntime 接口抽象：
 
 ```go
-type RuntimeClient interface {
+type AgentRuntime interface {
     Health(ctx context.Context) (HealthInfo, error)
     CreateSession(ctx context.Context, request CreateSessionRequest) (Session, error)
-    SendPromptAsync(ctx context.Context, sessionID string, req PromptRequest) error
-    Subscribe(ctx context.Context) (<-chan RuntimeEvent, error)
-    ApprovePermission(
-        ctx context.Context,
-        sessionID string,
-        permissionID string,
-        decision PermissionDecision,
-    ) error
-    AbortSession(ctx context.Context, sessionID string) error
+    Prompt(ctx context.Context, sessionID SessionID, req PromptRequest) error
+    Subscribe(ctx context.Context) (<-chan Event, error)
+    ReplyApproval(ctx context.Context, approvalID ApprovalID, decision ApprovalReply) error
+    Cancel(ctx context.Context, sessionID SessionID) error
     ListAgents(ctx context.Context) ([]Agent, error)
+    Capabilities() RuntimeCapabilities
 }
 ```
+
+`Subscribe` 忠实表达 `/global/event` 的全局流。`Start/Stop` 属于独立 RuntimeSupervisor；`RuntimeCapabilities` 表示实际实现能力，不替代 required/optional/deferred 产品清单。确切模型与边界以 2026-08-08 Rebaseline 为准。
 
 配置更新通过独立服务完成（V1 通过重启 Runtime 生效，不假设热加载）：
 
@@ -1751,8 +1751,8 @@ Parity 不是最后阶段补测，而是从 Phase 2 开始持续运行的回归�
 | 术语 | 含义 |
 |---|---|
 | OpenCode Runtime | 以 `opencode serve` 模式运行的 OpenCode 进程 |
-| RuntimeClient | Go TUI 侧定义的 Codea 内部接口 |
-| OpenCodeAdapter | RuntimeClient 的 OpenCode HTTP/SSE 实现 |
+| AgentRuntime | Codea 自己拥有的 Runtime Domain 接口 |
+| OpenCodeAdapter | AgentRuntime 的 OpenCode HTTP/SSE 实现 |
 | Effective Skills | 经过四级配置合并后的最终 Skill 启用状态 |
 | Runtime Password | 每次启动生成的 Basic Auth 随机密码 |
 | Build ID | 发行包构建标识（`20260730.1`），同一语义版本可区分多次构建 |
