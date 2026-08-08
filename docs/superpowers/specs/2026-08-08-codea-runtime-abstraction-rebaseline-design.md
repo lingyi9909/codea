@@ -103,7 +103,7 @@ type AgentRuntime interface {
 	CreateSession(ctx context.Context, req CreateSessionRequest) (Session, error)
 	Prompt(ctx context.Context, sessionID SessionID, req PromptRequest) error
 	Subscribe(ctx context.Context) (<-chan Event, error)
-	ReplyApproval(ctx context.Context, approvalID ApprovalID, decision ApprovalDecision) error
+	ReplyApproval(ctx context.Context, approvalID ApprovalID, reply ApprovalReply) error
 	Cancel(ctx context.Context, sessionID SessionID) error
 	ListAgents(ctx context.Context) ([]Agent, error)
 	Capabilities() RuntimeCapabilities
@@ -135,7 +135,7 @@ type TextPart struct{ Text string }
 
 ### 4.4 Approval
 
-Codea Domain 使用明确枚举：
+Codea Domain 使用 `ApprovalReply` 统一承载明确的决策枚举与可选消息：
 
 ```go
 type ApprovalDecision string
@@ -148,9 +148,11 @@ const (
 
 type ApprovalReply struct {
 	Decision ApprovalDecision
-	Message  string
+	Message  string // optional
 }
 ```
+
+`ReplyApproval` 必须接收完整的 `ApprovalReply`，不得退化为只接收 `ApprovalDecision`，否则会丢失拒绝原因等可选消息。
 
 OpenCodeAdapter 映射到当前非废弃的 `/permission/{requestID}/reply`。OpenCode Spec 没有 `remember` 字段，Adapter 不得伪造；Codea 项目级记忆策略属于后续 Policy/Application 层。
 

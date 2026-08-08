@@ -102,7 +102,7 @@ Task Gate 状态：
 
 - OpenCode 作为独立 Agent Runtime，通过 `opencode serve` 启动。
 - Go TUI 通过 HTTP/OpenAPI + SSE 与 Runtime 通信。
-- `RuntimeClient + OpenCodeAdapter` 隔离协议变化。
+- `AgentRuntime + OpenCodeAdapter` 隔离协议变化。
 - Go TUI 不承担 Agent Loop、上下文管理、Tool 选择或 Subagent 调度。
 - 企业能力通过 Agent + Skill + 专用 Tool 实现。
 - OpenCode Core 保持最小侵入，原则上修改不超过 5 个文件。

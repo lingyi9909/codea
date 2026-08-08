@@ -552,7 +552,7 @@ type AgentRuntime interface {
     CreateSession(ctx context.Context, request CreateSessionRequest) (Session, error)
     Prompt(ctx context.Context, sessionID SessionID, req PromptRequest) error
     Subscribe(ctx context.Context) (<-chan Event, error)
-    ReplyApproval(ctx context.Context, approvalID ApprovalID, decision ApprovalReply) error
+    ReplyApproval(ctx context.Context, approvalID ApprovalID, reply ApprovalReply) error
     Cancel(ctx context.Context, sessionID SessionID) error
     ListAgents(ctx context.Context) ([]Agent, error)
     Capabilities() RuntimeCapabilities

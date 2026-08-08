@@ -34,7 +34,7 @@
 
 **Interfaces:**
 - Consumes: no OpenCode packages or DTOs
-- Produces: `AgentRuntime`, `SessionID`, `ApprovalID`, `HealthInfo`, `Session`, `CreateSessionRequest`, `PromptRequest`, four Prompt Part variants, `Event`, `ApprovalDecision`, `RuntimeCapabilities`, `RuntimeError`
+- Produces: `AgentRuntime`, `SessionID`, `ApprovalID`, `HealthInfo`, `Session`, `CreateSessionRequest`, `PromptRequest`, four Prompt Part variants, `Event`, `ApprovalDecision`, `ApprovalReply`, `RuntimeCapabilities`, `RuntimeError`
 
 - [ ] **Step 1: Write compile-time and enum tests**
 
@@ -50,6 +50,13 @@ func TestApprovalDecisionValues(t *testing.T) {
 	}
 }
 
+func TestApprovalReplyCarriesDecisionAndOptionalMessage(t *testing.T) {
+	reply := ApprovalReply{Decision: ApprovalReject, Message: "denied by user"}
+	if reply.Decision != ApprovalReject || reply.Message != "denied by user" {
+		t.Fatalf("unexpected reply: %+v", reply)
+	}
+}
+
 func TestPromptPartVariantsSatisfyContract(t *testing.T) {
 	var parts = []PromptPart{TextPart{}, FilePart{}, AgentPart{}, SubtaskPart{}}
 	if len(parts) != 4 { t.Fatal("expected four prompt part variants") }
@@ -58,7 +65,7 @@ func TestPromptPartVariantsSatisfyContract(t *testing.T) {
 
 - [ ] **Step 2: Run the focused tests and confirm RED**
 
-Run: `cd tui && go test ./internal/runtime -run 'TestApprovalDecisionValues|TestPromptPartVariantsSatisfyContract' -count=1`
+Run: `cd tui && go test ./internal/runtime -run 'TestApprovalDecisionValues|TestApprovalReplyCarriesDecisionAndOptionalMessage|TestPromptPartVariantsSatisfyContract' -count=1`
 
 Expected: FAIL because the runtime package/types do not exist.
 
@@ -72,10 +79,23 @@ type AgentRuntime interface {
 	CreateSession(context.Context, CreateSessionRequest) (Session, error)
 	Prompt(context.Context, SessionID, PromptRequest) error
 	Subscribe(context.Context) (<-chan Event, error)
-	ReplyApproval(context.Context, ApprovalID, ApprovalReply) error
+	ReplyApproval(ctx context.Context, approvalID ApprovalID, reply ApprovalReply) error
 	Cancel(context.Context, SessionID) error
 	ListAgents(context.Context) ([]Agent, error)
 	Capabilities() RuntimeCapabilities
+}
+
+type ApprovalDecision string
+
+const (
+	ApprovalOnce   ApprovalDecision = "once"
+	ApprovalAlways ApprovalDecision = "always"
+	ApprovalReject ApprovalDecision = "reject"
+)
+
+type ApprovalReply struct {
+	Decision ApprovalDecision
+	Message  string // optional
 }
 ```
 
