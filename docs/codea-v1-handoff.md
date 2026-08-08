@@ -6,13 +6,13 @@
 - 工作分支：`develop`，后续直接在该分支按顺序修改，不另建功能分支
 - 技术设计与主实施计划：已评审通过
 - 执行状态机制设计与实施计划：已评审通过
-- 当前执行阶段：Task E0、Task 0、Task 1 已人工验收通过；Task 2 已完成自动验证并处于 `awaiting_acceptance`
-- 唯一下一步：人工验收 Task 2 的 OpenAPI 生成器、锁定 DTO、HTTP Client 与验证证据
-- 边界：Task 2 人工验收前不得开始 Task 3
+- 当前执行阶段：Task E0、Task 0、Task 1、Task 2 已人工验收通过；Task 2 状态为 `completed`
+- 唯一下一步：等待用户明确指令后再开始 Task 3
+- 边界：按用户要求，Task 3 保持 `pending`，本次不启动
 - 已知非阻塞改进：项目全部完成时补充校验终态 `current.task = 21` 的一致性
 - Go 基线：项目统一使用 Go 1.26.5
 
-当前仓库已包含 `docs/execution-state.yaml` 及其校验器。Task 1 的六项 Spike、OpenAPI、Golden SSE、机器结果和 Phase 0 Gate 均已持久化并通过人工验收。Task 2 已从锁定 v1.18.11 OpenAPI 3.1.0 Spec 生成 DTO，并完成使用生成 DTO 的 HTTP Client；自动验证与 Task Gate 已通过，等待人工验收。
+当前仓库已包含 `docs/execution-state.yaml` 及其校验器。Task 1 的六项 Spike、OpenAPI、Golden SSE、机器结果和 Phase 0 Gate 均已持久化并通过人工验收。Task 2 已从锁定 v1.18.11 OpenAPI 3.1.0 Spec 生成 DTO，并完成使用生成 DTO 的 HTTP Client；自动验证、Task Gate 与人工验收均已通过。Task 3 尚未启动。
 
 ## 2. 权威文档与读取顺序
 
@@ -117,7 +117,7 @@ Task Gate 状态：
 9. API Key 不得写入普通配置或日志。
 10. 状态文件、Task 报告、验证证据和实际 Git Commit 必须一致。
 
-## 7. 当前执行点：Task 2 等待人工验收
+## 7. 当前执行点：Task 2 已完成，Task 3 暂不启动
 
 Task E0 和 Task 0 已人工验收通过。Task 1 已锁定 OpenCode v1.18.11（commit `012c2f57f976489d88bd4598a056b4bdcdd428ee`）。Linux x64、macOS arm64/x64、Windows x64 四个精确 CLI 资产均已实际下载，SHA-256 与官方 Release digest 一致。
 
@@ -127,7 +127,7 @@ S2～S6 均已通过：Session/SSE、Tool Approval 批准与拒绝、结构化 R
 
 S5/S6 可复现证据和四平台哈希已经闭环。S1～S6 与 Phase 0 Gate 全部 PASS，Task 1 已于 2026-08-04 通过人工验收并标记为 `completed`。
 
-Task 2 已完成锁定 Spec 审阅、OpenAPI 代码生成器、472 个组件与 162 条路径的 DTO 生成，以及 Health、Session、Prompt、Permission、Abort 和 Agent List HTTP Client。Permission Client 使用非废弃 `/permission/{requestID}/reply`；完整 Go 测试、Race Detector、vet、build、生成一致性和状态门禁均通过。代码 checkpoint 为 `0316ed0c3b64a9f2169a2ea11e946ae1000ae7c8`，当前唯一下一步是人工验收 Task 2。
+Task 2 已完成锁定 Spec 审阅、OpenAPI 代码生成器、472 个组件与 162 条路径的 DTO 生成，以及 Health、Session、Prompt、Permission、Abort 和 Agent List HTTP Client。Permission Client 使用非废弃 `/permission/{requestID}/reply`；完整 Go 测试、Race Detector、vet、build、生成一致性和状态门禁均通过。代码 checkpoint 为 `0316ed0c3b64a9f2169a2ea11e946ae1000ae7c8`，并于 2026-08-08 通过人工验收、标记为 `completed`。按用户要求，Task 3 保持 `pending`，等待明确启动指令。
 
 ## 8. E0 验收后的 Task 0
 
@@ -198,4 +198,4 @@ Task 0 验收后，Task 1 执行 S1～S6：
 
 ## 11. 当前交接结论
 
-Task E0、Task 0 和 Task 1 已人工验收通过；Go 基线统一为 1.26.5。Task 2 已完成自动验证与 Task Gate，当前为 `awaiting_acceptance`。人工验收前不得开始 Task 3。
+Task E0、Task 0、Task 1 和 Task 2 已人工验收通过；Go 基线统一为 1.26.5。Task 2 已标记为 `completed`。Task 3 仍为 `pending`，按用户要求暂不启动。

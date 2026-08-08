@@ -2,34 +2,26 @@ schemaVersion: 1
 project: codea-v1
 plan: docs/superpowers/plans/2026-07-30-codea-v1-plan.md
 current:
-  task: 2
-  step: 5
-  status: awaiting_acceptance
-  nextAction: 等待 Task 2 人工验收；验收前不得开始 Task 3
+  task: 3
+  step: 1
+  status: pending
+  nextAction: Task 2 已完成人工验收；按用户要求保持 Task 3 pending，等待明确启动指令
 checkpoint:
-  commit: 0316ed0c3b64a9f2169a2ea11e946ae1000ae7c8
-  updatedAt: "2026-08-04T06:34:54Z"
+  commit: 174bb2997aa206736775c54a31f6de8ee82261f9
+  updatedAt: "2026-08-08T08:56:10Z"
 verification:
-  status: pass
-  commands:
-    - "cd tui && go test ./... -count=1"
-    - "cd tui && go test -race ./... -count=1"
-    - "cd tui && go vet ./..."
-    - "cd tui && go build ./..."
-    - "cd tui && go run ./cmd/openapi-gen ../runtime/openapi/opencode-1.18.11.json <tmp> && cmp <tmp> internal/opencode/dto.go"
-    - "jq OpenAPI 3.1.0, 162 paths, and 472 schemas assertions"
-    - "./scripts/check-execution-state.sh"
-    - "deprecated endpoint, placeholder, credential, and git diff scans"
+  status: not_run
+  commands: []
   errorSummary: null
   recoveryAdvice: null
 taskGate:
-  status: pass
+  status: not_evaluated
 humanAcceptance:
   accepted: false
 tasks:
   "0": {status: completed, completedSteps: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: 97ea4b8e7f6d86a97e17781bb858b5f90ad81b20, report: docs/task-reports/task-00.md}
   "1": {status: completed, completedSteps: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: 50e32c2673d1324c040d5c2296b25196307a4662, report: docs/task-reports/task-01.md}
-  "2": {status: awaiting_acceptance, completedSteps: [1, 2, 3, 4, 5], verificationStatus: pass, taskGateStatus: pass, humanAccepted: false, checkpoint: 0316ed0c3b64a9f2169a2ea11e946ae1000ae7c8, report: docs/task-reports/task-02.md}
+  "2": {status: completed, completedSteps: [1, 2, 3, 4, 5], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: 174bb2997aa206736775c54a31f6de8ee82261f9, report: docs/task-reports/task-02.md}
   "3": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-03.md}
   "4": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-04.md}
   "5": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-05.md}

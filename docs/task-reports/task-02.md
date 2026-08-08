@@ -2,13 +2,13 @@
 
 **Task:** 2
 
-**Status:** awaiting_acceptance
+**Status:** completed
 
-**Current step:** 5 — 提交并等待人工验收
+**Current step:** 5 — 人工验收通过，Task 正式结束
 
-**Date:** 2026-08-04
+**Date:** 2026-08-08
 
-**Checkpoint:** `0316ed0c3b64a9f2169a2ea11e946ae1000ae7c8`
+**Checkpoint:** `174bb2997aa206736775c54a31f6de8ee82261f9`
 
 ## 完成内容
 
@@ -66,7 +66,7 @@ feat: generate OpenAPI DTOs and typed HTTP client
 - `tui/internal/opencode/dto.go`：由锁定 v1.18.11 Spec 生成的 DTO。
 - `tui/internal/opencode/http_client.go`：使用生成 DTO 的普通 HTTP Client。
 - `tui/internal/opencode/http_client_test.go`：六类 HTTP 行为、认证、序列化与错误响应测试。
-- `docs/execution-state.yaml`：Task 2 更新为 `awaiting_acceptance`。
+- `docs/execution-state.yaml`：记录 Task 2 从 `awaiting_acceptance` 到人工验收完成的状态流转。
 - `docs/task-reports/task-02.md`：本报告。
 - `docs/codea-v1-handoff.md`：交接点更新为 Task 2 人工验收。
 
@@ -83,7 +83,7 @@ OpenCode Core 修改文件数：0，符合最多 5 个文件的约束。
 | `cd tui && go build ./...` | PASS | Go 1.26.5 全量构建通过 |
 | 生成器重跑后 `cmp` | PASS | 新生成 DTO 与已提交 `dto.go` 逐字节一致 |
 | 锁定 Spec 结构断言 | PASS | OpenAPI 3.1.0、162 paths、472 schemas |
-| `./scripts/check-execution-state.sh` | PASS | Task 2 `awaiting_acceptance` 状态合法 |
+| `./scripts/check-execution-state.sh` | PASS | 代码收口时 Task 2 `awaiting_acceptance` 状态合法 |
 | 废弃路径、占位符、凭据与 `git diff --check` 扫描 | PASS | 无命中、无格式错误 |
 
 ## 计划偏差与处理
@@ -98,11 +98,12 @@ OpenCode Core 修改文件数：0，符合最多 5 个文件的约束。
 - **阻塞项：**无。
 - **非阻塞边界：**union 容器依赖生成的具体变体 DTO；Task 4 Adapter 必须按锁定 Spec 做领域转换，不得直接向 TUI 暴露 OpenCode DTO。
 - **恢复点：**代码 checkpoint `0316ed0c3b64a9f2169a2ea11e946ae1000ae7c8`。
-- **下一步：**等待 Task 2 人工验收；验收前不得开始 Task 3。
+- **下一步：**按用户要求保持 Task 3 为 `pending`，等待明确启动指令。
+- **范围边界：**本次仅记录 Task 2 人工验收，不执行 Task 3。
 
 ## Gate 结论
 
 - **Verification:** `pass`
 - **Task Gate:** `pass`
-- **Human acceptance:** `false`
-- **Task 2:** `awaiting_acceptance`
+- **Human acceptance:** `true`（用户于 2026-08-08 明确验收通过）
+- **Task 2:** `completed`
