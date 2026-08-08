@@ -6,9 +6,9 @@
 - 工作分支：`develop`，后续直接在该分支按顺序修改，不另建功能分支
 - 技术设计与主实施计划：已评审通过
 - 执行状态机制设计与实施计划：已评审通过
-- 当前执行阶段：Task E0、Task 0、Task 1、Task 2 已人工验收通过；Architecture Rebaseline 文档已落库，Task 2A 保持 `pending`
-- 唯一下一步：人工验收 Runtime Abstraction Rebaseline 设计与 Task 2A 实施计划
-- 边界：Rebaseline 文档人工验收前不得开始 Task 2A 实现；Task 2A 人工验收前不得开始 Task 3
+- 当前执行阶段：Task E0、Task 0、Task 1、Task 2 已人工验收通过；Architecture Rebaseline 已有条件验收并完成三项前置收口，Task 2A 保持 `pending`
+- 唯一下一步：开始 Task 2A Step 1，定义 Codea Runtime Domain 与 `AgentRuntime`
+- 边界：只允许启动 Task 2A；Task 2A 人工验收前不得开始 Task 3
 - 已知非阻塞改进：项目全部完成时补充校验终态 `current.task = 21` 的一致性
 - Go 基线：项目统一使用 Go 1.26.5
 
@@ -120,7 +120,7 @@ Task Gate 状态：
 9. API Key 不得写入普通配置或日志。
 10. 状态文件、Task 报告、验证证据和实际 Git Commit 必须一致。
 
-## 7. 当前执行点：Task 2 已完成，等待 Task 2A 方案人工验收
+## 7. 当前执行点：Task 2A Step 1 待启动
 
 Task E0 和 Task 0 已人工验收通过。Task 1 已锁定 OpenCode v1.18.11（commit `012c2f57f976489d88bd4598a056b4bdcdd428ee`）。Linux x64、macOS arm64/x64、Windows x64 四个精确 CLI 资产均已实际下载，SHA-256 与官方 Release digest 一致。
 
@@ -132,7 +132,7 @@ S5/S6 可复现证据和四平台哈希已经闭环。S1～S6 与 Phase 0 Gate �
 
 Task 2 已完成锁定 Spec 审阅、OpenAPI 代码生成器、472 个组件与 162 条路径的 DTO 生成，以及 Health、Session、Prompt、Permission、Abort 和 Agent List HTTP Client。Permission Client 使用非废弃 `/permission/{requestID}/reply`；完整 Go 测试、Race Detector、vet、build、生成一致性和状态门禁均通过。代码 checkpoint 为 `0316ed0c3b64a9f2169a2ea11e946ae1000ae7c8`，并于 2026-08-08 通过人工验收、标记为 `completed`。
 
-2026-08-08 Architecture Rebaseline 将现有 Task 2 产物定位为 OpenCode Vendor Layer，在 Task 3 前插入 Task 2A，用最小 Codea AgentRuntime、OpenCodeAdapter、Event/Approval Mapper、RuntimeCapabilities 与 Import Boundary 固化依赖方向。V1 仍只实现 OpenCode，不实现 OMP。当前等待 Rebaseline 文档人工验收；不得开始 Task 2A 代码。
+2026-08-08 Architecture Rebaseline 将现有 Task 2 产物定位为 OpenCode Vendor Layer，在 Task 3 前插入 Task 2A，用最小 Codea AgentRuntime、OpenCodeAdapter、Event/Approval Mapper、RuntimeCapabilities 与 Import Boundary 固化依赖方向。V1 仍只实现 OpenCode，不实现 OMP。方案已有条件验收；`ReplyApproval` 已统一接收承载 Decision 与可选 Message 的 `ApprovalReply`，清理变更已独立提交，执行状态 checkpoint 已更新。下一步允许启动 Task 2A Step 1；Task 3 必须保持 `pending`。
 
 ## 8. E0 验收后的 Task 0
 
@@ -203,4 +203,4 @@ Task 0 验收后，Task 1 执行 S1～S6：
 
 ## 11. 当前交接结论
 
-Task E0、Task 0、Task 1 和 Task 2 已人工验收通过；Go 基线统一为 1.26.5。执行状态已升级到 schema v2，Task 2A 为第一个未完成 Task，当前保持 `pending`。Rebaseline 文档人工验收前不得实现 Task 2A，Task 2A 人工验收前不得开始 Task 3。
+Task E0、Task 0、Task 1 和 Task 2 已人工验收通过；Go 基线统一为 1.26.5。执行状态已升级到 schema v2，Task 2A 为第一个未完成 Task，当前保持 `pending`，checkpoint 指向最终获批的 Rebaseline 提交。下一步允许启动 Task 2A Step 1；Task 2A 人工验收前不得开始 Task 3。

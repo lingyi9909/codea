@@ -6,10 +6,10 @@ current:
   task: "2A"
   step: 1
   status: pending
-  nextAction: 等待 Runtime Abstraction Rebaseline 文档人工验收；验收前不得开始 Task 2A 实现或 Task 3
+  nextAction: 开始 Task 2A Step 1：定义 Codea Runtime Domain 与 AgentRuntime；Task 3 必须保持 pending
 checkpoint:
-  commit: 54b349af45799b10e0ace9bb9c58bc298e947477
-  updatedAt: "2026-08-08T11:28:03Z"
+  commit: 3fc5fe3393b284534242508cdb10bbc18123f20c
+  updatedAt: "2026-08-08T13:25:36Z"
 verification:
   status: not_run
   commands: []
@@ -23,7 +23,7 @@ tasks:
   "0": {status: completed, completedSteps: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: 97ea4b8e7f6d86a97e17781bb858b5f90ad81b20, report: docs/task-reports/task-00.md}
   "1": {status: completed, completedSteps: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: 50e32c2673d1324c040d5c2296b25196307a4662, report: docs/task-reports/task-01.md}
   "2": {status: completed, completedSteps: [1, 2, 3, 4, 5], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: 174bb2997aa206736775c54a31f6de8ee82261f9, report: docs/task-reports/task-02.md}
-  "2A": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: 54b349af45799b10e0ace9bb9c58bc298e947477, report: docs/task-reports/task-02A.md}
+  "2A": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: 3fc5fe3393b284534242508cdb10bbc18123f20c, report: docs/task-reports/task-02A.md}
   "3": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-03.md}
   "4": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-04.md}
   "5": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-05.md}
