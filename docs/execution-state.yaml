@@ -8,7 +8,7 @@ current:
   status: awaiting_acceptance
   nextAction: 等待人工验收；验收通过后开始 Task 3
 checkpoint:
-  commit: 3a3a139f82e83f1b4655696e3570b0d3a594f262
+  commit: 576fd27f9f114b283af9f25e6343c51efbf5309e
   updatedAt: "2026-08-09T00:00:00Z"
 verification:
   status: pass
@@ -42,7 +42,7 @@ tasks:
   "0": {status: completed, completedSteps: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: 97ea4b8e7f6d86a97e17781bb858b5f90ad81b20, report: docs/task-reports/task-00.md}
   "1": {status: completed, completedSteps: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: 50e32c2673d1324c040d5c2296b25196307a4662, report: docs/task-reports/task-01.md}
   "2": {status: completed, completedSteps: [1, 2, 3, 4, 5], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: 174bb2997aa206736775c54a31f6de8ee82261f9, report: docs/task-reports/task-02.md}
-  "2A": {status: awaiting_acceptance, completedSteps: [1, 2, 3, 4, 5, 6], verificationStatus: pass, taskGateStatus: pass, humanAccepted: false, checkpoint: 3a3a139f82e83f1b4655696e3570b0d3a594f262, report: docs/task-reports/task-02A.md}
+  "2A": {status: awaiting_acceptance, completedSteps: [1, 2, 3, 4, 5, 6], verificationStatus: pass, taskGateStatus: pass, humanAccepted: false, checkpoint: 576fd27f9f114b283af9f25e6343c51efbf5309e, report: docs/task-reports/task-02A.md}
   "3": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-03.md}
   "4": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-04.md}
   "5": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-05.md}
