@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 )
@@ -52,12 +53,8 @@ func (c *SSEClient) Subscribe(ctx context.Context) (<-chan SSERawEvent, error) {
 	}
 	if resp.StatusCode != http.StatusOK {
 		defer resp.Body.Close()
-		body, _ := bufio.NewReader(resp.Body).ReadString('\n')
-		body = strings.TrimSpace(body)
-		if len(body) > 1024 {
-			body = body[:1024]
-		}
-		return nil, fmt.Errorf("SSE subscribe returned HTTP %d: %s", resp.StatusCode, body)
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 64*1024))
+		return nil, fmt.Errorf("SSE subscribe returned HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
 	}
 
 	ch := make(chan SSERawEvent, 16)
@@ -82,9 +79,14 @@ func (c *SSEClient) readLoop(ctx context.Context, resp *http.Response, ch chan S
 			// Empty line = event separator
 			if len(dataLines) > 0 {
 				seq++
-				ch <- SSERawEvent{
+				event := SSERawEvent{
 					Data:     []byte(strings.Join(dataLines, "\n")),
 					Sequence: seq,
+				}
+				select {
+				case ch <- event:
+				case <-ctx.Done():
+					return
 				}
 				dataLines = dataLines[:0]
 			}
@@ -104,9 +106,12 @@ func (c *SSEClient) readLoop(ctx context.Context, resp *http.Response, ch chan S
 
 	if scanner.Err() != nil && ctx.Err() == nil {
 		seq++
-		ch <- SSERawEvent{
+		select {
+		case ch <- SSERawEvent{
 			Data:     []byte(fmt.Sprintf(`{"type":"runtime_error","error":"%s"}`, scanner.Err().Error())),
 			Sequence: seq,
+		}:
+		case <-ctx.Done():
 		}
 	}
 }

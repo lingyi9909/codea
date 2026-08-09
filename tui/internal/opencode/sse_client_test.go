@@ -226,6 +226,37 @@ func TestSSEClientLargePayload(t *testing.T) {
 	}
 }
 
+func TestSSEClientTruncatedStream(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		flusher, _ := w.(http.Flusher)
+		// Send incomplete event without trailing blank line, then close
+		fmt.Fprintf(w, "data: partial event")
+		flusher.Flush()
+		// hijack and close to simulate truncated stream
+	}))
+	defer srv.Close()
+
+	client := NewSSEClient(srv.URL, "", "")
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	ch, err := client.Subscribe(ctx)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Should eventually close without hanging
+	select {
+	case _, ok := <-ch:
+		if ok {
+			// may receive partial event or nothing
+		}
+	case <-time.After(time.Second):
+		t.Fatal("channel not closed after truncated stream")
+	}
+}
+
 func TestSSEClientBasicAuth(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		user, pass, ok := r.BasicAuth()

@@ -60,14 +60,17 @@ func (a *OpenCodeAdapter) Subscribe(ctx context.Context) (<-chan runtime.Event, 
 		for raw := range rawCh {
 			event, err := MapEvent(raw.Data, raw.Sequence)
 			if err != nil {
-				ch <- runtime.Event{
+				event = runtime.Event{
 					Type:     "_unparseable_",
 					Sequence: raw.Sequence,
 					Raw:      raw.Data,
 				}
-				continue
 			}
-			ch <- event
+			select {
+			case ch <- event:
+			case <-ctx.Done():
+				return
+			}
 		}
 	}()
 

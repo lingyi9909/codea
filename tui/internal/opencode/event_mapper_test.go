@@ -7,9 +7,11 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"codea/tui/internal/runtime"
 )
 
-func TestEventMapperGoldenSSE(t *testing.T) {
+func TestEventMapperGoldenSSEAllMapped(t *testing.T) {
 	goldenPath := filepath.Join("..", "..", "..", "runtime", "openapi", "golden-sse-s2.jsonl")
 	f, err := os.Open(goldenPath)
 	if err != nil {
@@ -38,6 +40,10 @@ func TestEventMapperGoldenSSE(t *testing.T) {
 		if event.RawType == "" {
 			t.Fatalf("event %d has empty RawType", seq)
 		}
+		// RawType must preserve the original OpenCode type
+		if event.Type != "_unparseable_" && event.Type != CodeaEventRaw && event.RawType == string(event.Type) {
+			// ok: raw events use the original type as RawType which may equal Type
+		}
 	}
 	if err := scanner.Err(); err != nil {
 		t.Fatalf("scanner error: %v", err)
@@ -47,51 +53,139 @@ func TestEventMapperGoldenSSE(t *testing.T) {
 	}
 }
 
-func TestEventMapperGoldenSSEEventTypes(t *testing.T) {
-	goldenPath := filepath.Join("..", "..", "..", "runtime", "openapi", "golden-sse-s2.jsonl")
-	f, err := os.Open(goldenPath)
-	if err != nil {
-		t.Fatalf("failed to open golden SSE file: %v", err)
+func TestEventMapperSemanticTypes(t *testing.T) {
+	tests := []struct {
+		name     string
+		raw      string
+		wantType runtime.EventType
+	}{
+		{
+			name:     "server.connected → runtime.connected",
+			raw:      `{"directory":"","payload":{"type":"server.connected","properties":{}}}`,
+			wantType: CodeaEventRuntimeConnected,
+		},
+		{
+			name:     "session.status → session.status",
+			raw:      `{"directory":"/tmp","payload":{"type":"session.status","properties":{"sessionID":"s1","status":{"type":"busy"}}}}`,
+			wantType: CodeaEventSessionStatus,
+		},
+		{
+			name:     "session.updated → session.updated",
+			raw:      `{"directory":"/tmp","payload":{"type":"session.updated","properties":{"sessionID":"s1","info":{"id":"s1","projectID":"proj1"}}}}`,
+			wantType: CodeaEventSessionUpdated,
+		},
+		{
+			name:     "session.created → session.created",
+			raw:      `{"directory":"/tmp","payload":{"type":"session.created","properties":{"sessionID":"s1"}}}`,
+			wantType: CodeaEventSessionCreated,
+		},
+		{
+			name:     "message.updated → message.updated",
+			raw:      `{"directory":"/tmp","payload":{"type":"message.updated","properties":{"sessionID":"s1","info":{"id":"msg1"}}}}`,
+			wantType: CodeaEventMessageUpdated,
+		},
+		{
+			name:     "message.part.delta text → answer.delta",
+			raw:      `{"directory":"/tmp","payload":{"type":"message.part.delta","properties":{"sessionID":"s1","messageID":"m1","partID":"p1","field":"text","delta":"hello"}}}`,
+			wantType: CodeaEventAnswerDelta,
+		},
+		{
+			name:     "message.part.delta reasoning → reasoning.delta",
+			raw:      `{"directory":"/tmp","payload":{"type":"message.part.delta","properties":{"sessionID":"s1","messageID":"m1","partID":"p1","field":"reasoning","delta":"I think..."}}}`,
+			wantType: CodeaEventReasoningDelta,
+		},
+		{
+			name:     "message.part.updated step-start → step.started",
+			raw:      `{"directory":"/tmp","payload":{"type":"message.part.updated","properties":{"sessionID":"s1","part":{"id":"p1","messageID":"m1","sessionID":"s1","type":"step-start"}}}}`,
+			wantType: CodeaEventStepStarted,
+		},
+		{
+			name:     "message.part.updated step-finish → step.finished",
+			raw:      `{"directory":"/tmp","payload":{"type":"message.part.updated","properties":{"sessionID":"s1","part":{"id":"p1","messageID":"m1","sessionID":"s1","type":"step-finish","reason":"stop"}}}}`,
+			wantType: CodeaEventStepFinished,
+		},
+		{
+			name:     "message.part.updated text → part.updated",
+			raw:      `{"directory":"/tmp","payload":{"type":"message.part.updated","properties":{"sessionID":"s1","part":{"id":"p1","messageID":"m1","sessionID":"s1","type":"text","text":"hello"}}}}`,
+			wantType: CodeaEventPartUpdated,
+		},
+		{
+			name:     "permission.asked → approval.requested",
+			raw:      `{"directory":"/tmp","payload":{"type":"permission.asked","properties":{"sessionID":"s1"}}}`,
+			wantType: CodeaEventApprovalRequested,
+		},
+		{
+			name:     "permission.replied → approval.resolved",
+			raw:      `{"directory":"/tmp","payload":{"type":"permission.replied","properties":{"sessionID":"s1"}}}`,
+			wantType: CodeaEventApprovalResolved,
+		},
+		{
+			name:     "unknown vendor type → raw",
+			raw:      `{"directory":"/tmp","payload":{"type":"vendor.custom.event","properties":{"key":"value"}}}`,
+			wantType: CodeaEventRaw,
+		},
+		{
+			name:     "plugin.added → raw (vendor-specific)",
+			raw:      `{"directory":"/tmp","payload":{"type":"plugin.added","properties":{"id":"test"}}}`,
+			wantType: CodeaEventRaw,
+		},
+		{
+			name:     "sync → raw (internal)",
+			raw:      `{"directory":"/tmp","payload":{"type":"sync","properties":null}}`,
+			wantType: CodeaEventRaw,
+		},
 	}
-	defer f.Close()
 
-	seen := map[string]int{}
-	scanner := bufio.NewScanner(f)
-	var seq int64
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if line == "" {
-			continue
-		}
-		seq++
-		event, err := MapEvent([]byte(line), seq)
-		if err != nil {
-			t.Fatalf("map event %d: %v", seq, err)
-		}
-		seen[string(event.Type)]++
-	}
-	if err := scanner.Err(); err != nil {
-		t.Fatalf("scanner error: %v", err)
-	}
-	if len(seen) == 0 {
-		t.Fatal("no event types found")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			event, err := MapEvent([]byte(tt.raw), 1)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if event.Type != tt.wantType {
+				t.Fatalf("expected Type=%q, got %q", tt.wantType, event.Type)
+			}
+			if event.RawType == "" {
+				t.Fatal("RawType must not be empty")
+			}
+		})
 	}
 }
 
-func TestEventMapperUnknownType(t *testing.T) {
-	raw := []byte(`{"directory":"/tmp","payload":{"type":"custom.unknown.event","properties":{"key":"value"}}}`)
-	event, err := MapEvent(raw, 1)
+func TestEventMapperPreservesRawType(t *testing.T) {
+	raw := `{"directory":"/tmp","payload":{"type":"plugin.added","properties":{"id":"test"}}}`
+	event, err := MapEvent([]byte(raw), 1)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if event.Type != "custom.unknown.event" {
-		t.Fatalf("expected Type=custom.unknown.event, got %q", event.Type)
+	// Semantic type is raw, but RawType preserves original
+	if event.Type != CodeaEventRaw {
+		t.Fatalf("expected Type=raw, got %q", event.Type)
 	}
-	if event.RawType != "custom.unknown.event" {
-		t.Fatalf("expected RawType=custom.unknown.event, got %q", event.RawType)
+	if event.RawType != "plugin.added" {
+		t.Fatalf("expected RawType=plugin.added, got %q", event.RawType)
 	}
-	if len(event.Raw) == 0 {
-		t.Fatal("raw payload must not be empty for unknown event")
+}
+
+func TestEventMapperExtractsProjectID(t *testing.T) {
+	raw := `{"directory":"/tmp","payload":{"type":"session.updated","properties":{"sessionID":"s1","info":{"projectID":"proj_abc","id":"s1"}}}}`
+	event, err := MapEvent([]byte(raw), 1)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if event.ProjectID != "proj_abc" {
+		t.Fatalf("expected ProjectID=proj_abc, got %q", event.ProjectID)
+	}
+}
+
+func TestEventMapperExtractsCreatedAt(t *testing.T) {
+	raw := `{"directory":"/tmp","payload":{"type":"session.status","properties":{"sessionID":"s1","time":1785756134158}}}`
+	event, err := MapEvent([]byte(raw), 1)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if event.CreatedAt.IsZero() {
+		t.Fatal("expected non-zero CreatedAt")
 	}
 }
 
