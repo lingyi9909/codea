@@ -4,11 +4,11 @@
 
 **Status:** in_progress
 
-**Current step:** 2 completed — 进入 Step 3
+**Current step:** 3 completed — 进入 Step 4
 
 **Date:** 2026-08-09
 
-**Checkpoint:** `a2ef9e0ecc6d0ad2be9ee267b671c217be115327`
+**Checkpoint:** `05a26d8054999f23314d34803fccdf88c1d2fc8e`
 
 ## 已完成内容
 
@@ -84,6 +84,39 @@
 - nil PromptPart、nil FilePartSource 和部分映射提前终止均返回 error，不 panic
 - 新增 `TestMapPromptRequestRejectsNilPart`、`TestMapPromptRequestRejectsNilFileSource`、`TestMapPromptRequestRejectsNilPartStopsEarly`
 
+### Step 3: SSE Transport and Event Mapper — PASS
+
+**文件变更:**
+
+- 新增 `tui/internal/opencode/sse_client.go` — `SSEClient`，通过 `GET /global/event` 订阅 SSE 流，Basic Auth，返回 `<-chan SSERawEvent`
+- 新增 `tui/internal/opencode/sse_client_test.go` — 8 个测试：单行/多行数据、注释忽略、多事件、非 200、上下文取消、大负载（128KB）、Basic Auth
+- 新增 `tui/internal/opencode/event_mapper.go` — `MapEvent`，解析 SSE envelope `{directory, payload: {type, properties}}` → `runtime.Event`
+- 新增 `tui/internal/opencode/event_mapper_test.go` — 9 个测试：Golden SSE（76 条事件逐一映射）、事件类型统计、未知类型、畸形 JSON、超大 Raw（20KB 截断）、字段提取（SessionID/MessageID/PartID/Content）、Raw JSON 完整性
+
+**TDD 流程:**
+
+- RED: `go test ./internal/opencode -run 'Test(SSE|EventMapper|Golden)' -count=1` → 编译失败
+- GREEN: 全部 17 个新测试 PASS
+
+**关键行为:**
+
+- SSE 协议：多行 `data:` 用 `\n` 合并，`:` 注释忽略，空行分隔事件
+- Scanner buffer 128KB，最大 2MB；大负载不受默认 64KB 限制
+- 非 200 响应返回 error（含截断 body）
+- 上下文取消时 channel 正常关闭，无 goroutine 泄漏
+- Golden SSE 76 条事件全部映射：每条均有非空 Type、RawType、Raw
+- 未知事件类型：Type = RawType = 原始 OpenCode 类型字符串，Raw 保留
+- 畸形 JSON：Type = `_unparseable_`，Raw 保留精确原始字节
+- Raw > 16KB：截断至 16KB，`RawTruncated=true`，`RawOriginalSize` 记录原始大小
+- 从 properties 提取：sessionID、messageID、partID、delta/text（Content）
+
+**验证结果:**
+
+| 命令 | 结果 |
+|------|------|
+| `cd tui && go test ./internal/opencode -run 'Test(SSE\|EventMapper\|Golden)' -count=1` | PASS（17/17） |
+| `cd tui && go test ./internal/opencode -count=1` | PASS（全 51 tests） |
+
 ## 计划偏差
 
 Step 1: `FilePart.Source any` → 锁定 Spec 提取的 `FilePartSource` sealed interface；`SensitivityPrivate` → `SensitivitySensitive`。
@@ -93,12 +126,13 @@ Step 2: 严格按计划实现。复审后修正 panic → typed error（`Mapping
 ## 未解决问题
 
 - 无阻塞项。
-- 下一步：Task 2A Step 3 — SSE Transport and Event Mapper。
+- 下一步：Task 2A Step 4 — OpenCodeAdapter and Runtime Capabilities。
 
 ## Gate 结论
 
 - **Verification (Step 1):** `pass`
 - **Verification (Step 2):** `pass`
+- **Verification (Step 3):** `pass`
 - **Task Gate:** `not_evaluated`（待 Step 1–6 全部完成）
 - **Human acceptance:** `false`
 - **Task 2A:** `in_progress`
