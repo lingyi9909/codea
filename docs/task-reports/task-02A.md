@@ -4,11 +4,11 @@
 
 **Status:** in_progress
 
-**Current step:** 1 completed — 进入 Step 2
+**Current step:** 2 completed — 进入 Step 3
 
 **Date:** 2026-08-09
 
-**Checkpoint:** `31b692d8bcfc3a8e8b9677f0279b62f5b1c992af`
+**Checkpoint:** `a2ef9e0ecc6d0ad2be9ee267b671c217be115327`
 
 ## 已完成内容
 
@@ -43,18 +43,55 @@
 | `cd tui && go test ./internal/runtime -count=1` | PASS（5/5） |
 | `cd tui && go vet ./internal/runtime/...` | PASS |
 
+### Step 2: OpenCode Request and Approval Mapping — PASS
+
+**文件变更:**
+
+- 新增 `tui/internal/opencode/request_mapper.go` — `MapCreateSessionRequest`、`MapPromptRequest` 及内部 Part/Source 映射
+- 新增 `tui/internal/opencode/request_mapper_test.go` — 15 个测试：CreateSession、TextPart（含 JSON discriminator）、FilePart FileSource/SymbolSource/ResourceSource、AgentPart（含 nil Source）、SubtaskPart（含 nil Model）、nil Model、全 Part 组合
+- 新增 `tui/internal/opencode/approval_mapper.go` — `MapApprovalReply`
+- 新增 `tui/internal/opencode/approval_mapper_test.go` — 5 个测试：once/always/reject/with message/no remember field
+
+**TDD 流程:**
+
+- RED: `go test ./internal/opencode -run 'TestMap(CreateSession|Prompt|Approval)' -count=1` → 编译失败（函数未定义）
+- GREEN: 全部 18 个新测试 + 所有 Task 2 现有测试 PASS
+
+**映射覆盖:**
+
+| Codea Domain | OpenCode DTO | Discriminator |
+|-------------|-------------|---------------|
+| `TextPart` | `OpenCodeTextPartInput` | `"text"` |
+| `FilePart` + `FileSource` | `OpenCodeFilePartInput` + `OpenCodeFileSource` | `"file"` |
+| `FilePart` + `SymbolSource` | `OpenCodeFilePartInput` + `OpenCodeSymbolSource` | `"file"` |
+| `FilePart` + `ResourceSource` | `OpenCodeFilePartInput` + `OpenCodeResourceSource` | `"file"` |
+| `AgentPart` | `OpenCodeAgentPartInput` | `"agent"` |
+| `SubtaskPart` | `OpenCodeSubtaskPartInput` | `"subtask"` |
+| `ApprovalReply` | `OpenCodePermissionReplyRequest` | — |
+| `ModelRef` | `OpenCodeSessionPromptAsyncRequestModel` | — |
+
+**验证结果:**
+
+| 命令 | 结果 |
+|------|------|
+| `cd tui && go test ./internal/opencode -run 'TestMap(CreateSession\|Prompt\|Approval)' -count=1` | PASS（18/18） |
+| `cd tui && go test ./internal/opencode -count=1` | PASS（全 31 tests，含 Task 2 现有测试） |
+
 ## 计划偏差
 
-`FilePart.Source any` → 锁定 Spec 提取的 `FilePartSource` sealed interface；`SensitivityPrivate` → `SensitivitySensitive`。其余严格按 Task 2A.1 计划和 Rebaseline Design §4 实现。
+Step 1: `FilePart.Source any` → 锁定 Spec 提取的 `FilePartSource` sealed interface；`SensitivityPrivate` → `SensitivitySensitive`。
+
+Step 2: 严格按计划实现，无偏差。
 
 ## 未解决问题
 
 - 无阻塞项。
-- 下一步：Task 2A Step 2 — Request/Approval Mapper。
+- 下一步：Task 2A Step 3 — SSE Transport and Event Mapper。
 
 ## Gate 结论
 
 - **Verification (Step 1):** `pass`
+- **Verification (Step 2):** `pass`
 - **Task Gate:** `not_evaluated`（待 Step 1–6 全部完成）
 - **Human acceptance:** `false`
 - **Task 2A:** `in_progress`
