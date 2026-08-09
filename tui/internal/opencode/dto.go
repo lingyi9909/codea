@@ -6772,7 +6772,7 @@ type OpenCodeSessionPromptAsyncRequestModel struct {
 type OpenCodeSessionPromptAsyncRequest struct {
 	Agent     string                                  `json:"agent,omitempty"`
 	Format    OpenCodeOutputFormat                    `json:"format,omitempty"`
-	MessageID string                                  `json:"messageID,omitempty"`
+	MessageID string                                  `json:"id,omitempty"`
 	Model     *OpenCodeSessionPromptAsyncRequestModel `json:"model,omitempty"`
 	NoReply   bool                                    `json:"noReply,omitempty"`
 	Parts     []any                                   `json:"parts"`

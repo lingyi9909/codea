@@ -46,6 +46,12 @@ type schema struct {
 	AdditionalProperties json.RawMessage   `json:"additionalProperties"`
 }
 
+// fieldJSONOverrides maps "TypeName.property" to the correct JSON field name when
+// the OpenAPI spec property name doesn't match what the OpenCode API actually expects.
+var fieldJSONOverrides = map[string]string{
+	"OpenCodeSessionPromptAsyncRequest.messageID": "id",
+}
+
 type renderer struct {
 	typeNames map[string]string
 	usedNames map[string]int
@@ -176,6 +182,9 @@ func (render *renderer) writeDeclaration(out *strings.Builder, name string, valu
 	fields := make([]field, 0, len(value.Properties))
 	for _, property := range sortedKeys(value.Properties) {
 		tag := property
+		if override, ok := fieldJSONOverrides[name+"."+property]; ok {
+			tag = override
+		}
 		if !required[property] {
 			tag += ",omitempty"
 		}

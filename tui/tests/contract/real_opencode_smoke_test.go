@@ -144,8 +144,8 @@ func TestRealOpenCodeParitySmoke(t *testing.T) {
 			}
 		}
 
-		// Stop after collecting enough events or on idle
-		if eventCount >= 20 {
+		// Stop after collecting enough events
+		if eventCount >= 200 {
 			subCancel()
 		}
 	}
