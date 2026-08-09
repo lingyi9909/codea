@@ -52,7 +52,7 @@ type RuntimeError struct {
 type Sensitivity string
 
 const (
-	SensitivityPublic   Sensitivity = "public"
-	SensitivityInternal Sensitivity = "internal"
-	SensitivityPrivate  Sensitivity = "private"
+	SensitivityPublic    Sensitivity = "public"
+	SensitivityInternal  Sensitivity = "internal"
+	SensitivitySensitive Sensitivity = "sensitive"
 )

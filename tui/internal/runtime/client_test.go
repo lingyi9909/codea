@@ -30,3 +30,23 @@ func TestPromptPartVariantsSatisfyContract(t *testing.T) {
 		t.Fatal("expected four prompt part variants")
 	}
 }
+
+func TestFilePartSourceVariantsSatisfyContract(t *testing.T) {
+	var sources = []FilePartSource{FileSource{}, SymbolSource{}, ResourceSource{}}
+	if len(sources) != 3 {
+		t.Fatal("expected three file part source variants")
+	}
+}
+
+func TestSensitivityValues(t *testing.T) {
+	cases := map[Sensitivity]string{
+		SensitivityPublic:    "public",
+		SensitivityInternal:  "internal",
+		SensitivitySensitive: "sensitive",
+	}
+	for s, want := range cases {
+		if string(s) != want {
+			t.Fatalf("%q != %q", s, want)
+		}
+	}
+}
