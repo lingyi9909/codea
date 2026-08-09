@@ -8,7 +8,7 @@ current:
   status: in_progress
   nextAction: 开始 Task 2A Step 3：SSE Transport and Event Mapper
 checkpoint:
-  commit: a2ef9e0ecc6d0ad2be9ee267b671c217be115327
+  commit: 0b6a4d16770dcd3e6cb8652e3bbe5a775ecfd18c
   updatedAt: "2026-08-09T00:00:00Z"
 verification:
   status: not_run
