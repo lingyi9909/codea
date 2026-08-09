@@ -6,7 +6,7 @@
 
 **Date:** 2026-08-09
 
-**Checkpoint:** `576fd27f9f114b283af9f25e6343c51efbf5309e`
+**Checkpoint:** `871110ae346b27d8629769d5a3bb9f14a7373f73`
 
 ## 完成内容
 
@@ -73,6 +73,25 @@ SSE 协议解析 + 76 条 Golden SSE 事件全映射。EventMapper 完整语义�
 | Issue 2 | EventMapper 只做 Type 映射，未提取领域数据 | extractApproval（ID/Permission + v2 action 兼容）、extractTool（Name/CallID + fallback to part.id）、extractError（string + 结构化 format） |
 | Issue 3 | Truncated stream 残留 dataLines 静默丢失 | readLoop EOF 后检测 len(dataLines) > 0，发送 truncated runtime_error；测试断言收到此事件 |
 
+### 第三轮（3 个必须修复）
+
+| # | 问题 | 修复 |
+|---|------|------|
+| Issue 1 | Gate 6 只检测事件类型，未验证 Approval once/reject 端到端流程 | 重写 phase-based 状态机：once 后 tool 执行 + reject 后 tool 阻止；两个 Prompt 串联驱动完整审批闭环 |
+| Issue 2 | `quick_llm_test.go` 硬编码诊断测试，默认 `go test ./...` 必然 FAIL | 删除文件 |
+| Issue 3 | `prompt_async` 请求 DTO JSON 字段 `messageID` 与 OpenCode v1.18.11 实际协议不符 | 见下方 Protocol Deviation 记录；生成器新增 `fieldJSONOverrides` + 回归测试 |
+
+## OpenCode v1.18.11 Known Protocol Deviations
+
+### Deviation 1: prompt_async 请求使用 `id` 而非 `messageID`
+
+- **发现日期:** 2026-08-09
+- **现象:** 使用 `messageID` 发送 prompt 后，OpenCode 返回 `session.error`：「No user message found in stream」；curl 验证 `id` 正常、`messageID` 失败
+- **根因:** OpenAPI spec `prompt_async.requestBody.messageID` 与实际 Runtime 行为不一致 — Runtime 只处理 JSON 字段 `id`
+- **修复:** `cmd/openapi-gen/main.go` 新增 `fieldJSONOverrides` 映射，将 `OpenCodeSessionPromptAsyncRequest.messageID` JSON tag 覆盖为 `id`
+- **回归测试:** `TestPromptAsyncJSONUsesIDNotMessageID`（`go/parser` + `ast.Inspect` 验证 struct tag）
+- **影响范围:** 仅 `prompt_async` 请求体；所有响应中的 `MessageID` 字段不受影响
+
 ## 完整文件变更
 
 | 文件 | 状态 | 步骤 |
@@ -99,15 +118,20 @@ SSE 协议解析 + 76 条 Golden SSE 事件全映射。EventMapper 完整语义�
 | `scripts/check-runtime-boundary.sh` | 新增 | Step 5 |
 | `tests/runtime-boundary/runtime_boundary_test.sh` | 新增 | Step 5 |
 | `tui/tests/contract/runtime_adapter_test.go` | 新增 | Step 6 |
-| `tui/tests/contract/real_opencode_smoke_test.go` | 新增（Review 重写） | Step 6 |
+| `tui/tests/contract/real_opencode_smoke_test.go` | 新增（Review 重写×3） | Step 6 |
+| `tui/cmd/openapi-gen/main.go` | 修改 — fieldJSONOverrides | Step 3/Review |
+| `tui/cmd/openapi-gen/main_test.go` | 修改 — 新增回归测试 | Step 3/Review |
+| `tui/internal/opencode/dto.go` | 重新生成 — messageID→id | Step 3/Review |
+| `docs/execution-state.yaml` | 修改 — checkpoint + Gate 6 | — |
+| `docs/task-reports/task-02A.md` | 修改 — 报告更新 | — |
 
-**零文件修改、零文件删除。**
+**1 文件删除：** `tui/tests/contract/quick_llm_test.go`（Review Issue 2）。
 
 ## 验证结果
 
 | 命令 | 结果 |
 |------|------|
-| `go test ./... -count=1` | PASS（所有包，53 个测试） |
+| `go test ./... -count=1` | PASS（所有包，55 个测试） |
 | `go test -race ./... -count=1` | PASS |
 | `go vet ./...` | PASS |
 | `go build ./...` | PASS |
@@ -115,7 +139,8 @@ SSE 协议解析 + 76 条 Golden SSE 事件全映射。EventMapper 完整语义�
 | `go run ./cmd/openapi-gen ... \| cmp ... dto.go` | PASS（生成一致） |
 | `./scripts/check-runtime-boundary.sh` | PASS（零泄漏） |
 | `./scripts/check-execution-state.sh` | PASS |
-| Real OpenCode v1.18.11 parity smoke (Gate 6) | PASS（有 LLM）/ SKIP（无 LLM） |
+| `tests/execution-state/state_validator_test.sh` | PASS |
+| Real OpenCode v1.18.11 parity smoke (Gate 6) | PASS（含 Approval once/reject 端到端） |
 
 ## Task Gate 逐项
 
@@ -126,7 +151,7 @@ SSE 协议解析 + 76 条 Golden SSE 事件全映射。EventMapper 完整语义�
 | 3 | DTO 零泄漏 — 边界门禁通过 | PASS |
 | 4 | Event 零静默丢失 — Golden SSE 76 条全映射 + truncated EOF | PASS |
 | 5 | Approval parity — once/always/reject + message，无 remember | PASS |
-| 6 | Runtime parity smoke — 真实 OpenCode v1.18.11 语义事件验证 | PASS |
+| 6 | Runtime parity smoke — 真实 OpenCode v1.18.11 验证通过（含 Approval once/reject 端到端流程） | PASS |
 | 7 | Offline 无新增风险 | PASS |
 | 8 | Windows 无新增风险 | PASS |
 | 9 | 人工验收 | **pending** |
@@ -135,8 +160,11 @@ SSE 协议解析 + 76 条 Golden SSE 事件全映射。EventMapper 完整语义�
 
 `TestRealOpenCodeParitySmoke` 在真实 OpenCode v1.18.11 上运行，验证：
 
-- Health / CreateSession / Prompt / Subscribe / Cancel / ListAgents / Capabilities — 全部 7 个方法
-- 语义事件类型检测：`runtime.connected`, `answer.delta`, `reasoning.delta`, `step.started`, `step.finished`, `tool.called`, `approval.requested`
+- Health / CreateSession / Prompt / Subscribe / ReplyApproval / Cancel / ListAgents / Capabilities — 全部 8 个方法
+- 语义事件类型检测：`runtime.connected`, `answer.delta`, `reasoning.delta`, `step.started`, `step.finished`, `tool.called`, `approval.requested`, `session.error`
+- **Approval 端到端流程（phase-based 状态机）：**
+  - Scenario A: 第一个 Prompt 触发 `approval.requested` → `ReplyApproval(once)` → 工具放行执行 → `toolAfterOnce=true`
+  - Scenario B: 第二个 Prompt 触发 `approval.requested` → `ReplyApproval(reject)` → step 终止 → `approvalRejectDone=true`
 - 领域数据提取：`Approval.ID`, `Approval.Permission`, `Tool.Name`, `Tool.CallID`, `Error.Code`, `Error.Message`
 - 模型未配置时自动检测 `session.error` 并 SKIP（含可操作提示），不被 `go test ./...` 的 PASS 掩盖
 

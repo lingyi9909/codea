@@ -8,8 +8,8 @@ current:
   status: awaiting_acceptance
   nextAction: 等待人工验收；验收通过后开始 Task 3
 checkpoint:
-  commit: 576fd27f9f114b283af9f25e6343c51efbf5309e
-  updatedAt: "2026-08-09T00:00:00Z"
+  commit: 871110ae346b27d8629769d5a3bb9f14a7373f73
+  updatedAt: "2026-08-09T12:00:00Z"
 verification:
   status: pass
   commands:
@@ -32,7 +32,7 @@ taskGate:
     "3": {description: "DTO 零泄漏 — 边界门禁通过", status: pass}
     "4": {description: "Event 零静默丢失 — Golden SSE 76 条全映射", status: pass}
     "5": {description: "Approval parity — once/always/reject + message, 无 remember", status: pass}
-    "6": {description: "Runtime parity smoke — 真实 OpenCode v1.18.11 验证通过", status: pass}
+    "6": {description: "Runtime parity smoke — 真实 OpenCode v1.18.11 验证通过（含 Approval once/reject 端到端流程）", status: pass}
     "7": {description: "Offline 无新增风险 — 无 Runtime 下载/安装/网络路径", status: pass}
     "8": {description: "Windows 无新增风险 — x64 cross-build 通过", status: pass}
     "9": {description: "人工验收", status: pending}
