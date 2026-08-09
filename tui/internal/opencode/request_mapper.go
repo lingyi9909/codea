@@ -6,6 +6,16 @@ import (
 	"codea/tui/internal/runtime"
 )
 
+// MappingError describes an unsupported or nil type during Domain-to-Vendor mapping.
+type MappingError struct {
+	Field string
+	Type  string
+}
+
+func (e *MappingError) Error() string {
+	return fmt.Sprintf("unsupported %s type: %s", e.Field, e.Type)
+}
+
 // MapCreateSessionRequest maps a Codea create-session request to an OpenCode session create request.
 func MapCreateSessionRequest(req runtime.CreateSessionRequest) OpenCodeSessionCreateRequest {
 	return OpenCodeSessionCreateRequest{
@@ -14,10 +24,14 @@ func MapCreateSessionRequest(req runtime.CreateSessionRequest) OpenCodeSessionCr
 }
 
 // MapPromptRequest maps a Codea prompt request and session ID to an OpenCode prompt-async request.
-func MapPromptRequest(sessionID runtime.SessionID, req runtime.PromptRequest) (string, OpenCodeSessionPromptAsyncRequest) {
+func MapPromptRequest(sessionID runtime.SessionID, req runtime.PromptRequest) (string, OpenCodeSessionPromptAsyncRequest, error) {
 	parts := make([]any, 0, len(req.Parts))
 	for _, p := range req.Parts {
-		parts = append(parts, mapPromptPart(p))
+		mapped, err := mapPromptPart(p)
+		if err != nil {
+			return "", OpenCodeSessionPromptAsyncRequest{}, err
+		}
+		parts = append(parts, mapped)
 	}
 
 	var model *OpenCodeSessionPromptAsyncRequestModel
@@ -33,10 +47,13 @@ func MapPromptRequest(sessionID runtime.SessionID, req runtime.PromptRequest) (s
 		MessageID: req.MessageID,
 		Model:     model,
 		Parts:     parts,
-	}
+	}, nil
 }
 
-func mapPromptPart(part runtime.PromptPart) any {
+func mapPromptPart(part runtime.PromptPart) (any, error) {
+	if part == nil {
+		return nil, &MappingError{Field: "PromptPart", Type: "nil"}
+	}
 	switch p := part.(type) {
 	case runtime.TextPart:
 		return OpenCodeTextPartInput{
@@ -46,16 +63,20 @@ func mapPromptPart(part runtime.PromptPart) any {
 			Ignored:   p.Ignored,
 			Metadata:  p.Metadata,
 			Type:      "text",
-		}
+		}, nil
 	case runtime.FilePart:
+		source, err := mapFilePartSource(p.Source)
+		if err != nil {
+			return nil, err
+		}
 		return OpenCodeFilePartInput{
 			ID:       p.ID,
 			Filename: p.Filename,
 			Mime:     p.MIME,
 			Url:      p.URL,
-			Source:   mapFilePartSource(p.Source),
+			Source:   source,
 			Type:     "file",
-		}
+		}, nil
 	case runtime.AgentPart:
 		var source *OpenCodeAgentPartInputSource
 		if p.Source != nil {
@@ -70,7 +91,7 @@ func mapPromptPart(part runtime.PromptPart) any {
 			Name:   p.Name,
 			Source: source,
 			Type:   "agent",
-		}
+		}, nil
 	case runtime.SubtaskPart:
 		var model *OpenCodeSubtaskPartInputModel
 		if p.Model != nil {
@@ -87,20 +108,23 @@ func mapPromptPart(part runtime.PromptPart) any {
 			Command:     p.Command,
 			Model:       model,
 			Type:        "subtask",
-		}
+		}, nil
 	default:
-		panic(fmt.Sprintf("unsupported prompt part type: %T", part))
+		return nil, &MappingError{Field: "PromptPart", Type: fmt.Sprintf("%T", part)}
 	}
 }
 
-func mapFilePartSource(source runtime.FilePartSource) OpenCodeFilePartSource {
+func mapFilePartSource(source runtime.FilePartSource) (OpenCodeFilePartSource, error) {
+	if source == nil {
+		return nil, &MappingError{Field: "FilePartSource", Type: "nil"}
+	}
 	switch s := source.(type) {
 	case runtime.FileSource:
 		return OpenCodeFileSource{
 			Type: s.Type,
 			Path: s.Path,
 			Text: mapFilePartSourceText(s.Text),
-		}
+		}, nil
 	case runtime.SymbolSource:
 		return OpenCodeSymbolSource{
 			Type: s.Type,
@@ -112,16 +136,16 @@ func mapFilePartSource(source runtime.FilePartSource) OpenCodeFilePartSource {
 				Start: OpenCodeRangeStart{Line: int64(s.Range.Start.Line), Character: int64(s.Range.Start.Character)},
 				End:   OpenCodeRangeEnd{Line: int64(s.Range.End.Line), Character: int64(s.Range.End.Character)},
 			},
-		}
+		}, nil
 	case runtime.ResourceSource:
 		return OpenCodeResourceSource{
 			Type:       s.Type,
 			ClientName: s.ClientName,
 			Uri:        s.URI,
 			Text:       mapFilePartSourceText(s.Text),
-		}
+		}, nil
 	default:
-		panic(fmt.Sprintf("unsupported file part source type: %T", source))
+		return nil, &MappingError{Field: "FilePartSource", Type: fmt.Sprintf("%T", source)}
 	}
 }
 

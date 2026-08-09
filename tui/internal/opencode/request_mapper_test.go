@@ -2,6 +2,7 @@ package opencode
 
 import (
 	"encoding/json"
+	"errors"
 	"testing"
 
 	"codea/tui/internal/runtime"
@@ -24,7 +25,7 @@ func TestMapCreateSessionRequestEmpty(t *testing.T) {
 }
 
 func TestMapPromptRequestWithTextPart(t *testing.T) {
-	_, req := MapPromptRequest("sess-1", runtime.PromptRequest{
+	_, req, err := MapPromptRequest("sess-1", runtime.PromptRequest{
 		MessageID: "msg-1",
 		Agent:     "general",
 		Model:     &runtime.ModelRef{ProviderID: "deepseek", ModelID: "v3"},
@@ -32,6 +33,9 @@ func TestMapPromptRequestWithTextPart(t *testing.T) {
 			runtime.TextPart{ID: "p1", Text: "hello", Synthetic: false, Ignored: false, Metadata: map[string]any{"key": "value"}},
 		},
 	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	if req.MessageID != "msg-1" {
 		t.Fatalf("expected MessageID=msg-1, got %q", req.MessageID)
 	}
@@ -47,11 +51,14 @@ func TestMapPromptRequestWithTextPart(t *testing.T) {
 }
 
 func TestMapPromptRequestTextPartJSON(t *testing.T) {
-	_, req := MapPromptRequest("sess-1", runtime.PromptRequest{
+	_, req, err := MapPromptRequest("sess-1", runtime.PromptRequest{
 		Parts: []runtime.PromptPart{
 			runtime.TextPart{ID: "p1", Text: "hello", Metadata: map[string]any{"k": "v"}},
 		},
 	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	data, err := json.Marshal(req.Parts[0])
 	if err != nil {
 		t.Fatal(err)
@@ -69,7 +76,7 @@ func TestMapPromptRequestTextPartJSON(t *testing.T) {
 }
 
 func TestMapPromptRequestWithFilePartFileSource(t *testing.T) {
-	_, req := MapPromptRequest("sess-1", runtime.PromptRequest{
+	_, req, err := MapPromptRequest("sess-1", runtime.PromptRequest{
 		Parts: []runtime.PromptPart{
 			runtime.FilePart{
 				ID:       "f1",
@@ -84,6 +91,9 @@ func TestMapPromptRequestWithFilePartFileSource(t *testing.T) {
 			},
 		},
 	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	if len(req.Parts) != 1 {
 		t.Fatalf("expected 1 part, got %d", len(req.Parts))
 	}
@@ -107,7 +117,7 @@ func TestMapPromptRequestWithFilePartFileSource(t *testing.T) {
 }
 
 func TestMapPromptRequestWithFilePartSymbolSource(t *testing.T) {
-	_, req := MapPromptRequest("sess-1", runtime.PromptRequest{
+	_, req, err := MapPromptRequest("sess-1", runtime.PromptRequest{
 		Parts: []runtime.PromptPart{
 			runtime.FilePart{
 				ID:       "f2",
@@ -127,6 +137,9 @@ func TestMapPromptRequestWithFilePartSymbolSource(t *testing.T) {
 			},
 		},
 	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	data, err := json.Marshal(req.Parts[0])
 	if err != nil {
 		t.Fatal(err)
@@ -148,7 +161,7 @@ func TestMapPromptRequestWithFilePartSymbolSource(t *testing.T) {
 }
 
 func TestMapPromptRequestWithFilePartResourceSource(t *testing.T) {
-	_, req := MapPromptRequest("sess-1", runtime.PromptRequest{
+	_, req, err := MapPromptRequest("sess-1", runtime.PromptRequest{
 		Parts: []runtime.PromptPart{
 			runtime.FilePart{
 				ID:       "f3",
@@ -163,6 +176,9 @@ func TestMapPromptRequestWithFilePartResourceSource(t *testing.T) {
 			},
 		},
 	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	data, err := json.Marshal(req.Parts[0])
 	if err != nil {
 		t.Fatal(err)
@@ -184,7 +200,7 @@ func TestMapPromptRequestWithFilePartResourceSource(t *testing.T) {
 }
 
 func TestMapPromptRequestWithAgentPart(t *testing.T) {
-	_, req := MapPromptRequest("sess-1", runtime.PromptRequest{
+	_, req, err := MapPromptRequest("sess-1", runtime.PromptRequest{
 		Parts: []runtime.PromptPart{
 			runtime.AgentPart{
 				ID:   "a1",
@@ -197,6 +213,9 @@ func TestMapPromptRequestWithAgentPart(t *testing.T) {
 			},
 		},
 	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	data, err := json.Marshal(req.Parts[0])
 	if err != nil {
 		t.Fatal(err)
@@ -214,11 +233,14 @@ func TestMapPromptRequestWithAgentPart(t *testing.T) {
 }
 
 func TestMapPromptRequestWithAgentPartNoSource(t *testing.T) {
-	_, req := MapPromptRequest("sess-1", runtime.PromptRequest{
+	_, req, err := MapPromptRequest("sess-1", runtime.PromptRequest{
 		Parts: []runtime.PromptPart{
 			runtime.AgentPart{ID: "a2", Name: "general"},
 		},
 	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	data, err := json.Marshal(req.Parts[0])
 	if err != nil {
 		t.Fatal(err)
@@ -233,7 +255,7 @@ func TestMapPromptRequestWithAgentPartNoSource(t *testing.T) {
 }
 
 func TestMapPromptRequestWithSubtaskPart(t *testing.T) {
-	_, req := MapPromptRequest("sess-1", runtime.PromptRequest{
+	_, req, err := MapPromptRequest("sess-1", runtime.PromptRequest{
 		Parts: []runtime.PromptPart{
 			runtime.SubtaskPart{
 				ID:          "s1",
@@ -245,6 +267,9 @@ func TestMapPromptRequestWithSubtaskPart(t *testing.T) {
 			},
 		},
 	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	data, err := json.Marshal(req.Parts[0])
 	if err != nil {
 		t.Fatal(err)
@@ -275,7 +300,7 @@ func TestMapPromptRequestWithSubtaskPart(t *testing.T) {
 }
 
 func TestMapPromptRequestWithSubtaskPartNoModel(t *testing.T) {
-	_, req := MapPromptRequest("sess-1", runtime.PromptRequest{
+	_, req, err := MapPromptRequest("sess-1", runtime.PromptRequest{
 		Parts: []runtime.PromptPart{
 			runtime.SubtaskPart{
 				ID:          "s2",
@@ -285,6 +310,9 @@ func TestMapPromptRequestWithSubtaskPartNoModel(t *testing.T) {
 			},
 		},
 	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	data, err := json.Marshal(req.Parts[0])
 	if err != nil {
 		t.Fatal(err)
@@ -299,18 +327,21 @@ func TestMapPromptRequestWithSubtaskPartNoModel(t *testing.T) {
 }
 
 func TestMapPromptRequestNilModel(t *testing.T) {
-	_, req := MapPromptRequest("sess-1", runtime.PromptRequest{
+	_, req, err := MapPromptRequest("sess-1", runtime.PromptRequest{
 		MessageID: "msg-1",
 		Model:     nil,
 		Parts:     []runtime.PromptPart{runtime.TextPart{Text: "hi"}},
 	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	if req.Model != nil {
 		t.Fatal("model must be nil when not provided")
 	}
 }
 
 func TestMapPromptRequestAllParts(t *testing.T) {
-	_, req := MapPromptRequest("sess-1", runtime.PromptRequest{
+	_, req, err := MapPromptRequest("sess-1", runtime.PromptRequest{
 		Parts: []runtime.PromptPart{
 			runtime.TextPart{Text: "t"},
 			runtime.FilePart{MIME: "text/plain", Filename: "f.txt", Source: runtime.FileSource{Type: "file", Path: "/f.txt"}},
@@ -318,7 +349,61 @@ func TestMapPromptRequestAllParts(t *testing.T) {
 			runtime.SubtaskPart{Agent: "s", Description: "d", Prompt: "p"},
 		},
 	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	if len(req.Parts) != 4 {
 		t.Fatalf("expected 4 parts, got %d", len(req.Parts))
+	}
+}
+
+func TestMapPromptRequestRejectsNilPart(t *testing.T) {
+	_, _, err := MapPromptRequest("sess-1", runtime.PromptRequest{
+		Parts: []runtime.PromptPart{nil},
+	})
+	if err == nil {
+		t.Fatal("expected error for nil PromptPart")
+	}
+	var me *MappingError
+	if !errors.As(err, &me) {
+		t.Fatalf("expected *MappingError, got %T: %v", err, err)
+	}
+	if me.Field != "PromptPart" || me.Type != "nil" {
+		t.Fatalf("unexpected MappingError: Field=%q Type=%q", me.Field, me.Type)
+	}
+}
+
+func TestMapPromptRequestRejectsNilFileSource(t *testing.T) {
+	_, _, err := MapPromptRequest("sess-1", runtime.PromptRequest{
+		Parts: []runtime.PromptPart{
+			runtime.FilePart{MIME: "text/plain", Filename: "f.txt", Source: nil},
+		},
+	})
+	if err == nil {
+		t.Fatal("expected error for nil FilePartSource")
+	}
+	var me *MappingError
+	if !errors.As(err, &me) {
+		t.Fatalf("expected *MappingError, got %T: %v", err, err)
+	}
+	if me.Field != "FilePartSource" || me.Type != "nil" {
+		t.Fatalf("unexpected MappingError: Field=%q Type=%q", me.Field, me.Type)
+	}
+}
+
+func TestMapPromptRequestRejectsNilPartStopsEarly(t *testing.T) {
+	_, _, err := MapPromptRequest("sess-1", runtime.PromptRequest{
+		Parts: []runtime.PromptPart{
+			runtime.TextPart{Text: "ok"},
+			nil,
+			runtime.TextPart{Text: "after"},
+		},
+	})
+	if err == nil {
+		t.Fatal("expected error for nil PromptPart")
+	}
+	var me *MappingError
+	if !errors.As(err, &me) {
+		t.Fatalf("expected *MappingError, got %T: %v", err, err)
 	}
 }

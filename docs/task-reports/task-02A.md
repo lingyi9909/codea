@@ -55,7 +55,7 @@
 **TDD 流程:**
 
 - RED: `go test ./internal/opencode -run 'TestMap(CreateSession|Prompt|Approval)' -count=1` → 编译失败（函数未定义）
-- GREEN: 全部 18 个新测试 + 所有 Task 2 现有测试 PASS
+- GREEN: 全部 21 个新测试 + 所有 Task 2 现有测试 PASS
 
 **映射覆盖:**
 
@@ -74,14 +74,21 @@
 
 | 命令 | 结果 |
 |------|------|
-| `cd tui && go test ./internal/opencode -run 'TestMap(CreateSession\|Prompt\|Approval)' -count=1` | PASS（18/18） |
-| `cd tui && go test ./internal/opencode -count=1` | PASS（全 31 tests，含 Task 2 现有测试） |
+| `cd tui && go test ./internal/opencode -run 'TestMap(CreateSession\|Prompt\|Approval)' -count=1` | PASS（21/21，含 nil/error 路径） |
+| `cd tui && go test ./internal/opencode -count=1` | PASS（全 34 tests，含 Task 2 现有测试） |
+
+**复审修正（2026-08-09）:**
+
+- `MapPromptRequest` 签名改为 `(string, OpenCodeSessionPromptAsyncRequest, error)`，`mapPromptPart` 和 `mapFilePartSource` 改为返回 error
+- 新增 `MappingError` typed error，支持 `errors.As` 识别
+- nil PromptPart、nil FilePartSource 和部分映射提前终止均返回 error，不 panic
+- 新增 `TestMapPromptRequestRejectsNilPart`、`TestMapPromptRequestRejectsNilFileSource`、`TestMapPromptRequestRejectsNilPartStopsEarly`
 
 ## 计划偏差
 
 Step 1: `FilePart.Source any` → 锁定 Spec 提取的 `FilePartSource` sealed interface；`SensitivityPrivate` → `SensitivitySensitive`。
 
-Step 2: 严格按计划实现，无偏差。
+Step 2: 严格按计划实现。复审后修正 panic → typed error（`MappingError`），`MapPromptRequest` 返回 `error`。
 
 ## 未解决问题
 
