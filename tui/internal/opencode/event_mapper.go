@@ -78,6 +78,7 @@ type sseCommonProps struct {
 	Status    *sseStatus      `json:"status"`
 	Info      json.RawMessage `json:"info"`
 	Part      *ssePart        `json:"part"`
+	Error     json.RawMessage `json:"error"`
 }
 
 type sseStatus struct {
@@ -85,12 +86,14 @@ type sseStatus struct {
 }
 
 type ssePart struct {
-	ID        string  `json:"id"`
-	MessageID string  `json:"messageID"`
-	SessionID string  `json:"sessionID"`
-	Type      string  `json:"type"`
-	Text      string  `json:"text"`
-	Reason    string  `json:"reason"`
+	ID        string   `json:"id"`
+	MessageID string   `json:"messageID"`
+	SessionID string   `json:"sessionID"`
+	Type      string   `json:"type"`
+	Text      string   `json:"text"`
+	Reason    string   `json:"reason"`
+	Tool      string   `json:"tool"`
+	CallID    string   `json:"callID"`
 	Time      *sseTime `json:"time"`
 }
 
@@ -103,6 +106,14 @@ type sseTime struct {
 type sseSessionInfo struct {
 	ProjectID string `json:"projectID"`
 	ID        string `json:"id"`
+}
+
+// ssePermissionProps extracts permission request data from permission.asked events.
+type ssePermissionProps struct {
+	ID         string `json:"id"`
+	Permission string `json:"permission"`
+	Action     string `json:"action"`
+	SessionID  string `json:"sessionID"`
 }
 
 // MapEvent maps a raw OpenCode SSE event to a Codea runtime.Event.
@@ -169,7 +180,97 @@ func MapEvent(raw []byte, sequence int64) (runtime.Event, error) {
 		}
 	}
 
+	// Domain data extraction
+	extractApproval(&event, &payload, &props)
+	extractTool(&event, &props)
+	extractError(&event, &props)
+
 	return event, nil
+}
+
+func extractApproval(event *runtime.Event, payload *ssePayload, props *sseCommonProps) {
+	if event.Type != CodeaEventApprovalRequested {
+		return
+	}
+	var perm ssePermissionProps
+	_ = json.Unmarshal(payload.Properties, &perm)
+	approval := &runtime.ApprovalRequest{
+		ID: perm.ID,
+	}
+	if perm.Permission != "" {
+		approval.Permission = perm.Permission
+	} else if perm.Action != "" {
+		approval.Permission = perm.Action
+	}
+	if approval.ID != "" || approval.Permission != "" {
+		event.Approval = approval
+	}
+	if perm.SessionID != "" && event.SessionID == "" {
+		event.SessionID = perm.SessionID
+	}
+}
+
+func extractTool(event *runtime.Event, props *sseCommonProps) {
+	if event.Type != CodeaEventToolCalled || props.Part == nil {
+		return
+	}
+	name := props.Part.Tool
+	callID := props.Part.CallID
+	if callID == "" {
+		callID = props.Part.ID
+	}
+	if name != "" || callID != "" {
+		event.Tool = &runtime.ToolEvent{
+			Name:   name,
+			CallID: callID,
+		}
+	}
+}
+
+// sseErrorData extracts the message from a structured error object.
+type sseErrorData struct {
+	Name string          `json:"name"`
+	Data json.RawMessage `json:"data"`
+}
+
+type sseErrorInner struct {
+	Message string `json:"message"`
+}
+
+func extractError(event *runtime.Event, props *sseCommonProps) {
+	if event.Type != CodeaEventSessionError && event.RawType != "_unparseable_" {
+		return
+	}
+	if len(props.Error) == 0 {
+		return
+	}
+	// Try string first
+	var msg string
+	if err := json.Unmarshal(props.Error, &msg); err == nil {
+		event.Error = &runtime.RuntimeError{
+			Code:    string(CodeaEventSessionError),
+			Message: msg,
+		}
+		return
+	}
+	// Try structured error: {"name":"...","data":{"message":"..."}}
+	var ed sseErrorData
+	if err := json.Unmarshal(props.Error, &ed); err == nil {
+		if ed.Data != nil {
+			var inner sseErrorInner
+			if err := json.Unmarshal(ed.Data, &inner); err == nil && inner.Message != "" {
+				event.Error = &runtime.RuntimeError{
+					Code:    ed.Name,
+					Message: inner.Message,
+				}
+				return
+			}
+		}
+		event.Error = &runtime.RuntimeError{
+			Code:    ed.Name,
+			Message: string(props.Error),
+		}
+	}
 }
 
 func mapVendorType(vendorType string, props *sseCommonProps) runtime.EventType {

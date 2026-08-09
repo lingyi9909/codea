@@ -230,10 +230,8 @@ func TestSSEClientTruncatedStream(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/event-stream")
 		flusher, _ := w.(http.Flusher)
-		// Send incomplete event without trailing blank line, then close
 		fmt.Fprintf(w, "data: partial event")
 		flusher.Flush()
-		// hijack and close to simulate truncated stream
 	}))
 	defer srv.Close()
 
@@ -246,14 +244,19 @@ func TestSSEClientTruncatedStream(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// Should eventually close without hanging
 	select {
-	case _, ok := <-ch:
-		if ok {
-			// may receive partial event or nothing
+	case evt, ok := <-ch:
+		if !ok {
+			t.Fatal("channel closed without emitting truncated event")
+		}
+		if !strings.Contains(string(evt.Data), "truncated stream") {
+			t.Fatalf("expected truncated stream event, got: %s", evt.Data)
+		}
+		if !strings.Contains(string(evt.Data), "partial event") {
+			t.Fatalf("expected partial content in event, got: %s", evt.Data)
 		}
 	case <-time.After(time.Second):
-		t.Fatal("channel not closed after truncated stream")
+		t.Fatal("timeout waiting for truncated stream event")
 	}
 }
 

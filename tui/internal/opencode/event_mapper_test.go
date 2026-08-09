@@ -40,10 +40,6 @@ func TestEventMapperGoldenSSEAllMapped(t *testing.T) {
 		if event.RawType == "" {
 			t.Fatalf("event %d has empty RawType", seq)
 		}
-		// RawType must preserve the original OpenCode type
-		if event.Type != "_unparseable_" && event.Type != CodeaEventRaw && event.RawType == string(event.Type) {
-			// ok: raw events use the original type as RawType which may equal Type
-		}
 	}
 	if err := scanner.Err(); err != nil {
 		t.Fatalf("scanner error: %v", err)
@@ -111,12 +107,12 @@ func TestEventMapperSemanticTypes(t *testing.T) {
 		},
 		{
 			name:     "permission.asked → approval.requested",
-			raw:      `{"directory":"/tmp","payload":{"type":"permission.asked","properties":{"sessionID":"s1"}}}`,
+			raw:      `{"directory":"/tmp","payload":{"type":"permission.asked","properties":{"sessionID":"s1","id":"perm_abc","permission":"read"}}}`,
 			wantType: CodeaEventApprovalRequested,
 		},
 		{
 			name:     "permission.replied → approval.resolved",
-			raw:      `{"directory":"/tmp","payload":{"type":"permission.replied","properties":{"sessionID":"s1"}}}`,
+			raw:      `{"directory":"/tmp","payload":{"type":"permission.replied","properties":{"sessionID":"s1","requestID":"perm_abc","reply":"once"}}}`,
 			wantType: CodeaEventApprovalResolved,
 		},
 		{
@@ -152,13 +148,140 @@ func TestEventMapperSemanticTypes(t *testing.T) {
 	}
 }
 
+func TestEventMapperExtractsApprovalRequest(t *testing.T) {
+	tests := []struct {
+		name       string
+		raw        string
+		wantID     string
+		wantPerm   string
+	}{
+		{
+			name:     "permission.asked with id and permission",
+			raw:      `{"directory":"/tmp","payload":{"type":"permission.asked","properties":{"sessionID":"s1","id":"perm_read_001","permission":"read"}}}`,
+			wantID:   "perm_read_001",
+			wantPerm: "read",
+		},
+		{
+			name:     "permission.v2.asked with id and action",
+			raw:      `{"directory":"/tmp","payload":{"type":"permission.v2.asked","properties":{"sessionID":"s1","id":"perm_v2_002","action":"write"}}}`,
+			wantID:   "perm_v2_002",
+			wantPerm: "write",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			event, err := MapEvent([]byte(tt.raw), 1)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if event.Type != CodeaEventApprovalRequested {
+				t.Fatalf("expected approval.requested, got %q", event.Type)
+			}
+			if event.Approval == nil {
+				t.Fatal("expected Approval to be non-nil")
+			}
+			if event.Approval.ID != tt.wantID {
+				t.Fatalf("expected Approval.ID=%q, got %q", tt.wantID, event.Approval.ID)
+			}
+			if event.Approval.Permission != tt.wantPerm {
+				t.Fatalf("expected Approval.Permission=%q, got %q", tt.wantPerm, event.Approval.Permission)
+			}
+		})
+	}
+}
+
+func TestEventMapperExtractsToolEvent(t *testing.T) {
+	raw := `{"directory":"/tmp","payload":{"type":"message.part.updated","properties":{"sessionID":"s1","part":{"id":"prt_001","messageID":"m1","sessionID":"s1","type":"tool","tool":"read","callID":"call_abc"}}}}`
+	event, err := MapEvent([]byte(raw), 1)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if event.Type != CodeaEventToolCalled {
+		t.Fatalf("expected tool.called, got %q", event.Type)
+	}
+	if event.Tool == nil {
+		t.Fatal("expected Tool to be non-nil")
+	}
+	if event.Tool.Name != "read" {
+		t.Fatalf("expected Tool.Name=read, got %q", event.Tool.Name)
+	}
+	if event.Tool.CallID != "call_abc" {
+		t.Fatalf("expected Tool.CallID=call_abc, got %q", event.Tool.CallID)
+	}
+}
+
+func TestEventMapperExtractsToolEventFallbackCallID(t *testing.T) {
+	raw := `{"directory":"/tmp","payload":{"type":"message.part.updated","properties":{"sessionID":"s1","part":{"id":"prt_002","messageID":"m1","sessionID":"s1","type":"tool","tool":"bash"}}}}`
+	event, err := MapEvent([]byte(raw), 1)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if event.Tool == nil {
+		t.Fatal("expected Tool to be non-nil")
+	}
+	if event.Tool.CallID != "prt_002" {
+		t.Fatalf("expected Tool.CallID=prt_002 (fallback to part.id), got %q", event.Tool.CallID)
+	}
+}
+
+func TestEventMapperExtractsSessionError(t *testing.T) {
+	raw := `{"directory":"/tmp","payload":{"type":"session.error","properties":{"sessionID":"s1","error":"something went wrong"}}}`
+	event, err := MapEvent([]byte(raw), 1)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if event.Type != CodeaEventSessionError {
+		t.Fatalf("expected session.error, got %q", event.Type)
+	}
+	if event.Error == nil {
+		t.Fatal("expected Error to be non-nil")
+	}
+	if event.Error.Code != string(CodeaEventSessionError) {
+		t.Fatalf("expected Error.Code=%q, got %q", CodeaEventSessionError, event.Error.Code)
+	}
+	if event.Error.Message != "something went wrong" {
+		t.Fatalf("expected Error.Message='something went wrong', got %q", event.Error.Message)
+	}
+}
+
+func TestEventMapperExtractsStructuredError(t *testing.T) {
+	raw := `{"directory":"/tmp","payload":{"type":"session.error","properties":{"sessionID":"s1","error":{"name":"UnknownError","data":{"message":"Error: No user message found"}}}}}`
+	event, err := MapEvent([]byte(raw), 1)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if event.Type != CodeaEventSessionError {
+		t.Fatalf("expected session.error, got %q", event.Type)
+	}
+	if event.Error == nil {
+		t.Fatal("expected Error to be non-nil for structured error")
+	}
+	if event.Error.Code != "UnknownError" {
+		t.Fatalf("expected Error.Code=UnknownError, got %q", event.Error.Code)
+	}
+	if !strings.Contains(event.Error.Message, "No user message found") {
+		t.Fatalf("expected Error.Message to contain 'No user message found', got %q", event.Error.Message)
+	}
+}
+
+func TestEventMapperToolEventOnlyWhenToolType(t *testing.T) {
+	// text part.updated should NOT have Tool set
+	raw := `{"directory":"/tmp","payload":{"type":"message.part.updated","properties":{"sessionID":"s1","part":{"id":"p1","messageID":"m1","sessionID":"s1","type":"text","text":"hello"}}}}`
+	event, err := MapEvent([]byte(raw), 1)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if event.Tool != nil {
+		t.Fatal("Tool must be nil for non-tool part.updated")
+	}
+}
+
 func TestEventMapperPreservesRawType(t *testing.T) {
 	raw := `{"directory":"/tmp","payload":{"type":"plugin.added","properties":{"id":"test"}}}`
 	event, err := MapEvent([]byte(raw), 1)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	// Semantic type is raw, but RawType preserves original
 	if event.Type != CodeaEventRaw {
 		t.Fatalf("expected Type=raw, got %q", event.Type)
 	}

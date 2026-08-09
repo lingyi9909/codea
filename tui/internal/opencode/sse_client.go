@@ -114,4 +114,16 @@ func (c *SSEClient) readLoop(ctx context.Context, resp *http.Response, ch chan S
 		case <-ctx.Done():
 		}
 	}
+
+	// Emit residual dataLines on clean EOF — must not silently drop data.
+	if len(dataLines) > 0 && ctx.Err() == nil {
+		seq++
+		select {
+		case ch <- SSERawEvent{
+			Data:     []byte(fmt.Sprintf(`{"type":"runtime_error","error":"truncated stream: incomplete event","partial":"%s"}`, strings.Join(dataLines, "\n"))),
+			Sequence: seq,
+		}:
+		case <-ctx.Done():
+		}
+	}
 }
