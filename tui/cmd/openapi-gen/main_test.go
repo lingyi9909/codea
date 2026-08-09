@@ -175,3 +175,59 @@ func TestCommittedDTOIsCurrent(t *testing.T) {
 		t.Fatal("internal/opencode/dto.go is stale; rerun openapi-gen")
 	}
 }
+
+// TestPromptAsyncJSONUsesIDNotMessageID is the regression test for
+// OpenCode v1.18.11 Known Protocol Deviation 1:
+//
+//	The locked OpenAPI spec declares prompt_async.messageID, but the real
+//	runtime only processes JSON field "id".  If someone removes the
+//	fieldJSONOverrides entry, this test will catch it.
+func TestPromptAsyncJSONUsesIDNotMessageID(t *testing.T) {
+	spec, err := os.ReadFile("../../../runtime/openapi/opencode-1.18.11.json")
+	if err != nil {
+		t.Fatalf("read locked spec: %v", err)
+	}
+	generated, err := generate(spec)
+	if err != nil {
+		t.Fatalf("generate locked spec: %v", err)
+	}
+
+	src := string(generated)
+
+	// OpenCode v1.18.11 Protocol Deviation 1:
+	// prompt_async request must use "id" not "messageID".
+	// Parse the generated code to check the specific struct field tag.
+	fset := token.NewFileSet()
+	f, err := parser.ParseFile(fset, "dto.go", src, 0)
+	if err != nil {
+		t.Fatalf("parse generated DTO: %v", err)
+	}
+
+	var found bool
+	ast.Inspect(f, func(n ast.Node) bool {
+		ts, ok := n.(*ast.TypeSpec)
+		if !ok || ts.Name.Name != "OpenCodeSessionPromptAsyncRequest" {
+			return true
+		}
+		st, ok := ts.Type.(*ast.StructType)
+		if !ok {
+			return true
+		}
+		for _, field := range st.Fields.List {
+			if len(field.Names) == 1 && field.Names[0].Name == "MessageID" {
+				found = true
+				tag := field.Tag.Value
+				if !strings.Contains(tag, `json:"id,omitempty"`) {
+					t.Errorf("OpenCodeSessionPromptAsyncRequest.MessageID tag = %s, want json:\"id,omitempty\"", tag)
+				}
+				if strings.Contains(tag, `json:"messageID"`) {
+					t.Errorf("OpenCodeSessionPromptAsyncRequest.MessageID tag = %s, must NOT contain \"messageID\"", tag)
+				}
+			}
+		}
+		return true
+	})
+	if !found {
+		t.Error("OpenCodeSessionPromptAsyncRequest.MessageID field not found in generated DTO")
+	}
+}

@@ -46,8 +46,22 @@ type schema struct {
 	AdditionalProperties json.RawMessage   `json:"additionalProperties"`
 }
 
-// fieldJSONOverrides maps "TypeName.property" to the correct JSON field name when
-// the OpenAPI spec property name doesn't match what the OpenCode API actually expects.
+// fieldJSONOverrides documents OpenCode v1.18.11 Known Protocol Deviations
+// where the locked OpenAPI spec does not match the real runtime behaviour.
+//
+// Deviation 1 (2026-08-09):
+//
+//	OpenAPI declares prompt_async request property "messageID", but the real
+//	OpenCode v1.18.11 runtime only processes the JSON field "id".  Using
+//	"messageID" causes every prompt to fail with "No user message found in
+//	stream".  Verified by curl against a running OpenCode v1.18.11 instance:
+//	  POST /session/{id}/prompt_async with "id"    → 204, model responds
+//	  POST /session/{id}/prompt_async with "messageID" → 204, session.error
+//
+//	This override ensures the generated DTO uses "id" so the adapter works.
+//	If the spec is regenerated, this override must remain.  The regression
+//	test TestPromptAsyncJSONUsesIDNotMessageID guards against accidental
+//	removal.
 var fieldJSONOverrides = map[string]string{
 	"OpenCodeSessionPromptAsyncRequest.messageID": "id",
 }
