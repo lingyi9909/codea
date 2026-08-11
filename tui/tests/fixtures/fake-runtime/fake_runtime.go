@@ -83,21 +83,17 @@ func (f *FakeRuntime) CreateSession(ctx context.Context, req runtime.CreateSessi
 func (f *FakeRuntime) Prompt(ctx context.Context, sessionID runtime.SessionID, req runtime.PromptRequest) error {
 	f.mu.Lock()
 	f.prompts = append(f.prompts, PromptRecord{SessionID: sessionID, Request: req})
-	// Snapshot subscribers to avoid holding lock during send.
-	subs := make(map[chan runtime.Event]context.Context, len(f.subscribers))
-	for ch, sctx := range f.subscribers {
-		subs[ch] = sctx
-	}
-	f.mu.Unlock()
 
 	for _, ev := range f.Events {
-		for ch, sctx := range subs {
+		for ch, sctx := range f.subscribers {
 			select {
 			case ch <- ev:
 			case <-sctx.Done():
+			default:
 			}
 		}
 	}
+	f.mu.Unlock()
 	return nil
 }
 
@@ -111,8 +107,8 @@ func (f *FakeRuntime) Subscribe(ctx context.Context) (<-chan runtime.Event, erro
 		<-ctx.Done()
 		f.mu.Lock()
 		delete(f.subscribers, ch)
-		f.mu.Unlock()
 		close(ch)
+		f.mu.Unlock()
 	}()
 
 	return ch, nil

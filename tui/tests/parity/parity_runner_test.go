@@ -6,25 +6,35 @@ import (
 	"time"
 
 	"codea/tui/internal/capability"
+	"codea/tui/internal/opencode"
 	"codea/tui/internal/parity"
 	"codea/tui/internal/runtime"
 	fakeruntime "codea/tui/tests/fixtures/fake-runtime"
 )
 
 func TestAllV1RequiredScenariosPass(t *testing.T) {
-	baseline := fakeruntime.New()
-	baseline.HealthInfo = runtime.HealthInfo{Healthy: true, Version: "test"}
-	baseline.Events = []runtime.Event{
+	// Events must satisfy all semantic assertions in V1RequiredScenarios():
+	// RequireAnswer, RequireReasoning, RequireTool, RequireApproval, RequireRaw.
+	sharedEvents := []runtime.Event{
+		{Type: runtime.EventType("reasoning.delta"), Content: "thinking..."},
 		{Type: runtime.EventType("answer.delta"), Content: "ok"},
+		{Type: runtime.EventType("tool.called"), Tool: &runtime.ToolEvent{
+			Name: "read", CallID: "call-1",
+		}},
+		{Type: runtime.EventType("approval.requested"), Approval: &runtime.ApprovalRequest{
+			ID: "approval-1", Permission: "bash",
+		}},
+		{Type: runtime.EventType("raw"), Raw: []byte(`{"foo":"bar"}`)},
 		{Type: runtime.EventType("step.finished")},
 	}
 
+	baseline := fakeruntime.New()
+	baseline.HealthInfo = runtime.HealthInfo{Healthy: true, Version: "test"}
+	baseline.Events = sharedEvents
+
 	candidate := fakeruntime.New()
 	candidate.HealthInfo = runtime.HealthInfo{Healthy: true, Version: "test"}
-	candidate.Events = []runtime.Event{
-		{Type: runtime.EventType("answer.delta"), Content: "ok"},
-		{Type: runtime.EventType("step.finished")},
-	}
+	candidate.Events = sharedEvents
 
 	runner := parity.Runner{Baseline: baseline, Candidate: candidate}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -45,35 +55,22 @@ func TestAllV1RequiredScenariosPass(t *testing.T) {
 	}
 }
 
-func TestCapabilityCompareWithParity(t *testing.T) {
-	// Load real product requirements.
+func TestCapabilityCompareWithRealOpenCodeAdapter(t *testing.T) {
+	// Load real product requirements from capabilities.yaml.
 	inv, err := capability.Load("../../../runtime/capabilities.yaml")
 	if err != nil {
 		t.Fatalf("load capabilities.yaml: %v", err)
 	}
 
-	// Simulate OpenCodeAdapter capabilities.
-	caps := runtime.RuntimeCapabilities{
-		Sessions:          true,
-		Streaming:         true,
-		Reasoning:         true,
-		FileRead:          true,
-		FileWrite:         true,
-		Edit:              true,
-		Bash:              true,
-		ToolApproval:      true,
-		Agents:            true,
-		Subagents:         true,
-		Skills:            true,
-		Plugins:           true,
-		Abort:             true,
-		MessageHistory:    true,
-		ContextCompaction: true,
-	}
+	// Use real OpenCodeAdapter.Capabilities() — not hand-crafted true values.
+	caps := opencode.OpenCodeCapabilities()
 
 	result := inv.Compare(caps)
 	if result.HasRequiredFailures() {
-		t.Errorf("all required capabilities should be supported, missing: %v", result.RequiredMissing)
+		t.Errorf("OpenCodeAdapter.Capabilities() must satisfy all product requirements, missing: %v", result.RequiredMissing)
+	}
+	if len(result.RequiredSupported) != 15 {
+		t.Errorf("expected 15 required supported, got %d", len(result.RequiredSupported))
 	}
 }
 
@@ -99,14 +96,17 @@ func TestCapabilityCompareMissingRequired(t *testing.T) {
 func TestParitySilentLossFailsRequired(t *testing.T) {
 	baseline := fakeruntime.New()
 	baseline.Events = []runtime.Event{
+		{Type: runtime.EventType("reasoning.delta"), Content: "thinking"},
 		{Type: runtime.EventType("answer.delta"), Content: "a"},
 		{Type: runtime.EventType("step.finished")},
 	}
 
 	candidate := fakeruntime.New()
-	// Missing one event — silent loss.
+	// Same count (3) but missing reasoning.delta — semantic silent loss.
 	candidate.Events = []runtime.Event{
+		{Type: runtime.EventType("tool.called"), Tool: &runtime.ToolEvent{Name: "x", CallID: "1"}},
 		{Type: runtime.EventType("answer.delta"), Content: "a"},
+		{Type: runtime.EventType("step.finished")},
 	}
 
 	runner := parity.Runner{Baseline: baseline, Candidate: candidate}
@@ -114,11 +114,14 @@ func TestParitySilentLossFailsRequired(t *testing.T) {
 	defer cancel()
 
 	result := runner.Run(ctx, parity.Scenario{
-		Name:     "Prompt",
+		Name:     "Reasoning",
 		Required: true,
 		Prompt: &runtime.PromptRequest{
 			Agent: "general",
 			Parts: []runtime.PromptPart{runtime.TextPart{Text: "test"}},
+		},
+		Assertions: parity.Assertion{
+			RequireReasoning: true,
 		},
 	})
 
@@ -126,6 +129,6 @@ func TestParitySilentLossFailsRequired(t *testing.T) {
 		t.Error("required scenario with silent loss must fail")
 	}
 	if !result.SilentLoss {
-		t.Error("must detect silent loss")
+		t.Error("must detect silent loss: same event count but missing semantic event")
 	}
 }

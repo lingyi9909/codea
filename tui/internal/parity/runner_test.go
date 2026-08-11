@@ -96,14 +96,17 @@ func TestRunnerPromptEventParity(t *testing.T) {
 func TestRunnerSilentLossDetected(t *testing.T) {
 	baseline := fakeruntime.New()
 	baseline.Events = []runtime.Event{
+		{Type: runtime.EventType("reasoning.delta"), Content: "thinking"},
 		{Type: runtime.EventType("answer.delta"), Content: "hello"},
 		{Type: runtime.EventType("step.finished")},
 	}
 
 	candidate := fakeruntime.New()
-	// Candidate produces fewer events than baseline — silent loss.
+	// Candidate has same event count (3) but missing reasoning.delta — silent loss.
 	candidate.Events = []runtime.Event{
+		{Type: runtime.EventType("tool.called"), Tool: &runtime.ToolEvent{Name: "x", CallID: "1"}},
 		{Type: runtime.EventType("answer.delta"), Content: "hello"},
+		{Type: runtime.EventType("step.finished")},
 	}
 
 	runner := Runner{Baseline: baseline, Candidate: candidate}
@@ -111,11 +114,15 @@ func TestRunnerSilentLossDetected(t *testing.T) {
 	defer cancel()
 
 	result := runner.Run(ctx, Scenario{
-		Name:     "Prompt",
+		Name:     "Reasoning",
 		Required: true,
 		Prompt: &runtime.PromptRequest{
 			Agent: "general",
 			Parts: []runtime.PromptPart{runtime.TextPart{Text: "test"}},
+		},
+		Assertions: Assertion{
+			RequireReasoning: true,
+			RequireAnswer:    true,
 		},
 	})
 
@@ -123,7 +130,7 @@ func TestRunnerSilentLossDetected(t *testing.T) {
 		t.Error("silent loss should cause failure for required scenario")
 	}
 	if !result.SilentLoss {
-		t.Error("should detect silent loss")
+		t.Error("should detect silent loss: reasoning missing in candidate despite same event count")
 	}
 }
 

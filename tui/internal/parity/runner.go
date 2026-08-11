@@ -2,6 +2,8 @@ package parity
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"time"
 
 	"codea/tui/internal/runtime"
@@ -22,20 +24,42 @@ func (r *Runner) Run(ctx context.Context, s Scenario) ScenarioResult {
 		Runs:     1,
 	}
 
-	switch {
-	case s.Name == "Health":
-		r.runHealth(ctx, s, &sr)
-	case s.Name == "CreateSession":
-		r.runCreateSession(ctx, s, &sr)
-	case s.Name == "Cancel":
-		r.runCancel(ctx, s, &sr)
-	case s.Prompt != nil:
-		r.runPrompt(ctx, s, &sr)
-	default:
-		sr.Passed = true
+	repeats := s.RepeatCount
+	if repeats < 1 {
+		repeats = 1
 	}
 
+	var allPassed []bool
+	for i := 0; i < repeats; i++ {
+		passed := r.executeOnce(ctx, s, &sr)
+		allPassed = append(allPassed, passed)
+	}
+	sr.Runs = repeats
+
+	// If any repeat failed, the scenario fails.
+	for _, p := range allPassed {
+		if !p {
+			return sr
+		}
+	}
+	sr.Passed = true
 	return sr
+}
+
+func (r *Runner) executeOnce(ctx context.Context, s Scenario, sr *ScenarioResult) bool {
+	switch {
+	case s.Name == "Health":
+		r.runHealth(ctx, s, sr)
+	case s.Name == "CreateSession":
+		r.runCreateSession(ctx, s, sr)
+	case s.Name == "Cancel":
+		r.runCancel(ctx, s, sr)
+	case s.Prompt != nil:
+		r.runPrompt(ctx, s, sr)
+	default:
+		return true
+	}
+	return len(sr.Failures) == 0
 }
 
 // RunAll executes multiple scenarios and returns an aggregated Result.
@@ -71,7 +95,6 @@ func (r *Runner) runHealth(ctx context.Context, s Scenario, sr *ScenarioResult) 
 		})
 		return
 	}
-	sr.Passed = true
 }
 
 func (r *Runner) runCreateSession(ctx context.Context, s Scenario, sr *ScenarioResult) {
@@ -98,7 +121,6 @@ func (r *Runner) runCreateSession(ctx context.Context, s Scenario, sr *ScenarioR
 		sr.Failures = append(sr.Failures, Failure{Reason: "candidate returned empty session ID"})
 		return
 	}
-	sr.Passed = true
 }
 
 func (r *Runner) runCancel(ctx context.Context, s Scenario, sr *ScenarioResult) {
@@ -124,10 +146,20 @@ func (r *Runner) runCancel(ctx context.Context, s Scenario, sr *ScenarioResult) 
 		sr.Failures = append(sr.Failures, Failure{Reason: "candidate Cancel failed but baseline succeeded"})
 		return
 	}
-	sr.Passed = true
 }
 
 func (r *Runner) runPrompt(ctx context.Context, s Scenario, sr *ScenarioResult) {
+	// Check RequireAgent assertion against the scenario's Prompt request.
+	if s.Assertions.RequireAgent != "" && s.Prompt != nil {
+		if s.Prompt.Agent != s.Assertions.RequireAgent {
+			sr.Failures = append(sr.Failures, Failure{
+				Reason: fmt.Sprintf("agent mismatch: expected %q, got %q",
+					s.Assertions.RequireAgent, s.Prompt.Agent),
+			})
+			return
+		}
+	}
+
 	// Baseline
 	bEvents, bErr := r.collectEvents(ctx, r.Baseline, s.Prompt)
 	if bErr != nil {
@@ -140,21 +172,98 @@ func (r *Runner) runPrompt(ctx context.Context, s Scenario, sr *ScenarioResult) 
 		sr.Failures = append(sr.Failures, Failure{Reason: "candidate prompt failed: " + cErr.Error()})
 	}
 
-	// If either had a transport error, that's a hard failure.
 	if len(sr.Failures) > 0 {
 		return
 	}
 
-	// Compare event counts — fewer candidate events = silent loss.
-	if len(cEvents) < len(bEvents) {
-		sr.SilentLoss = true
+	// Check semantic assertions against Baseline and Candidate.
+	bSat := checkAssertions(bEvents, s.Assertions)
+	cSat := checkAssertions(cEvents, s.Assertions)
+
+	if !bSat.ok {
 		sr.Failures = append(sr.Failures, Failure{
-			Reason: "silent loss: baseline produced events but candidate did not",
+			Reason: "baseline failed assertion: " + bSat.reason,
 		})
 		return
 	}
 
-	sr.Passed = true
+	if !cSat.ok {
+		sr.SilentLoss = true
+		sr.Failures = append(sr.Failures, Failure{
+			Reason: "silent loss — candidate failed assertion: " + cSat.reason,
+		})
+		return
+	}
+}
+
+type assertResult struct {
+	ok     bool
+	reason string
+}
+
+func checkAssertions(events []runtime.Event, a Assertion) assertResult {
+	if a.RequireReasoning {
+		if !hasEventType(events, "reasoning.delta") {
+			return assertResult{false, "missing reasoning.delta event"}
+		}
+	}
+	if a.RequireAnswer {
+		if !hasEventType(events, "answer.delta") {
+			return assertResult{false, "missing answer.delta event"}
+		}
+	}
+	if a.RequireApproval {
+		found := false
+		for _, e := range events {
+			if e.Type == "approval.requested" && e.Approval != nil &&
+				e.Approval.ID != "" && e.Approval.Permission != "" {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return assertResult{false, "missing approval.requested event with non-empty ID and Permission"}
+		}
+	}
+	if a.RequireTool {
+		found := false
+		for _, e := range events {
+			if e.Type == "tool.called" && e.Tool != nil &&
+				e.Tool.Name != "" && e.Tool.CallID != "" {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return assertResult{false, "missing tool.called event with non-empty Name and CallID"}
+		}
+	}
+	if a.RequireRaw {
+		found := false
+		for _, e := range events {
+			if e.Type == "raw" && len(e.Raw) > 0 {
+				// Verify it's valid JSON.
+				var v any
+				if json.Unmarshal(e.Raw, &v) == nil {
+					found = true
+					break
+				}
+			}
+		}
+		if !found {
+			return assertResult{false, "missing raw event with non-empty valid JSON payload"}
+		}
+	}
+	return assertResult{ok: true}
+}
+
+func hasEventType(events []runtime.Event, t runtime.EventType) bool {
+	for _, e := range events {
+		if e.Type == t {
+			return true
+		}
+	}
+	return false
 }
 
 func (r *Runner) collectEvents(ctx context.Context, rt runtime.AgentRuntime, req *runtime.PromptRequest) ([]runtime.Event, error) {
@@ -174,8 +283,6 @@ func (r *Runner) collectEvents(ctx context.Context, rt runtime.AgentRuntime, req
 
 	var events []runtime.Event
 	timeout := time.After(100 * time.Millisecond)
-	// Collect buffered events. Fake runtimes send synchronously during
-	// Prompt(), so all events are already in the channel buffer.
 	for {
 		select {
 		case ev, ok := <-ch:

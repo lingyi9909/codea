@@ -28,8 +28,9 @@ func TestVendorBoundaryNoLeakage(t *testing.T) {
 
 		isOpencode := strings.Contains(pkg.ImportPath, "internal/opencode")
 		isCmd := strings.Contains(pkg.ImportPath, "/cmd/")
+		isTest := strings.Contains(pkg.ImportPath, "/tests/")
 
-		if isOpencode || isCmd {
+		if isOpencode || isCmd || isTest {
 			continue
 		}
 

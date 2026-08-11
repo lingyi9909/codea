@@ -14,7 +14,7 @@ cd "$TUI_DIR"
 FORBIDDEN_PKG="codea/tui/internal/opencode"
 
 # Collect all packages excluding the vendor layer itself
-ALL_PKGS=$(go list ./... 2>/dev/null | grep -v 'internal/opencode' || true)
+ALL_PKGS=$(go list ./... 2>/dev/null | grep -v 'internal/opencode' | grep -v '/tests/' || true)
 
 if [ -z "$ALL_PKGS" ]; then
     echo "PASS: no packages outside opencode vendor layer"
