@@ -4,9 +4,9 @@ plan: docs/superpowers/plans/2026-07-30-codea-v1-plan.md
 taskOrder: ["0", "1", "2", "2A", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21"]
 current:
   task: "3"
-  step: 5
+  step: 6
   status: in_progress
-  nextAction: 执行 Task 3 Step 5 — Parity Runner
+  nextAction: 执行 Task 3 Step 6 — Required Gate and Task Report
 checkpoint:
   commit: 871110ae346b27d8629769d5a3bb9f14a7373f73
   updatedAt: "2026-08-11T12:00:00Z"
@@ -25,7 +25,7 @@ tasks:
   "1": {status: completed, completedSteps: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: 50e32c2673d1324c040d5c2296b25196307a4662, report: docs/task-reports/task-01.md}
   "2": {status: completed, completedSteps: [1, 2, 3, 4, 5], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: 174bb2997aa206736775c54a31f6de8ee82261f9, report: docs/task-reports/task-02.md}
   "2A": {status: completed, completedSteps: [1, 2, 3, 4, 5, 6], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: 871110ae346b27d8629769d5a3bb9f14a7373f73, report: docs/task-reports/task-02A.md}
-  "3": {status: in_progress, completedSteps: [1, 2, 3, 4], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-03.md}
+  "3": {status: in_progress, completedSteps: [1, 2, 3, 4, 5], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-03.md}
   "4": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-04.md}
   "5": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-05.md}
   "6": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-06.md}
