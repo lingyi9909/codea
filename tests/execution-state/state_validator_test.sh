@@ -107,12 +107,17 @@ data["current"].update({"task": 0, "step": 11, "status": "awaiting_acceptance"})
 data["verification"]["status"] = "pass"
 data["taskGate"]["status"] = "pass"
 data["humanAcceptance"]["accepted"] = False
+data["checkpoint"] = {"commit": "0000000000000000000000000000000000000000"}
 data["tasks"]["0"].update({
     "status": "awaiting_acceptance",
     "verificationStatus": "pass",
     "taskGateStatus": "pass",
     "humanAccepted": False,
+    "checkpoint": "0000000000000000000000000000000000000000",
+    "report": str(target / "baseline-task-00.md"),
 })
+baseline_report = target / "baseline-task-00.md"
+baseline_report.write_text("**Checkpoint:** `0000000000000000000000000000000000000000`\n")
 for task_id in data["taskOrder"][1:]:
     data["tasks"][task_id].update({
         "status": "pending",
@@ -238,6 +243,20 @@ future_active["tasks"]["0"].update({
 future_active["tasks"]["1"]["status"] = "in_progress"
 (target / "future-active.yaml").write_text(yaml.safe_dump(future_active, sort_keys=False))
 
+# Checkpoint mismatch fixtures
+chk_mismatch = copy.deepcopy(data)
+chk_mismatch["checkpoint"] = {"commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}
+chk_mismatch["tasks"]["0"]["checkpoint"] = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+(target / "checkpoint-mismatch.yaml").write_text(yaml.safe_dump(chk_mismatch, sort_keys=False))
+
+report_no_chk = copy.deepcopy(data)
+report_no_chk["checkpoint"] = {"commit": "cccccccccccccccccccccccccccccccccccccccc"}
+report_no_chk["tasks"]["0"]["checkpoint"] = "cccccccccccccccccccccccccccccccccccccccc"
+report = target / "report-no-chk.md"
+report.write_text("# Task Report\n\n**Checkpoint:** `dddddddddddddddddddddddddddddddddddddddd`\n")
+report_no_chk["tasks"]["0"]["report"] = str(report)
+(target / "report-checkpoint-mismatch.yaml").write_text(yaml.safe_dump(report_no_chk, sort_keys=False))
+
 terminal_report = target / "terminal-report.md"
 terminal_report.write_text("# Terminal Task Report\n")
 terminal = copy.deepcopy(data)
@@ -270,5 +289,7 @@ expect_fail "missing current step" "$TMP_DIR/missing-step.yaml" "FAIL: current.s
 expect_fail "pending task already accepted" "$TMP_DIR/accepted-pending.yaml" "FAIL: human acceptance is only valid for completed Task 0"
 expect_pass "all tasks completed terminal state" "$TMP_DIR/terminal.yaml" "Execution state is valid: Task 21 Step 1 (completed)"
 expect_fail "future task active while current is pending" "$TMP_DIR/future-active.yaml" "FAIL: pending current Task requires no active Task"
+expect_fail "checkpoint mismatch global vs task" "$TMP_DIR/checkpoint-mismatch.yaml" "FAIL: global checkpoint does not match Task 0 checkpoint"
+expect_fail "report checkpoint mismatch" "$TMP_DIR/report-checkpoint-mismatch.yaml" "FAIL: Task 0 report checkpoint does not match task checkpoint"
 
 echo "Execution state validator tests passed."

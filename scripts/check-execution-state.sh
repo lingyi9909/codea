@@ -61,6 +61,15 @@ for task_id, task in tasks.items():
     if task.get("status") == "awaiting_acceptance":
         if task.get("verificationStatus") != "pass" or task.get("taskGateStatus") != "pass":
             raise SystemExit(f"FAIL: awaiting_acceptance Task {task_id} must pass verification and Task Gate")
+        global_commit = (state.get("checkpoint") or {}).get("commit")
+        task_commit = task.get("checkpoint")
+        if global_commit and task_commit and global_commit != task_commit:
+            raise SystemExit(f"FAIL: global checkpoint does not match Task {task_id} checkpoint")
+        report_path = task.get("report")
+        if report_path and task_commit:
+            report_file = pathlib.Path(report_path)
+            if report_file.is_file() and task_commit not in report_file.read_text():
+                raise SystemExit(f"FAIL: Task {task_id} report checkpoint does not match task checkpoint")
     if task.get("status") == "completed":
         if task.get("verificationStatus") != "pass" or task.get("taskGateStatus") != "pass":
             raise SystemExit(f"FAIL: completed Task {task_id} must pass verification and Task Gate")
