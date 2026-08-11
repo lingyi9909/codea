@@ -6,7 +6,7 @@
 
 **Date:** 2026-08-11
 
-**Checkpoint:** `0fd7255e54c54bce99d9f75fc2408a8e6042bba6`
+**Checkpoint:** `53fc78443b6cbb64a536c1f4d05054d8256c6683`
 
 ## 完成内容
 
@@ -30,42 +30,47 @@ Product Requirement vs `runtime.RuntimeCapabilities` 比较。Required+missing �
 
 ### Step 4: Parity Scenario / Result Model — PASS
 
-定义 Scenario、ScenarioResult、Failure、Result 类型及 Assertion 语义断言模型。`V1RequiredScenarios()` 返回 12 个 Required 场景，每个场景携带具体断言：
+定义 Scenario、ScenarioResult、Failure、Result 类型及 Assertion 语义断言模型。Scenario 新增 `ApprovalDecision` 字段，支持 Runner 在收到 `approval.requested` 事件时实际调用 `ReplyApproval`。`V1RequiredScenarios()` 返回 12 个 Required 场景：
 
-| 场景 | Assertions |
-|------|-----------|
-| Prompt | RequireAnswer |
-| Streaming | RequireAnswer |
-| Answer | RequireAnswer |
-| Reasoning | RequireReasoning + RequireAnswer |
-| ToolLifecycle | RequireTool |
-| Approval | RequireApproval |
-| Reject | RequireApproval |
-| AgentSelection | RequireAnswer + RequireAgent: "reviewer" |
-| RawEventHandling | RequireRaw |
+| 场景 | Assertions | ApprovalDecision |
+|------|-----------|-----------------|
+| Prompt | RequireAnswer | — |
+| Streaming | RequireAnswer | — |
+| Answer | RequireAnswer | — |
+| Reasoning | RequireReasoning + RequireAnswer | — |
+| ToolLifecycle | RequireTool | — |
+| Approval | RequireApproval | ApprovalOnce |
+| Reject | RequireApproval | ApprovalReject |
+| AgentSelection | RequireAnswer + RequireAgent: "reviewer" | — |
+| RawEventHandling | RequireRaw | — |
 
 **文件:** `tui/internal/parity/scenario.go`, `result.go`, `scenario_test.go`
 
 ### Step 5: Parity Runner — PASS
 
-Runner 通过 AgentRuntime + Codea Event 执行 Scenario，对比 Baseline/Candidate 结果。支持 Health/CreateSession/Cancel/Prompt 四种场景类型。`checkAssertions()` 验证六类语义断言：reasoning.delta 存在性、answer.delta 存在性、approval.requested（含非空 ID+Permission 域载荷）、tool.called（含非空 Name+CallID 域载荷）、raw（含有效 JSON 载荷）、Agent 名称匹配。SilentLoss 针对语义级检测：Candidate 事件数相同但缺少语义事件时触发 FAIL。Runner 支持 RepeatCount 重放验证。
+Runner 通过 AgentRuntime + Codea Event 执行 Scenario，对比 Baseline/Candidate 结果。`checkAssertions()` 验证六类语义断言。`collectEvents()` 在事件收集循环中拦截 `approval.requested` 事件，根据 `Scenario.ApprovalDecision` 实际调用 `ReplyApproval`（ApprovalOnce 或 ApprovalReject）。SilentLoss 语义级检测。RepeatCount 重放支持。
 
 **文件:** `tui/internal/parity/runner.go`, `runner_test.go`, `assertion_test.go`
 
 ### Step 6: Required Parity Tests + Gate — PASS
 
-集成测试覆盖：全 V1 Required 场景端到端（共享事件集满足全部语义断言）、真实 `opencode.OpenCodeCapabilities()` vs `capabilities.yaml` 对比（15/15 Required 全部支持）、SilentLoss 同数不同义失败检测。
+集成测试：全 V1 Required 场景端到端、真实 `OpenCodeAdapter` 实例通过 `AgentRuntime.Capabilities()` 接口对比 `capabilities.yaml`（15/15 Required）、SilentLoss 同数不同义失败检测。
 
 **文件:** `tui/tests/parity/parity_runner_test.go`
 
-## Code Review Fixes（本轮）
+## Code Review Fixes
 
-以下 4 项阻塞问题已修复（commit `d17b9a7`）：
+### 第一轮（commit `d17b9a7` → `0fd7255`）
 
-1. **语义 Assertions**：新增 `Assertion` 类型（6 个字段），`checkAssertions()` 函数验证事件类型 + 域载荷。12 个 Prompt 场景各自携带明确断言。
-2. **SilentLoss 语义级**：从 `len(cEvents) < len(bEvents)` 改为断言比对。Candidate 事件数相同但缺失 reasoning.delta → SilentLoss + FAIL。
-3. **真实 OpenCodeAdapter**：集成测试使用 `opencode.OpenCodeCapabilities()` 而非手写 15 个 `true` 值。
-4. **RepeatCount + Checkpoint**：Runner 支持 RepeatCount 重放；Implementation checkpoint 更新为 `d17b9a7`（包含全部 Step 6 代码和 review 修复）。
+1. **语义 Assertions**：新增 `Assertion` 类型（6 个字段），`checkAssertions()` 验证事件类型 + 域载荷
+2. **SilentLoss 语义级**：从事件数比较改为断言比对，同数不同义触发 FAIL
+3. **真实 OpenCodeAdapter**：集成测试使用 `opencode.OpenCodeCapabilities()`
+4. **RepeatCount**：Runner 支持 RepeatCount 重放；executeOnce 失败累积修复
+
+### 第二轮（commit `53fc784`）
+
+5. **Approval/Reject 驱动 ReplyApproval**：`Scenario.ApprovalDecision` 字段，`collectEvents()` 在事件循环中拦截 `approval.requested` 并调用 `ReplyApproval`。Approval 场景 → `ApprovalOnce`；Reject 场景 → `ApprovalReject`。新增 `TestRunnerApprovalOnce` 和 `TestRunnerApprovalReject` 验证 FakeRuntime 记录到正确的 Decision
+6. **AgentRuntime.Capabilities() 通过接口调用**：集成测试实例化真实 `OpenCodeAdapter`，通过 `var rt runtime.AgentRuntime = adapter` 调用 `rt.Capabilities()`，而非调用包级 helper 函数
 
 ## 完整文件变更
 
@@ -80,12 +85,12 @@ Runner 通过 AgentRuntime + Codea Event 执行 Scenario，对比 Baseline/Candi
 | `tui/internal/parity/scenario.go` | 新增 | Step 4 |
 | `tui/internal/parity/result.go` | 新增 | Step 4 |
 | `tui/internal/parity/scenario_test.go` | 新增 | Step 4 |
-| `tui/internal/parity/runner.go` | 新增+修改 | Step 5 + Fix 1/2/4 |
+| `tui/internal/parity/runner.go` | 新增+修改 | Step 5 + Fixes |
 | `tui/internal/parity/runner_test.go` | 新增+修改 | Step 5 + Fix 2 |
-| `tui/internal/parity/assertion_test.go` | 新增 | Fix 1/2 |
-| `tui/tests/parity/parity_runner_test.go` | 新增+修改 | Step 6 + Fix 1/3 |
-| `tui/tests/architecture/vendor_boundary_test.go` | 修改 | Fix（skip /tests/） |
-| `scripts/check-runtime-boundary.sh` | 修改 | Fix（skip /tests/） |
+| `tui/internal/parity/assertion_test.go` | 新增 | Fix 1/2/5 |
+| `tui/tests/parity/parity_runner_test.go` | 新增+修改 | Step 6 + Fix 3/6 |
+| `tui/tests/architecture/vendor_boundary_test.go` | 修改 | Fix |
+| `scripts/check-runtime-boundary.sh` | 修改 | Fix |
 | `docs/execution-state.yaml` | 修改 | — |
 
 ## 测试统计
@@ -93,17 +98,17 @@ Runner 通过 AgentRuntime + Codea Event 执行 Scenario，对比 Baseline/Candi
 | 包 | 测试数 |
 |---|--------|
 | `internal/capability` | 14 |
-| `internal/parity` | 24 （15 原 + 9 断言） |
+| `internal/parity` | 26 |
 | `tests/parity` | 4 |
 | `tests/fixtures/fake-runtime` | 11 |
 | `tests/architecture` | 1 |
-| **总计** | **54** |
+| **总计** | **56** |
 
 ## 验证结果
 
 | 命令 | 结果 |
 |------|------|
-| `go test ./internal/capability/... ./internal/parity/... ./tests/parity/... ./tests/fixtures/fake-runtime/... ./tests/architecture/... -count=1` | PASS（54 测试） |
+| `go test ./internal/capability/... ./internal/parity/... ./tests/parity/... ./tests/fixtures/fake-runtime/... ./tests/architecture/... -count=1` | PASS（56 测试） |
 | `go test -race ./... -count=1` | PASS（全部包，零竞态） |
 | `go vet ./...` | PASS |
 | `go build ./...` | PASS |
@@ -114,34 +119,41 @@ Runner 通过 AgentRuntime + Codea Event 执行 Scenario，对比 Baseline/Candi
 
 ## Capability Inventory 结果
 
-加载 `runtime/capabilities.yaml`（15 个 Runtime 能力）：
+加载 `runtime/capabilities.yaml`（15 个 Runtime 能力），全部 Required。
 
-| Level | Count |
-|-------|-------|
-| Required | 15 |
-| Optional | 0 |
-| Deferred | 0 |
+`OpenCodeAdapter.Capabilities()` 通过 `AgentRuntime` 接口调用，对比结果：15/15 Required 全部支持，零缺失。
 
-OpenCodeAdapter `RuntimeCapabilities` 对比结果：15/15 Required 全部支持，零缺失。集成测试通过真实 `opencode.OpenCodeCapabilities()` 调用验证。
+```go
+adapter := opencode.NewOpenCodeAdapter("http://127.0.0.1:1", "", "")
+var rt runtime.AgentRuntime = adapter
+caps := rt.Capabilities()
+result := inv.Compare(caps)
+```
 
-## Paralic 场景清单
+## Parity 场景清单
 
-| 场景 | Required | RepeatCount | Assertions |
-|------|----------|-------------|-----------|
-| Health | yes | 1 | — |
-| CreateSession | yes | 1 | — |
-| Prompt | yes | 2 | RequireAnswer |
-| Streaming | yes | 2 | RequireAnswer |
-| Answer | yes | 2 | RequireAnswer |
-| Reasoning | yes | 2 | RequireReasoning + RequireAnswer |
-| ToolLifecycle | yes | 2 | RequireTool |
-| Approval | yes | 2 | RequireApproval |
-| Reject | yes | 2 | RequireApproval |
-| Cancel | yes | 1 | — |
-| AgentSelection | yes | 2 | RequireAnswer + RequireAgent:"reviewer" |
-| RawEventHandling | yes | 2 | RequireRaw |
+| 场景 | Required | RepeatCount | Assertions | ApprovalDecision |
+|------|----------|-------------|-----------|-----------------|
+| Health | yes | 1 | — | — |
+| CreateSession | yes | 1 | — | — |
+| Prompt | yes | 2 | RequireAnswer | — |
+| Streaming | yes | 2 | RequireAnswer | — |
+| Answer | yes | 2 | RequireAnswer | — |
+| Reasoning | yes | 2 | RequireReasoning + RequireAnswer | — |
+| ToolLifecycle | yes | 2 | RequireTool | — |
+| Approval | yes | 2 | RequireApproval | ApprovalOnce |
+| Reject | yes | 2 | RequireApproval | ApprovalReject |
+| Cancel | yes | 1 | — | — |
+| AgentSelection | yes | 2 | RequireAnswer + RequireAgent:"reviewer" | — |
+| RawEventHandling | yes | 2 | RequireRaw | — |
 
 全部 12 个 Required 场景通过，每个 Prompt 场景含 2 次重放（RepeatCount=2）。
+
+## Approval/Reject 流程
+
+- **Approval 场景**：收到 `approval.requested` → `ReplyApproval(ApprovalOnce)` → 验证 FakeRuntime 记录到 ApprovalOnce
+- **Reject 场景**：收到 `approval.requested` → `ReplyApproval(ApprovalReject)` → 验证 FakeRuntime 记录到 ApprovalReject
+- 通过 `TestRunnerApprovalOnce` 和 `TestRunnerApprovalReject` 端到端验证
 
 ## SilentLoss 检测
 
