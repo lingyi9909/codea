@@ -2,7 +2,7 @@
 
 **Task:** 2A
 
-**Status:** awaiting_acceptance
+**Status:** completed (human accepted 2026-08-11)
 
 **Date:** 2026-08-09
 
@@ -154,7 +154,7 @@ SSE 协议解析 + 76 条 Golden SSE 事件全映射。EventMapper 完整语义�
 | 6 | Runtime parity smoke — 真实 OpenCode v1.18.11 验证通过（含 Approval once/reject 端到端流程） | PASS |
 | 7 | Offline 无新增风险 | PASS |
 | 8 | Windows 无新增风险 | PASS |
-| 9 | 人工验收 | **pending** |
+| 9 | 人工验收 | **PASS** |
 
 ## Gate 6 说明
 
@@ -177,6 +177,6 @@ SSE 协议解析 + 76 条 Golden SSE 事件全映射。EventMapper 完整语义�
 
 - **Verification:** `pass`（11 项自动验证全部通过）
 - **Task Gate:** `pass`（9/9 通过）
-- **Human acceptance:** `false`
-- **Task 2A:** `awaiting_acceptance`
+- **Human acceptance:** `true` (2026-08-11)
+- **Task 2A:** `completed`
 - **Task 3:** `pending`

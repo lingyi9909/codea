@@ -66,15 +66,27 @@ data["current"].update({"task": "2A", "step": 1, "status": "pending"})
 data["verification"].update({"status": "not_run", "commands": []})
 data["taskGate"]["status"] = "not_evaluated"
 data["humanAcceptance"]["accepted"] = False
-data["tasks"]["2A"] = {
-    "status": "pending",
-    "completedSteps": [],
-    "verificationStatus": "not_run",
-    "taskGateStatus": "not_evaluated",
-    "humanAccepted": False,
-    "checkpoint": None,
-    "report": "docs/task-reports/task-02A.md",
-}
+# Reset all tasks to pending so the fixture is independent of current
+# repository state. The real state may have later tasks in_progress or
+# completed, which would produce invalid fixtures otherwise.
+for tid in data["taskOrder"]:
+    data["tasks"][tid] = {
+        "status": "pending",
+        "completedSteps": [],
+        "verificationStatus": "not_run",
+        "taskGateStatus": "not_evaluated",
+        "humanAccepted": False,
+        "checkpoint": None,
+        "report": f"docs/task-reports/task-{tid.zfill(2)}.md",
+    }
+# Mark earlier tasks as completed so current.task=2A is valid
+for tid in ["0", "1", "2"]:
+    data["tasks"][tid].update({
+        "status": "completed",
+        "verificationStatus": "pass",
+        "taskGateStatus": "pass",
+        "humanAccepted": True,
+    })
 valid_path.write_text(yaml.safe_dump(data, sort_keys=False))
 
 missing_order = copy.deepcopy(data)
