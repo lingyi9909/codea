@@ -545,6 +545,100 @@ func TestRunnerApprovalReject(t *testing.T) {
 	}
 }
 
+// TestSilentLossCountMismatch verifies that event count differences are detected
+// even when both sides have the same event types. Baseline: 10 answer.delta,
+// Candidate: 1 answer.delta — must fail with SilentLoss.
+func TestSilentLossCountMismatch(t *testing.T) {
+	baseline := fakeruntime.New()
+	bEvents := make([]runtime.Event, 10)
+	for i := 0; i < 10; i++ {
+		bEvents[i] = runtime.Event{Type: runtime.EventType("answer.delta"), Content: "chunk"}
+	}
+	bEvents = append(bEvents, runtime.Event{Type: runtime.EventType("step.finished")})
+	baseline.Events = bEvents
+
+	candidate := fakeruntime.New()
+	candidate.Events = []runtime.Event{
+		{Type: runtime.EventType("answer.delta"), Content: "chunk"},
+		{Type: runtime.EventType("step.finished")},
+	}
+
+	runner := Runner{Baseline: baseline, Candidate: candidate}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	result := runner.Run(ctx, Scenario{
+		Name:     "Answer",
+		Required: true,
+		Prompt: &runtime.PromptRequest{
+			Agent: "general",
+			Parts: []runtime.PromptPart{runtime.TextPart{Text: "test"}},
+		},
+		Assertions: Assertion{RequireAnswer: true},
+	})
+
+	if result.Passed {
+		t.Error("should fail: candidate has 1 answer.delta vs baseline 10")
+	}
+	if !result.SilentLoss {
+		t.Error("should detect silent loss via count fingerprint")
+	}
+}
+
+// TestAgentSelectionRecordedPrompt verifies agent selection through observable
+// evidence: FakeRuntime's recorded prompts, not just the scenario config.
+func TestAgentSelectionRecordedPrompt(t *testing.T) {
+	baseline := fakeruntime.New()
+	baseline.Events = []runtime.Event{
+		{Type: runtime.EventType("answer.delta"), Content: "ok"},
+		{Type: runtime.EventType("step.finished")},
+	}
+
+	candidate := fakeruntime.New()
+	candidate.Events = []runtime.Event{
+		{Type: runtime.EventType("answer.delta"), Content: "ok"},
+		{Type: runtime.EventType("step.finished")},
+	}
+
+	runner := Runner{Baseline: baseline, Candidate: candidate}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	result := runner.Run(ctx, Scenario{
+		Name:     "AgentSelection",
+		Required: true,
+		Prompt: &runtime.PromptRequest{
+			Agent: "reviewer",
+			Parts: []runtime.PromptPart{runtime.TextPart{Text: "review"}},
+		},
+		Assertions: Assertion{RequireAnswer: true, RequireAgent: "reviewer"},
+	})
+
+	if !result.Passed {
+		t.Errorf("should pass: failures: %v", result.Failures)
+	}
+
+	// Observable evidence: verify that both runtimes actually received the
+	// "reviewer" agent in their recorded prompts.
+	for _, side := range []struct {
+		name   string
+		rt     *fakeruntime.FakeRuntime
+	}{
+		{"baseline", baseline},
+		{"candidate", candidate},
+	} {
+		prompts := side.rt.Prompts()
+		if len(prompts) == 0 {
+			t.Errorf("%s: no prompts recorded", side.name)
+			continue
+		}
+		lastPrompt := prompts[len(prompts)-1]
+		if lastPrompt.Request.Agent != "reviewer" {
+			t.Errorf("%s: recorded agent %q, expected reviewer", side.name, lastPrompt.Request.Agent)
+		}
+	}
+}
+
 func TestRunnerApprovalReplyError(t *testing.T) {
 	once := runtime.ApprovalOnce
 

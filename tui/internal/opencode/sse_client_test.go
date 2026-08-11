@@ -256,9 +256,16 @@ func TestSSEClientTruncatedStream(t *testing.T) {
 		if !strings.Contains(string(evt.Data), "TRUNCATED_STREAM") {
 			t.Fatalf("expected TRUNCATED_STREAM code, got: %s", evt.Data)
 		}
-		// Verify it's valid JSON with proper payload envelope.
 		if !json.Valid(evt.Data) {
 			t.Fatalf("truncated event must be valid JSON, got: %s", evt.Data)
+		}
+		// Verify partial content is preserved.
+		if !strings.Contains(string(evt.Data), "partial event") {
+			t.Fatalf("truncated event must preserve partial data, got: %s", evt.Data)
+		}
+		// Verify originalSize is recorded.
+		if !strings.Contains(string(evt.Data), "originalSize") {
+			t.Fatalf("truncated event must record originalSize, got: %s", evt.Data)
 		}
 	case <-time.After(time.Second):
 		t.Fatal("timeout waiting for truncated stream event")

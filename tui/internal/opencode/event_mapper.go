@@ -80,8 +80,10 @@ type sseCommonProps struct {
 	Status    *sseStatus      `json:"status"`
 	Info      json.RawMessage `json:"info"`
 	Part      *ssePart        `json:"part"`
-	Error     json.RawMessage `json:"error"`
-	Code      string          `json:"code"`
+	Error        json.RawMessage `json:"error"`
+	Code         string          `json:"code"`
+	Partial      string          `json:"partial"`
+	OriginalSize int             `json:"originalSize"`
 }
 
 type sseStatus struct {
@@ -254,6 +256,15 @@ func extractError(event *runtime.Event, props *sseCommonProps) {
 		event.Error = &runtime.RuntimeError{
 			Code:    code,
 			Message: msg,
+		}
+		// Preserve partial content from truncated events as Raw.
+		if props.Partial != "" {
+			raw := []byte(props.Partial)
+			event.Raw = trimRaw(raw)
+			if props.OriginalSize > 0 && len(raw) < props.OriginalSize {
+				event.RawTruncated = true
+				event.RawOriginalSize = props.OriginalSize
+			}
 		}
 
 	case event.Type == CodeaEventSessionError:

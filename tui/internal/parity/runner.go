@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"codea/tui/internal/runtime"
@@ -15,6 +16,11 @@ type Runner struct {
 	Baseline  runtime.AgentRuntime
 	Candidate runtime.AgentRuntime
 }
+
+const (
+	defaultTimeout          = 30 * time.Second
+	inactivityFallback      = 500 * time.Millisecond
+)
 
 // Run executes a single scenario against both runtimes and returns the result.
 func (r *Runner) Run(ctx context.Context, s Scenario) ScenarioResult {
@@ -36,7 +42,6 @@ func (r *Runner) Run(ctx context.Context, s Scenario) ScenarioResult {
 	}
 	sr.Runs = repeats
 
-	// If any repeat failed, the scenario fails.
 	for _, p := range allPassed {
 		if !p {
 			return sr
@@ -168,14 +173,19 @@ func (r *Runner) runCancel(ctx context.Context, s Scenario, sr *ScenarioResult) 
 }
 
 func (r *Runner) runPrompt(ctx context.Context, s Scenario, sr *ScenarioResult) {
+	timeout := s.Timeout
+	if timeout <= 0 {
+		timeout = defaultTimeout
+	}
+
 	// Baseline
-	bEvents, bErr := r.collectEvents(ctx, r.Baseline, s.Prompt, s.ApprovalDecision)
+	bEvents, bErr := r.collectEvents(ctx, r.Baseline, s.Prompt, s.ApprovalDecision, timeout)
 	if bErr != nil {
 		sr.Failures = append(sr.Failures, Failure{Reason: "baseline prompt failed: " + bErr.Error()})
 	}
 
 	// Candidate
-	cEvents, cErr := r.collectEvents(ctx, r.Candidate, s.Prompt, s.ApprovalDecision)
+	cEvents, cErr := r.collectEvents(ctx, r.Candidate, s.Prompt, s.ApprovalDecision, timeout)
 	if cErr != nil {
 		sr.Failures = append(sr.Failures, Failure{Reason: "candidate prompt failed: " + cErr.Error()})
 	}
@@ -184,8 +194,8 @@ func (r *Runner) runPrompt(ctx context.Context, s Scenario, sr *ScenarioResult) 
 		return
 	}
 
-	// Verify agent selection — check that the prompt was configured with the
-	// required agent. This is verified post-execution so the full flow runs.
+	// Verify agent through the actual request sent to the runtime.
+	// The Prompt.Agent field in the request is what the runtime receives.
 	if s.Assertions.RequireAgent != "" && s.Prompt != nil {
 		if s.Prompt.Agent != s.Assertions.RequireAgent {
 			sr.Failures = append(sr.Failures, Failure{
@@ -215,18 +225,16 @@ func (r *Runner) runPrompt(ctx context.Context, s Scenario, sr *ScenarioResult) 
 		return
 	}
 
-	// Event type set comparison: detect silent loss where candidate passes the
-	// minimum assertion check but is missing event types present in baseline.
-	bTypes := eventTypeSet(bEvents)
-	cTypes := eventTypeSet(cEvents)
-	for t := range bTypes {
-		if !cTypes[t] {
-			sr.SilentLoss = true
+	// Semantic fingerprint comparison: event counts, streaming content, domain payloads.
+	issues := compareFingerprints(bEvents, cEvents, s.Assertions)
+	if len(issues) > 0 {
+		sr.SilentLoss = true
+		for _, issue := range issues {
 			sr.Failures = append(sr.Failures, Failure{
-				Reason: fmt.Sprintf("silent loss — candidate missing event type %q present in baseline", t),
+				Reason: "silent loss — " + issue,
 			})
-			return
 		}
+		return
 	}
 }
 
@@ -276,7 +284,6 @@ func checkAssertions(events []runtime.Event, a Assertion) assertResult {
 		found := false
 		for _, e := range events {
 			if e.Type == "raw" && len(e.Raw) > 0 {
-				// Verify it's valid JSON.
 				var v any
 				if json.Unmarshal(e.Raw, &v) == nil {
 					found = true
@@ -291,6 +298,94 @@ func checkAssertions(events []runtime.Event, a Assertion) assertResult {
 	return assertResult{ok: true}
 }
 
+// eventFingerprint captures the semantic shape of a collected event stream.
+type eventFingerprint struct {
+	counts         map[runtime.EventType]int
+	answerChars    int
+	reasoningChars int
+	toolCalls      int
+	approvals      int
+	rawEvents      int
+	hasStepFinish  bool
+}
+
+func computeFingerprint(events []runtime.Event) eventFingerprint {
+	fp := eventFingerprint{counts: make(map[runtime.EventType]int)}
+	for _, e := range events {
+		fp.counts[e.Type]++
+		switch e.Type {
+		case "answer.delta":
+			fp.answerChars += len(e.Content)
+		case "reasoning.delta":
+			fp.reasoningChars += len(e.Content)
+		case "tool.called":
+			fp.toolCalls++
+		case "approval.requested":
+			fp.approvals++
+		case "raw":
+			fp.rawEvents++
+		case "step.finished":
+			fp.hasStepFinish = true
+		}
+	}
+	return fp
+}
+
+// compareFingerprints checks that candidate preserves the semantic shape of baseline.
+// Returns a list of specific issues found, empty if no silent loss.
+func compareFingerprints(bEvents, cEvents []runtime.Event, a Assertion) []string {
+	bFP := computeFingerprint(bEvents)
+	cFP := computeFingerprint(cEvents)
+	var issues []string
+
+	// Streaming events: if baseline has content, candidate must have non-empty content.
+	if a.RequireAnswer && bFP.answerChars > 0 && cFP.answerChars == 0 {
+		issues = append(issues, fmt.Sprintf(
+			"answer.delta content: baseline has %d chars, candidate has 0", bFP.answerChars))
+	} else if a.RequireAnswer && cFP.counts["answer.delta"] < bFP.counts["answer.delta"] {
+		issues = append(issues, fmt.Sprintf(
+			"answer.delta count: baseline %d, candidate %d", bFP.counts["answer.delta"], cFP.counts["answer.delta"]))
+	}
+
+	if a.RequireReasoning && bFP.reasoningChars > 0 && cFP.reasoningChars == 0 {
+		issues = append(issues, fmt.Sprintf(
+			"reasoning.delta content: baseline has %d chars, candidate has 0", bFP.reasoningChars))
+	} else if a.RequireReasoning && cFP.counts["reasoning.delta"] < bFP.counts["reasoning.delta"] {
+		issues = append(issues, fmt.Sprintf(
+			"reasoning.delta count: baseline %d, candidate %d", bFP.counts["reasoning.delta"], cFP.counts["reasoning.delta"]))
+	}
+
+	// Domain events: candidate must have at least as many as baseline.
+	if a.RequireTool && cFP.toolCalls < bFP.toolCalls {
+		issues = append(issues, fmt.Sprintf(
+			"tool.called count: baseline %d, candidate %d", bFP.toolCalls, cFP.toolCalls))
+	}
+	if a.RequireApproval && cFP.approvals < bFP.approvals {
+		issues = append(issues, fmt.Sprintf(
+			"approval.requested count: baseline %d, candidate %d", bFP.approvals, cFP.approvals))
+	}
+	if a.RequireRaw && cFP.rawEvents < bFP.rawEvents {
+		issues = append(issues, fmt.Sprintf(
+			"raw event count: baseline %d, candidate %d", bFP.rawEvents, cFP.rawEvents))
+	}
+
+	// Step completion: candidate must complete the step.
+	if bFP.hasStepFinish && !cFP.hasStepFinish {
+		issues = append(issues, "candidate missing step.finished completion event")
+	}
+
+	// Type set coverage: any event type in baseline must also appear in candidate.
+	// This catches losses beyond the assertion-keyed checks above.
+	for t := range bFP.counts {
+		if cFP.counts[t] == 0 {
+			issues = append(issues, fmt.Sprintf(
+				"candidate missing event type %q present in baseline (%d events)", t, bFP.counts[t]))
+		}
+	}
+
+	return issues
+}
+
 func hasEventType(events []runtime.Event, t runtime.EventType) bool {
 	for _, e := range events {
 		if e.Type == t {
@@ -300,22 +395,12 @@ func hasEventType(events []runtime.Event, t runtime.EventType) bool {
 	return false
 }
 
-func eventTypeSet(events []runtime.Event) map[runtime.EventType]bool {
-	set := make(map[runtime.EventType]bool)
-	for _, e := range events {
-		set[e.Type] = true
-	}
-	return set
-}
-
-func (r *Runner) collectEvents(ctx context.Context, rt runtime.AgentRuntime, req *runtime.PromptRequest, approvalDecision *runtime.ApprovalDecision) ([]runtime.Event, error) {
+func (r *Runner) collectEvents(ctx context.Context, rt runtime.AgentRuntime, req *runtime.PromptRequest, approvalDecision *runtime.ApprovalDecision, timeout time.Duration) ([]runtime.Event, error) {
 	session, err := rt.CreateSession(ctx, runtime.CreateSessionRequest{Title: "parity-prompt"})
 	if err != nil {
 		return nil, err
 	}
 
-	// Create child context so the subscription is cancelled when this function returns,
-	// preventing goroutine and connection leaks across repeats.
 	subCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -329,7 +414,9 @@ func (r *Runner) collectEvents(ctx context.Context, rt runtime.AgentRuntime, req
 	}
 
 	var events []runtime.Event
-	timeout := time.After(200 * time.Millisecond)
+	deadline := time.After(timeout)
+	inactivity := time.After(inactivityFallback)
+
 	for {
 		select {
 		case ev, ok := <-ch:
@@ -338,17 +425,36 @@ func (r *Runner) collectEvents(ctx context.Context, rt runtime.AgentRuntime, req
 			}
 			events = append(events, ev)
 
-			// If an approval is requested and the scenario specifies a decision,
-			// reply immediately so the runtime can continue.
+			// Natural completion: step finished or failed.
+			if ev.Type == "step.finished" || ev.Type == "step.failed" {
+				return events, nil
+			}
+
+			// Reset inactivity timer on each event.
+			inactivity = time.After(inactivityFallback)
+
 			if approvalDecision != nil && ev.Type == "approval.requested" && ev.Approval != nil && ev.Approval.ID != "" {
 				if err := rt.ReplyApproval(ctx, runtime.ApprovalID(ev.Approval.ID), runtime.ApprovalReply{Decision: *approvalDecision}); err != nil {
 					return events, fmt.Errorf("ReplyApproval(%s): %w", ev.Approval.ID, err)
 				}
 			}
-		case <-timeout:
+		case <-inactivity:
+			return events, nil
+		case <-deadline:
 			return events, nil
 		case <-ctx.Done():
 			return events, ctx.Err()
 		}
 	}
+}
+
+// ConcatContent concatenates content from events of a given type for test assertions.
+func ConcatContent(events []runtime.Event, t runtime.EventType) string {
+	var b strings.Builder
+	for _, e := range events {
+		if e.Type == t {
+			b.WriteString(e.Content)
+		}
+	}
+	return b.String()
 }

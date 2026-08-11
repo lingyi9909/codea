@@ -76,18 +76,29 @@ type runtimeErrorPayload struct {
 }
 
 type runtimeErrorProperties struct {
-	Error string `json:"error"`
-	Code  string `json:"code"`
+	Error        string `json:"error"`
+	Code         string `json:"code"`
+	Partial      string `json:"partial,omitempty"`
+	OriginalSize int    `json:"originalSize,omitempty"`
 }
 
 func newRuntimeErrorEvent(errMsg, code string) []byte {
+	return newRuntimeErrorEventWithPartial(errMsg, code, "", 0)
+}
+
+func newRuntimeErrorEventWithPartial(errMsg, code, partial string, originalSize int) []byte {
+	if len(partial) > maxRawSize {
+		partial = partial[:maxRawSize]
+	}
 	evt := runtimeErrorEvent{
 		Directory: "",
 		Payload: runtimeErrorPayload{
 			Type: "runtime_error",
 			Properties: runtimeErrorProperties{
-				Error: errMsg,
-				Code:  code,
+				Error:        errMsg,
+				Code:         code,
+				Partial:      partial,
+				OriginalSize: originalSize,
 			},
 		},
 	}
@@ -148,12 +159,14 @@ func (c *SSEClient) readLoop(ctx context.Context, resp *http.Response, ch chan S
 		}
 	}
 
-	// Emit residual dataLines on clean EOF — must not silently drop data.
+	// Emit residual dataLines on clean EOF — preserve partial content within 16KB.
 	if len(dataLines) > 0 && ctx.Err() == nil {
 		seq++
+		partial := strings.Join(dataLines, "\n")
+		originalSize := len(partial)
 		select {
 		case ch <- SSERawEvent{
-			Data:     newRuntimeErrorEvent("truncated stream: incomplete event", "TRUNCATED_STREAM"),
+			Data:     newRuntimeErrorEventWithPartial("truncated stream: incomplete event", "TRUNCATED_STREAM", partial, originalSize),
 			Sequence: seq,
 		}:
 		case <-ctx.Done():

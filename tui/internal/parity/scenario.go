@@ -1,6 +1,10 @@
 package parity
 
-import "codea/tui/internal/runtime"
+import (
+	"time"
+
+	"codea/tui/internal/runtime"
+)
 
 var (
 	approvalOnce   = runtime.ApprovalOnce
@@ -24,6 +28,7 @@ type Scenario struct {
 	Required         bool
 	Prompt           *runtime.PromptRequest
 	RepeatCount      int
+	Timeout          time.Duration          // collection timeout per execution; 0 = default 30s
 	Assertions       Assertion
 	ApprovalDecision *runtime.ApprovalDecision // if set, ReplyApproval is called when approval.requested is received
 }
