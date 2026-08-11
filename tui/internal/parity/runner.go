@@ -47,6 +47,7 @@ func (r *Runner) Run(ctx context.Context, s Scenario) ScenarioResult {
 }
 
 func (r *Runner) executeOnce(ctx context.Context, s Scenario, sr *ScenarioResult) bool {
+	prev := len(sr.Failures)
 	switch {
 	case s.Name == "Health":
 		r.runHealth(ctx, s, sr)
@@ -59,7 +60,7 @@ func (r *Runner) executeOnce(ctx context.Context, s Scenario, sr *ScenarioResult
 	default:
 		return true
 	}
-	return len(sr.Failures) == 0
+	return len(sr.Failures) == prev
 }
 
 // RunAll executes multiple scenarios and returns an aggregated Result.
