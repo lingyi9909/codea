@@ -2,6 +2,11 @@ package parity
 
 import "codea/tui/internal/runtime"
 
+var (
+	approvalOnce   = runtime.ApprovalOnce
+	approvalReject = runtime.ApprovalReject
+)
+
 // Assertion defines the semantic checks for a parity scenario.
 // Each bool flag enables a specific check against collected events.
 type Assertion struct {
@@ -15,11 +20,12 @@ type Assertion struct {
 
 // Scenario defines a single parity test scenario.
 type Scenario struct {
-	Name        string
-	Required    bool
-	Prompt      *runtime.PromptRequest
-	RepeatCount int
-	Assertions  Assertion
+	Name             string
+	Required         bool
+	Prompt           *runtime.PromptRequest
+	RepeatCount      int
+	Assertions       Assertion
+	ApprovalDecision *runtime.ApprovalDecision // if set, ReplyApproval is called when approval.requested is received
 }
 
 // V1RequiredScenarios returns the minimal set of required parity scenarios
@@ -52,11 +58,11 @@ func V1RequiredScenarios() []Scenario {
 		{Name: "Approval", Required: true, RepeatCount: 2, Prompt: &runtime.PromptRequest{
 			Agent: "general",
 			Parts: []runtime.PromptPart{runtime.TextPart{Text: "approval test"}},
-		}, Assertions: Assertion{RequireApproval: true}},
+		}, Assertions: Assertion{RequireApproval: true}, ApprovalDecision: &approvalOnce},
 		{Name: "Reject", Required: true, RepeatCount: 2, Prompt: &runtime.PromptRequest{
 			Agent: "general",
 			Parts: []runtime.PromptPart{runtime.TextPart{Text: "reject test"}},
-		}, Assertions: Assertion{RequireApproval: true}},
+		}, Assertions: Assertion{RequireApproval: true}, ApprovalDecision: &approvalReject},
 		{Name: "Cancel", Required: true, RepeatCount: 1},
 		{Name: "AgentSelection", Required: true, RepeatCount: 2, Prompt: &runtime.PromptRequest{
 			Agent: "reviewer",

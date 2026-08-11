@@ -62,8 +62,11 @@ func TestCapabilityCompareWithRealOpenCodeAdapter(t *testing.T) {
 		t.Fatalf("load capabilities.yaml: %v", err)
 	}
 
-	// Use real OpenCodeAdapter.Capabilities() — not hand-crafted true values.
-	caps := opencode.OpenCodeCapabilities()
+	// Instantiate a real OpenCodeAdapter and call Capabilities() through the
+	// AgentRuntime interface — not through the package-level helper function.
+	adapter := opencode.NewOpenCodeAdapter("http://127.0.0.1:1", "", "")
+	var rt runtime.AgentRuntime = adapter
+	caps := rt.Capabilities()
 
 	result := inv.Compare(caps)
 	if result.HasRequiredFailures() {

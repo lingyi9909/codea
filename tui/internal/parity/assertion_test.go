@@ -381,3 +381,107 @@ func TestAgentSelectionAssertion(t *testing.T) {
 		t.Error("should fail: prompt sent to general but requires reviewer agent")
 	}
 }
+
+func TestRunnerApprovalOnce(t *testing.T) {
+	once := runtime.ApprovalOnce
+
+	baseline := fakeruntime.New()
+	baseline.Events = []runtime.Event{
+		{Type: runtime.EventType("approval.requested"), Approval: &runtime.ApprovalRequest{
+			ID: "approval-1", Permission: "bash",
+		}},
+		{Type: runtime.EventType("answer.delta"), Content: "approved"},
+		{Type: runtime.EventType("step.finished")},
+	}
+
+	candidate := fakeruntime.New()
+	candidate.Events = []runtime.Event{
+		{Type: runtime.EventType("approval.requested"), Approval: &runtime.ApprovalRequest{
+			ID: "approval-1", Permission: "bash",
+		}},
+		{Type: runtime.EventType("answer.delta"), Content: "approved"},
+		{Type: runtime.EventType("step.finished")},
+	}
+
+	runner := Runner{Baseline: baseline, Candidate: candidate}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	result := runner.Run(ctx, Scenario{
+		Name:     "Approval",
+		Required: true,
+		Prompt: &runtime.PromptRequest{
+			Agent: "general",
+			Parts: []runtime.PromptPart{runtime.TextPart{Text: "approve this"}},
+		},
+		Assertions:       Assertion{RequireApproval: true},
+		ApprovalDecision: &once,
+	})
+
+	if !result.Passed {
+		t.Errorf("approval once should pass, failures: %v", result.Failures)
+	}
+
+	// Verify that ReplyApproval was actually called on the candidate.
+	cRecords := candidate.Approvals()
+	if len(cRecords) != 1 {
+		t.Fatalf("expected 1 ReplyApproval call, got %d", len(cRecords))
+	}
+	if cRecords[0].Reply.Decision != runtime.ApprovalOnce {
+		t.Errorf("expected decision ApprovalOnce, got %s", cRecords[0].Reply.Decision)
+	}
+	if cRecords[0].ID != runtime.ApprovalID("approval-1") {
+		t.Errorf("expected approval ID approval-1, got %s", cRecords[0].ID)
+	}
+}
+
+func TestRunnerApprovalReject(t *testing.T) {
+	reject := runtime.ApprovalReject
+
+	baseline := fakeruntime.New()
+	baseline.Events = []runtime.Event{
+		{Type: runtime.EventType("approval.requested"), Approval: &runtime.ApprovalRequest{
+			ID: "approval-1", Permission: "bash",
+		}},
+		{Type: runtime.EventType("step.finished")},
+	}
+
+	candidate := fakeruntime.New()
+	candidate.Events = []runtime.Event{
+		{Type: runtime.EventType("approval.requested"), Approval: &runtime.ApprovalRequest{
+			ID: "approval-1", Permission: "bash",
+		}},
+		{Type: runtime.EventType("step.finished")},
+	}
+
+	runner := Runner{Baseline: baseline, Candidate: candidate}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	result := runner.Run(ctx, Scenario{
+		Name:     "Reject",
+		Required: true,
+		Prompt: &runtime.PromptRequest{
+			Agent: "general",
+			Parts: []runtime.PromptPart{runtime.TextPart{Text: "reject this"}},
+		},
+		Assertions:       Assertion{RequireApproval: true},
+		ApprovalDecision: &reject,
+	})
+
+	if !result.Passed {
+		t.Errorf("reject should pass, failures: %v", result.Failures)
+	}
+
+	// Verify that ReplyApproval was called with reject decision.
+	cRecords := candidate.Approvals()
+	if len(cRecords) != 1 {
+		t.Fatalf("expected 1 ReplyApproval call, got %d", len(cRecords))
+	}
+	if cRecords[0].Reply.Decision != runtime.ApprovalReject {
+		t.Errorf("expected decision ApprovalReject, got %s", cRecords[0].Reply.Decision)
+	}
+	if cRecords[0].ID != runtime.ApprovalID("approval-1") {
+		t.Errorf("expected approval ID approval-1, got %s", cRecords[0].ID)
+	}
+}

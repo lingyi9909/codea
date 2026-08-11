@@ -162,13 +162,13 @@ func (r *Runner) runPrompt(ctx context.Context, s Scenario, sr *ScenarioResult) 
 	}
 
 	// Baseline
-	bEvents, bErr := r.collectEvents(ctx, r.Baseline, s.Prompt)
+	bEvents, bErr := r.collectEvents(ctx, r.Baseline, s.Prompt, s.ApprovalDecision)
 	if bErr != nil {
 		sr.Failures = append(sr.Failures, Failure{Reason: "baseline prompt failed: " + bErr.Error()})
 	}
 
 	// Candidate
-	cEvents, cErr := r.collectEvents(ctx, r.Candidate, s.Prompt)
+	cEvents, cErr := r.collectEvents(ctx, r.Candidate, s.Prompt, s.ApprovalDecision)
 	if cErr != nil {
 		sr.Failures = append(sr.Failures, Failure{Reason: "candidate prompt failed: " + cErr.Error()})
 	}
@@ -267,7 +267,7 @@ func hasEventType(events []runtime.Event, t runtime.EventType) bool {
 	return false
 }
 
-func (r *Runner) collectEvents(ctx context.Context, rt runtime.AgentRuntime, req *runtime.PromptRequest) ([]runtime.Event, error) {
+func (r *Runner) collectEvents(ctx context.Context, rt runtime.AgentRuntime, req *runtime.PromptRequest, approvalDecision *runtime.ApprovalDecision) ([]runtime.Event, error) {
 	session, err := rt.CreateSession(ctx, runtime.CreateSessionRequest{Title: "parity-prompt"})
 	if err != nil {
 		return nil, err
@@ -291,6 +291,12 @@ func (r *Runner) collectEvents(ctx context.Context, rt runtime.AgentRuntime, req
 				return events, nil
 			}
 			events = append(events, ev)
+
+			// If an approval is requested and the scenario specifies a decision,
+			// reply immediately so the runtime can continue.
+			if approvalDecision != nil && ev.Type == "approval.requested" && ev.Approval != nil && ev.Approval.ID != "" {
+				_ = rt.ReplyApproval(ctx, runtime.ApprovalID(ev.Approval.ID), runtime.ApprovalReply{Decision: *approvalDecision})
+			}
 		case <-timeout:
 			return events, nil
 		case <-ctx.Done():
