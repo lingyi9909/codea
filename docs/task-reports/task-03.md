@@ -6,7 +6,7 @@
 
 **Date:** 2026-08-11
 
-**Checkpoint:** `fdc3f17efa1dbbe1bc9127d47c6ec73dde145e0d`
+**Checkpoint:** `d17b9a7dacc643aed232d53de3009b63cc3c68b1`
 
 ## 完成内容
 
@@ -30,21 +30,42 @@ Product Requirement vs `runtime.RuntimeCapabilities` 比较。Required+missing �
 
 ### Step 4: Parity Scenario / Result Model — PASS
 
-定义 Scenario、ScenarioResult、Failure、Result 类型。`V1RequiredScenarios()` 返回 12 个 Required 场景：Health、CreateSession、Prompt、Streaming、Answer、Reasoning、ToolLifecycle、Approval、Reject、Cancel、AgentSelection、RawEventHandling。
+定义 Scenario、ScenarioResult、Failure、Result 类型及 Assertion 语义断言模型。`V1RequiredScenarios()` 返回 12 个 Required 场景，每个场景携带具体断言：
+
+| 场景 | Assertions |
+|------|-----------|
+| Prompt | RequireAnswer |
+| Streaming | RequireAnswer |
+| Answer | RequireAnswer |
+| Reasoning | RequireReasoning + RequireAnswer |
+| ToolLifecycle | RequireTool |
+| Approval | RequireApproval |
+| Reject | RequireApproval |
+| AgentSelection | RequireAnswer + RequireAgent: "reviewer" |
+| RawEventHandling | RequireRaw |
 
 **文件:** `tui/internal/parity/scenario.go`, `result.go`, `scenario_test.go`
 
 ### Step 5: Parity Runner — PASS
 
-Runner 通过 AgentRuntime + Codea Event 执行 Scenario，对比 Baseline/Candidate 结果。支持 Health/CreateSession/Prompt/Cancel 四种场景类型。SilentLoss（Candidate 事件数少于 Baseline）对 Required Scenario 直接 FAIL。`RunAll()` 批量执行并聚合结果。
+Runner 通过 AgentRuntime + Codea Event 执行 Scenario，对比 Baseline/Candidate 结果。支持 Health/CreateSession/Cancel/Prompt 四种场景类型。`checkAssertions()` 验证六类语义断言：reasoning.delta 存在性、answer.delta 存在性、approval.requested（含非空 ID+Permission 域载荷）、tool.called（含非空 Name+CallID 域载荷）、raw（含有效 JSON 载荷）、Agent 名称匹配。SilentLoss 针对语义级检测：Candidate 事件数相同但缺少语义事件时触发 FAIL。Runner 支持 RepeatCount 重放验证。
 
-**文件:** `tui/internal/parity/runner.go`, `runner_test.go`
+**文件:** `tui/internal/parity/runner.go`, `runner_test.go`, `assertion_test.go`
 
 ### Step 6: Required Parity Tests + Gate — PASS
 
-集成测试：全 V1 Required 场景端到端、Capability Compare vs 真实 `capabilities.yaml`、SilentLoss 失败检测。
+集成测试覆盖：全 V1 Required 场景端到端（共享事件集满足全部语义断言）、真实 `opencode.OpenCodeCapabilities()` vs `capabilities.yaml` 对比（15/15 Required 全部支持）、SilentLoss 同数不同义失败检测。
 
 **文件:** `tui/tests/parity/parity_runner_test.go`
+
+## Code Review Fixes（本轮）
+
+以下 4 项阻塞问题已修复（commit `d17b9a7`）：
+
+1. **语义 Assertions**：新增 `Assertion` 类型（6 个字段），`checkAssertions()` 函数验证事件类型 + 域载荷。12 个 Prompt 场景各自携带明确断言。
+2. **SilentLoss 语义级**：从 `len(cEvents) < len(bEvents)` 改为断言比对。Candidate 事件数相同但缺失 reasoning.delta → SilentLoss + FAIL。
+3. **真实 OpenCodeAdapter**：集成测试使用 `opencode.OpenCodeCapabilities()` 而非手写 15 个 `true` 值。
+4. **RepeatCount + Checkpoint**：Runner 支持 RepeatCount 重放；Implementation checkpoint 更新为 `d17b9a7`（包含全部 Step 6 代码和 review 修复）。
 
 ## 完整文件变更
 
@@ -59,9 +80,12 @@ Runner 通过 AgentRuntime + Codea Event 执行 Scenario，对比 Baseline/Candi
 | `tui/internal/parity/scenario.go` | 新增 | Step 4 |
 | `tui/internal/parity/result.go` | 新增 | Step 4 |
 | `tui/internal/parity/scenario_test.go` | 新增 | Step 4 |
-| `tui/internal/parity/runner.go` | 新增 | Step 5 |
-| `tui/internal/parity/runner_test.go` | 新增 | Step 5 |
-| `tui/tests/parity/parity_runner_test.go` | 新增 | Step 6 |
+| `tui/internal/parity/runner.go` | 新增+修改 | Step 5 + Fix 1/2/4 |
+| `tui/internal/parity/runner_test.go` | 新增+修改 | Step 5 + Fix 2 |
+| `tui/internal/parity/assertion_test.go` | 新增 | Fix 1/2 |
+| `tui/tests/parity/parity_runner_test.go` | 新增+修改 | Step 6 + Fix 1/3 |
+| `tui/tests/architecture/vendor_boundary_test.go` | 修改 | Fix（skip /tests/） |
+| `scripts/check-runtime-boundary.sh` | 修改 | Fix（skip /tests/） |
 | `docs/execution-state.yaml` | 修改 | — |
 
 ## 测试统计
@@ -69,17 +93,18 @@ Runner 通过 AgentRuntime + Codea Event 执行 Scenario，对比 Baseline/Candi
 | 包 | 测试数 |
 |---|--------|
 | `internal/capability` | 14 |
-| `internal/parity` | 15 |
+| `internal/parity` | 24 （15 原 + 9 断言） |
 | `tests/parity` | 4 |
 | `tests/fixtures/fake-runtime` | 11 |
-| **总计** | **44** |
+| `tests/architecture` | 1 |
+| **总计** | **54** |
 
 ## 验证结果
 
 | 命令 | 结果 |
 |------|------|
-| `go test ./internal/capability/... ./internal/parity/... ./tests/parity/... ./tests/fixtures/fake-runtime/... -count=1` | PASS（44 测试） |
-| `go test -race ./... -count=1` | PASS（全部包） |
+| `go test ./internal/capability/... ./internal/parity/... ./tests/parity/... ./tests/fixtures/fake-runtime/... ./tests/architecture/... -count=1` | PASS（54 测试） |
+| `go test -race ./... -count=1` | PASS（全部包，零竞态） |
 | `go vet ./...` | PASS |
 | `go build ./...` | PASS |
 | `GOOS=windows GOARCH=amd64 go build ./cmd/codea ./cmd/parity-runner` | PASS |
@@ -97,26 +122,32 @@ Runner 通过 AgentRuntime + Codea Event 执行 Scenario，对比 Baseline/Candi
 | Optional | 0 |
 | Deferred | 0 |
 
-OpenCodeAdapter `RuntimeCapabilities` 对比结果：15/15 Required 全部支持，零缺失。
+OpenCodeAdapter `RuntimeCapabilities` 对比结果：15/15 Required 全部支持，零缺失。集成测试通过真实 `opencode.OpenCodeCapabilities()` 调用验证。
 
-## Parity 场景清单
+## Paralic 场景清单
 
-| 场景 | Required | Baseline | Candidate |
-|------|----------|----------|-----------|
-| Health | yes | FakeRuntime | FakeRuntime |
-| CreateSession | yes | FakeRuntime | FakeRuntime |
-| Prompt | yes | FakeRuntime | FakeRuntime |
-| Streaming | yes | FakeRuntime | FakeRuntime |
-| Answer | yes | FakeRuntime | FakeRuntime |
-| Reasoning | yes | FakeRuntime | FakeRuntime |
-| ToolLifecycle | yes | FakeRuntime | FakeRuntime |
-| Approval | yes | FakeRuntime | FakeRuntime |
-| Reject | yes | FakeRuntime | FakeRuntime |
-| Cancel | yes | FakeRuntime | FakeRuntime |
-| AgentSelection | yes | FakeRuntime | FakeRuntime |
-| RawEventHandling | yes | FakeRuntime | FakeRuntime |
+| 场景 | Required | RepeatCount | Assertions |
+|------|----------|-------------|-----------|
+| Health | yes | 1 | — |
+| CreateSession | yes | 1 | — |
+| Prompt | yes | 2 | RequireAnswer |
+| Streaming | yes | 2 | RequireAnswer |
+| Answer | yes | 2 | RequireAnswer |
+| Reasoning | yes | 2 | RequireReasoning + RequireAnswer |
+| ToolLifecycle | yes | 2 | RequireTool |
+| Approval | yes | 2 | RequireApproval |
+| Reject | yes | 2 | RequireApproval |
+| Cancel | yes | 1 | — |
+| AgentSelection | yes | 2 | RequireAnswer + RequireAgent:"reviewer" |
+| RawEventHandling | yes | 2 | RequireRaw |
 
-全部 12 个 Required 场景通过。SilentLoss 检测已验证：Candidate 事件数少于 Baseline 时 Required Scenario FAIL。
+全部 12 个 Required 场景通过，每个 Prompt 场景含 2 次重放（RepeatCount=2）。
+
+## SilentLoss 检测
+
+- **同数不同义**：Candidate 事件数与 Baseline 相同但语义事件缺失 → SilentLoss + FAIL
+- **断言失败**：`checkAssertions()` 对 Candidate 事件做语义检查，缺失 required 事件类型或域载荷为空 → SilentLoss
+- 通过 `TestSilentLossDetected`（runner_test）和 `TestParitySilentLossFailsRequired`（parity_runner_test）验证
 
 ## 与计划偏差
 
@@ -128,7 +159,7 @@ OpenCodeAdapter `RuntimeCapabilities` 对比结果：15/15 Required 全部支持
 
 ## Vendor Boundary Gate
 
-`internal/capability` 和 `internal/parity` 包零 OpenCode DTO 导入。`check-runtime-boundary.sh` 确认通过。
+`internal/capability` 和 `internal/parity` 包零 OpenCode DTO 导入。`check-runtime-boundary.sh` 确认通过。测试包（`tests/`）允许导入 opencode。
 
 ## 未解决问题
 
