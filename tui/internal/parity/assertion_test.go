@@ -390,8 +390,13 @@ func TestRunnerApprovalOnce(t *testing.T) {
 		{Type: runtime.EventType("approval.requested"), Approval: &runtime.ApprovalRequest{
 			ID: "approval-1", Permission: "bash",
 		}},
-		{Type: runtime.EventType("answer.delta"), Content: "approved"},
-		{Type: runtime.EventType("step.finished")},
+	}
+	// After ReplyApproval(once), the runtime continues and emits tool + answer.
+	baseline.ApprovalOnceEvents = []runtime.Event{
+		{Type: runtime.EventType("tool.called"), Tool: &runtime.ToolEvent{
+			Name: "read", CallID: "call-1",
+		}},
+		{Type: runtime.EventType("answer.delta"), Content: "done after approval"},
 	}
 
 	candidate := fakeruntime.New()
@@ -399,8 +404,12 @@ func TestRunnerApprovalOnce(t *testing.T) {
 		{Type: runtime.EventType("approval.requested"), Approval: &runtime.ApprovalRequest{
 			ID: "approval-1", Permission: "bash",
 		}},
-		{Type: runtime.EventType("answer.delta"), Content: "approved"},
-		{Type: runtime.EventType("step.finished")},
+	}
+	candidate.ApprovalOnceEvents = []runtime.Event{
+		{Type: runtime.EventType("tool.called"), Tool: &runtime.ToolEvent{
+			Name: "read", CallID: "call-1",
+		}},
+		{Type: runtime.EventType("answer.delta"), Content: "done after approval"},
 	}
 
 	runner := Runner{Baseline: baseline, Candidate: candidate}
@@ -414,7 +423,7 @@ func TestRunnerApprovalOnce(t *testing.T) {
 			Agent: "general",
 			Parts: []runtime.PromptPart{runtime.TextPart{Text: "approve this"}},
 		},
-		Assertions:       Assertion{RequireApproval: true},
+		Assertions:       Assertion{RequireApproval: true, RequireTool: true, RequireAnswer: true},
 		ApprovalDecision: &once,
 	})
 
@@ -422,7 +431,7 @@ func TestRunnerApprovalOnce(t *testing.T) {
 		t.Errorf("approval once should pass, failures: %v", result.Failures)
 	}
 
-	// Verify that ReplyApproval was actually called on the candidate.
+	// Verify ReplyApproval was called with ApprovalOnce.
 	cRecords := candidate.Approvals()
 	if len(cRecords) != 1 {
 		t.Fatalf("expected 1 ReplyApproval call, got %d", len(cRecords))
@@ -473,7 +482,7 @@ func TestRunnerApprovalReject(t *testing.T) {
 		t.Errorf("reject should pass, failures: %v", result.Failures)
 	}
 
-	// Verify that ReplyApproval was called with reject decision.
+	// Verify ReplyApproval was called with ApprovalReject.
 	cRecords := candidate.Approvals()
 	if len(cRecords) != 1 {
 		t.Fatalf("expected 1 ReplyApproval call, got %d", len(cRecords))
@@ -483,5 +492,51 @@ func TestRunnerApprovalReject(t *testing.T) {
 	}
 	if cRecords[0].ID != runtime.ApprovalID("approval-1") {
 		t.Errorf("expected approval ID approval-1, got %s", cRecords[0].ID)
+	}
+
+	// Verify that after reject, no tool execution was performed.
+	// ApprovalOnceEvents were not configured, and no tool.called should appear.
+	for _, ev := range candidate.Events {
+		if ev.Type == "tool.called" {
+			t.Error("reject scenario must not produce tool.called events — rejected operation must not execute")
+		}
+	}
+}
+
+func TestRunnerApprovalReplyError(t *testing.T) {
+	once := runtime.ApprovalOnce
+
+	baseline := fakeruntime.New()
+	baseline.Events = []runtime.Event{
+		{Type: runtime.EventType("approval.requested"), Approval: &runtime.ApprovalRequest{
+			ID: "approval-1", Permission: "bash",
+		}},
+	}
+
+	candidate := fakeruntime.New()
+	candidate.Events = []runtime.Event{
+		{Type: runtime.EventType("approval.requested"), Approval: &runtime.ApprovalRequest{
+			ID: "approval-1", Permission: "bash",
+		}},
+	}
+	candidate.ReplyApprovalError = fakeruntime.ErrSimulated
+
+	runner := Runner{Baseline: baseline, Candidate: candidate}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	result := runner.Run(ctx, Scenario{
+		Name:     "Approval",
+		Required: true,
+		Prompt: &runtime.PromptRequest{
+			Agent: "general",
+			Parts: []runtime.PromptPart{runtime.TextPart{Text: "approve this"}},
+		},
+		Assertions:       Assertion{RequireApproval: true},
+		ApprovalDecision: &once,
+	})
+
+	if result.Passed {
+		t.Error("ReplyApproval error must cause scenario FAIL")
 	}
 }

@@ -295,7 +295,9 @@ func (r *Runner) collectEvents(ctx context.Context, rt runtime.AgentRuntime, req
 			// If an approval is requested and the scenario specifies a decision,
 			// reply immediately so the runtime can continue.
 			if approvalDecision != nil && ev.Type == "approval.requested" && ev.Approval != nil && ev.Approval.ID != "" {
-				_ = rt.ReplyApproval(ctx, runtime.ApprovalID(ev.Approval.ID), runtime.ApprovalReply{Decision: *approvalDecision})
+				if err := rt.ReplyApproval(ctx, runtime.ApprovalID(ev.Approval.ID), runtime.ApprovalReply{Decision: *approvalDecision}); err != nil {
+					return events, fmt.Errorf("ReplyApproval(%s): %w", ev.Approval.ID, err)
+				}
 			}
 		case <-timeout:
 			return events, nil

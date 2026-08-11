@@ -39,6 +39,13 @@ type FakeRuntime struct {
 	// Events are sent to subscribers when Prompt is called.
 	Events []runtime.Event
 
+	// ReplyApprovalError, if set, is returned by ReplyApproval.
+	ReplyApprovalError error
+
+	// ApprovalOnceEvents are sent to subscribers when ReplyApproval is called
+	// with ApprovalOnce, simulating the runtime continuing after approval.
+	ApprovalOnceEvents []runtime.Event
+
 	mu                sync.Mutex
 	sessions          map[runtime.SessionID]*runtime.Session
 	prompts           []PromptRecord
@@ -117,7 +124,28 @@ func (f *FakeRuntime) Subscribe(ctx context.Context) (<-chan runtime.Event, erro
 func (f *FakeRuntime) ReplyApproval(ctx context.Context, approvalID runtime.ApprovalID, reply runtime.ApprovalReply) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+
+	if f.ReplyApprovalError != nil {
+		return f.ReplyApprovalError
+	}
+
 	f.approvals = append(f.approvals, ApprovalRecord{ID: approvalID, Reply: reply})
+
+	// Simulate post-approval behavior: on "once", the runtime continues and
+	// emits continuation events (e.g. tool calls). On "reject", no
+	// continuation events are emitted — the blocked operation does not run.
+	if reply.Decision == runtime.ApprovalOnce {
+		for _, ev := range f.ApprovalOnceEvents {
+			for ch, sctx := range f.subscribers {
+				select {
+				case ch <- ev:
+				case <-sctx.Done():
+				default:
+				}
+			}
+		}
+	}
+
 	return nil
 }
 
