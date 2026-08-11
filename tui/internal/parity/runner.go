@@ -78,6 +78,12 @@ func (r *Runner) runHealth(ctx context.Context, s Scenario, sr *ScenarioResult) 
 	bInfo, bErr := r.Baseline.Health(ctx)
 	cInfo, cErr := r.Candidate.Health(ctx)
 
+	if bErr != nil && cErr != nil {
+		sr.Failures = append(sr.Failures, Failure{
+			Reason: "both baseline and candidate Health failed: " + bErr.Error() + " / " + cErr.Error(),
+		})
+		return
+	}
 	if bErr != nil && cErr == nil {
 		sr.Failures = append(sr.Failures, Failure{
 			Reason: "baseline Health failed but candidate succeeded",
@@ -102,6 +108,12 @@ func (r *Runner) runCreateSession(ctx context.Context, s Scenario, sr *ScenarioR
 	bSess, bErr := r.Baseline.CreateSession(ctx, runtime.CreateSessionRequest{Title: "parity-test"})
 	cSess, cErr := r.Candidate.CreateSession(ctx, runtime.CreateSessionRequest{Title: "parity-test"})
 
+	if bErr != nil && cErr != nil {
+		sr.Failures = append(sr.Failures, Failure{
+			Reason: "both baseline and candidate CreateSession failed: " + bErr.Error() + " / " + cErr.Error(),
+		})
+		return
+	}
 	if bErr != nil && cErr == nil {
 		sr.Failures = append(sr.Failures, Failure{
 			Reason: "baseline CreateSession failed but candidate succeeded",
@@ -139,6 +151,12 @@ func (r *Runner) runCancel(ctx context.Context, s Scenario, sr *ScenarioResult) 
 	bCancelErr := r.Baseline.Cancel(ctx, runtime.SessionID(bSess.ID))
 	cCancelErr := r.Candidate.Cancel(ctx, runtime.SessionID(cSess.ID))
 
+	if bCancelErr != nil && cCancelErr != nil {
+		sr.Failures = append(sr.Failures, Failure{
+			Reason: "both baseline and candidate Cancel failed: " + bCancelErr.Error() + " / " + cCancelErr.Error(),
+		})
+		return
+	}
 	if bCancelErr != nil && cCancelErr == nil {
 		sr.Failures = append(sr.Failures, Failure{Reason: "baseline Cancel failed but candidate succeeded"})
 		return
@@ -150,17 +168,6 @@ func (r *Runner) runCancel(ctx context.Context, s Scenario, sr *ScenarioResult) 
 }
 
 func (r *Runner) runPrompt(ctx context.Context, s Scenario, sr *ScenarioResult) {
-	// Check RequireAgent assertion against the scenario's Prompt request.
-	if s.Assertions.RequireAgent != "" && s.Prompt != nil {
-		if s.Prompt.Agent != s.Assertions.RequireAgent {
-			sr.Failures = append(sr.Failures, Failure{
-				Reason: fmt.Sprintf("agent mismatch: expected %q, got %q",
-					s.Assertions.RequireAgent, s.Prompt.Agent),
-			})
-			return
-		}
-	}
-
 	// Baseline
 	bEvents, bErr := r.collectEvents(ctx, r.Baseline, s.Prompt, s.ApprovalDecision)
 	if bErr != nil {
@@ -175,6 +182,18 @@ func (r *Runner) runPrompt(ctx context.Context, s Scenario, sr *ScenarioResult) 
 
 	if len(sr.Failures) > 0 {
 		return
+	}
+
+	// Verify agent selection — check that the prompt was configured with the
+	// required agent. This is verified post-execution so the full flow runs.
+	if s.Assertions.RequireAgent != "" && s.Prompt != nil {
+		if s.Prompt.Agent != s.Assertions.RequireAgent {
+			sr.Failures = append(sr.Failures, Failure{
+				Reason: fmt.Sprintf("agent mismatch: expected %q, got %q",
+					s.Assertions.RequireAgent, s.Prompt.Agent),
+			})
+			return
+		}
 	}
 
 	// Check semantic assertions against Baseline and Candidate.
@@ -194,6 +213,20 @@ func (r *Runner) runPrompt(ctx context.Context, s Scenario, sr *ScenarioResult) 
 			Reason: "silent loss — candidate failed assertion: " + cSat.reason,
 		})
 		return
+	}
+
+	// Event type set comparison: detect silent loss where candidate passes the
+	// minimum assertion check but is missing event types present in baseline.
+	bTypes := eventTypeSet(bEvents)
+	cTypes := eventTypeSet(cEvents)
+	for t := range bTypes {
+		if !cTypes[t] {
+			sr.SilentLoss = true
+			sr.Failures = append(sr.Failures, Failure{
+				Reason: fmt.Sprintf("silent loss — candidate missing event type %q present in baseline", t),
+			})
+			return
+		}
 	}
 }
 
@@ -267,13 +300,26 @@ func hasEventType(events []runtime.Event, t runtime.EventType) bool {
 	return false
 }
 
+func eventTypeSet(events []runtime.Event) map[runtime.EventType]bool {
+	set := make(map[runtime.EventType]bool)
+	for _, e := range events {
+		set[e.Type] = true
+	}
+	return set
+}
+
 func (r *Runner) collectEvents(ctx context.Context, rt runtime.AgentRuntime, req *runtime.PromptRequest, approvalDecision *runtime.ApprovalDecision) ([]runtime.Event, error) {
 	session, err := rt.CreateSession(ctx, runtime.CreateSessionRequest{Title: "parity-prompt"})
 	if err != nil {
 		return nil, err
 	}
 
-	ch, err := rt.Subscribe(ctx)
+	// Create child context so the subscription is cancelled when this function returns,
+	// preventing goroutine and connection leaks across repeats.
+	subCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	ch, err := rt.Subscribe(subCtx)
 	if err != nil {
 		return nil, err
 	}
@@ -283,7 +329,7 @@ func (r *Runner) collectEvents(ctx context.Context, rt runtime.AgentRuntime, req
 	}
 
 	var events []runtime.Event
-	timeout := time.After(100 * time.Millisecond)
+	timeout := time.After(200 * time.Millisecond)
 	for {
 		select {
 		case ev, ok := <-ch:

@@ -39,6 +39,9 @@ type FakeRuntime struct {
 	// Events are sent to subscribers when Prompt is called.
 	Events []runtime.Event
 
+	// CancelError, if set, is returned by Cancel.
+	CancelError error
+
 	// ReplyApprovalError, if set, is returned by ReplyApproval.
 	ReplyApprovalError error
 
@@ -150,6 +153,9 @@ func (f *FakeRuntime) ReplyApproval(ctx context.Context, approvalID runtime.Appr
 }
 
 func (f *FakeRuntime) Cancel(ctx context.Context, sessionID runtime.SessionID) error {
+	if f.CancelError != nil {
+		return f.CancelError
+	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.cancelledSessions = append(f.cancelledSessions, sessionID)

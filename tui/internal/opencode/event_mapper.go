@@ -34,6 +34,7 @@ const (
 	CodeaEventToolFailed        runtime.EventType = "tool.failed"
 	CodeaEventApprovalRequested runtime.EventType = "approval.requested"
 	CodeaEventApprovalResolved  runtime.EventType = "approval.resolved"
+	CodeaEventRuntimeError      runtime.EventType = "runtime.error"
 	CodeaEventRaw               runtime.EventType = "raw"
 )
 
@@ -53,6 +54,7 @@ var vendorToCodea = map[string]runtime.EventType{
 	"message.part.removed":     CodeaEventPartRemoved,
 	"permission.asked":         CodeaEventApprovalRequested,
 	"permission.replied":       CodeaEventApprovalResolved,
+	"runtime_error":            CodeaEventRuntimeError,
 }
 
 // sseEnvelope is the top-level SSE event envelope from OpenCode.
@@ -79,6 +81,7 @@ type sseCommonProps struct {
 	Info      json.RawMessage `json:"info"`
 	Part      *ssePart        `json:"part"`
 	Error     json.RawMessage `json:"error"`
+	Code      string          `json:"code"`
 }
 
 type sseStatus struct {
@@ -238,37 +241,61 @@ type sseErrorInner struct {
 }
 
 func extractError(event *runtime.Event, props *sseCommonProps) {
-	if event.Type != CodeaEventSessionError && event.RawType != "_unparseable_" {
-		return
-	}
-	if len(props.Error) == 0 {
-		return
-	}
-	// Try string first
-	var msg string
-	if err := json.Unmarshal(props.Error, &msg); err == nil {
+	switch {
+	case event.Type == CodeaEventRuntimeError:
+		code := props.Code
+		if code == "" {
+			code = string(CodeaEventRuntimeError)
+		}
+		var msg string
+		if len(props.Error) > 0 {
+			_ = json.Unmarshal(props.Error, &msg)
+		}
 		event.Error = &runtime.RuntimeError{
-			Code:    string(CodeaEventSessionError),
+			Code:    code,
 			Message: msg,
 		}
-		return
-	}
-	// Try structured error: {"name":"...","data":{"message":"..."}}
-	var ed sseErrorData
-	if err := json.Unmarshal(props.Error, &ed); err == nil {
-		if ed.Data != nil {
-			var inner sseErrorInner
-			if err := json.Unmarshal(ed.Data, &inner); err == nil && inner.Message != "" {
-				event.Error = &runtime.RuntimeError{
-					Code:    ed.Name,
-					Message: inner.Message,
+
+	case event.Type == CodeaEventSessionError:
+		if len(props.Error) == 0 {
+			return
+		}
+		var msg string
+		if err := json.Unmarshal(props.Error, &msg); err == nil {
+			event.Error = &runtime.RuntimeError{
+				Code:    string(CodeaEventSessionError),
+				Message: msg,
+			}
+			return
+		}
+		var ed sseErrorData
+		if err := json.Unmarshal(props.Error, &ed); err == nil {
+			if ed.Data != nil {
+				var inner sseErrorInner
+				if err := json.Unmarshal(ed.Data, &inner); err == nil && inner.Message != "" {
+					event.Error = &runtime.RuntimeError{
+						Code:    ed.Name,
+						Message: inner.Message,
+					}
+					return
 				}
-				return
+			}
+			event.Error = &runtime.RuntimeError{
+				Code:    ed.Name,
+				Message: string(props.Error),
 			}
 		}
-		event.Error = &runtime.RuntimeError{
-			Code:    ed.Name,
-			Message: string(props.Error),
+
+	case event.RawType == "_unparseable_":
+		if len(props.Error) == 0 {
+			return
+		}
+		var msg string
+		if err := json.Unmarshal(props.Error, &msg); err == nil {
+			event.Error = &runtime.RuntimeError{
+				Code:    string(CodeaEventSessionError),
+				Message: msg,
+			}
 		}
 	}
 }

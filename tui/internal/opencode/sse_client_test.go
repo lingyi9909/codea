@@ -2,6 +2,7 @@ package opencode
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -252,11 +253,122 @@ func TestSSEClientTruncatedStream(t *testing.T) {
 		if !strings.Contains(string(evt.Data), "truncated stream") {
 			t.Fatalf("expected truncated stream event, got: %s", evt.Data)
 		}
-		if !strings.Contains(string(evt.Data), "partial event") {
-			t.Fatalf("expected partial content in event, got: %s", evt.Data)
+		if !strings.Contains(string(evt.Data), "TRUNCATED_STREAM") {
+			t.Fatalf("expected TRUNCATED_STREAM code, got: %s", evt.Data)
+		}
+		// Verify it's valid JSON with proper payload envelope.
+		if !json.Valid(evt.Data) {
+			t.Fatalf("truncated event must be valid JSON, got: %s", evt.Data)
 		}
 	case <-time.After(time.Second):
 		t.Fatal("timeout waiting for truncated stream event")
+	}
+}
+
+func TestSSEClientErrorTextEscaping(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		flusher, _ := w.(http.Flusher)
+		// Send data with no terminating blank line to trigger truncated stream
+		// with special characters in the data.
+		fmt.Fprintf(w, "data: line with \"quotes\" and \\backslashes\\\n")
+		fmt.Fprintf(w, "data: line with\ttabs\n")
+		flusher.Flush()
+	}))
+	defer srv.Close()
+
+	client := NewSSEClient(srv.URL, "", "")
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	ch, err := client.Subscribe(ctx)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	select {
+	case evt, ok := <-ch:
+		if !ok {
+			t.Fatal("channel closed without emitting runtime error event")
+		}
+		if !json.Valid(evt.Data) {
+			t.Fatalf("error event must be valid JSON with escaped characters, got: %s", evt.Data)
+		}
+		// Verify the envelope parses correctly.
+		var envelope struct {
+			Payload struct {
+				Type       string `json:"type"`
+				Properties struct {
+					Error string `json:"error"`
+					Code  string `json:"code"`
+				} `json:"properties"`
+			} `json:"payload"`
+		}
+		if err := json.Unmarshal(evt.Data, &envelope); err != nil {
+			t.Fatalf("failed to parse error event envelope: %v", err)
+		}
+		if envelope.Payload.Type != "runtime_error" {
+			t.Fatalf("expected runtime_error type, got %q", envelope.Payload.Type)
+		}
+		if envelope.Payload.Properties.Code != "TRUNCATED_STREAM" {
+			t.Fatalf("expected TRUNCATED_STREAM code, got %q", envelope.Payload.Properties.Code)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timeout waiting for error event")
+	}
+}
+
+func TestSSEClientScannerError(t *testing.T) {
+	// Use a server that writes an oversized line to trigger bufio.Scanner buffer overflow.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		flusher, _ := w.(http.Flusher)
+		// Write a line larger than the default bufio scanner buffer (64KB default,
+		// but we set 128KB initial buffer). Write > 2MB to overflow max buffer.
+		hugeData := strings.Repeat("x", 3*1024*1024)
+		fmt.Fprintf(w, "data: %s\n\n", hugeData)
+		flusher.Flush()
+	}))
+	defer srv.Close()
+
+	client := NewSSEClient(srv.URL, "", "")
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	ch, err := client.Subscribe(ctx)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// The scanner should overflow and emit a runtime_error event.
+	select {
+	case evt, ok := <-ch:
+		if !ok {
+			t.Fatal("channel closed without emitting error event")
+		}
+		if !json.Valid(evt.Data) {
+			t.Fatalf("scanner error event must be valid JSON, got: %s", evt.Data)
+		}
+		var envelope struct {
+			Payload struct {
+				Type       string `json:"type"`
+				Properties struct {
+					Error string `json:"error"`
+					Code  string `json:"code"`
+				} `json:"properties"`
+			} `json:"payload"`
+		}
+		if err := json.Unmarshal(evt.Data, &envelope); err != nil {
+			t.Fatalf("failed to parse error event envelope: %v", err)
+		}
+		if envelope.Payload.Type != "runtime_error" {
+			t.Fatalf("expected runtime_error type, got %q", envelope.Payload.Type)
+		}
+		if envelope.Payload.Properties.Code != "SCANNER_ERROR" {
+			t.Fatalf("expected SCANNER_ERROR code, got %q", envelope.Payload.Properties.Code)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timeout waiting for error event")
 	}
 }
 

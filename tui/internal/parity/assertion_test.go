@@ -382,6 +382,48 @@ func TestAgentSelectionAssertion(t *testing.T) {
 	}
 }
 
+// TestEventTypeSetSilentLoss verifies that the event type set comparison
+// detects silent loss when candidate passes the minimum assertion check
+// but is missing event types present in the baseline.
+func TestEventTypeSetSilentLoss(t *testing.T) {
+	baseline := fakeruntime.New()
+	baseline.Events = []runtime.Event{
+		{Type: runtime.EventType("reasoning.delta"), Content: "thinking"},
+		{Type: runtime.EventType("answer.delta"), Content: "answer"},
+	}
+
+	candidate := fakeruntime.New()
+	// Candidate has answer.delta (passes RequireAnswer) but missing reasoning.delta.
+	// The minimum assertion (RequireAnswer) passes, but event type set comparison
+	// detects that candidate is missing reasoning.delta.
+	candidate.Events = []runtime.Event{
+		{Type: runtime.EventType("answer.delta"), Content: "answer"},
+	}
+
+	runner := Runner{Baseline: baseline, Candidate: candidate}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	result := runner.Run(ctx, Scenario{
+		Name:     "Prompt",
+		Required: true,
+		Prompt: &runtime.PromptRequest{
+			Agent: "general",
+			Parts: []runtime.PromptPart{runtime.TextPart{Text: "test"}},
+		},
+		// Only RequireAnswer — candidate passes this minimum check,
+		// but event type set comparison should still detect missing reasoning.delta.
+		Assertions: Assertion{RequireAnswer: true},
+	})
+
+	if result.Passed {
+		t.Error("should fail: candidate missing reasoning.delta event type present in baseline")
+	}
+	if !result.SilentLoss {
+		t.Error("should detect silent loss via event type set comparison")
+	}
+}
+
 func TestRunnerApprovalOnce(t *testing.T) {
 	once := runtime.ApprovalOnce
 

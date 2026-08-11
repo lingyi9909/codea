@@ -33,8 +33,8 @@ type Scenario struct {
 // in FAIL.
 func V1RequiredScenarios() []Scenario {
 	return []Scenario{
-		{Name: "Health", Required: true, RepeatCount: 1},
-		{Name: "CreateSession", Required: true, RepeatCount: 1},
+		{Name: "Health", Required: true, RepeatCount: 2},
+		{Name: "CreateSession", Required: true, RepeatCount: 2},
 		{Name: "Prompt", Required: true, RepeatCount: 2, Prompt: &runtime.PromptRequest{
 			Agent: "general",
 			Parts: []runtime.PromptPart{runtime.TextPart{Text: "hello"}},
@@ -63,7 +63,7 @@ func V1RequiredScenarios() []Scenario {
 			Agent: "general",
 			Parts: []runtime.PromptPart{runtime.TextPart{Text: "reject test"}},
 		}, Assertions: Assertion{RequireApproval: true}, ApprovalDecision: &approvalReject},
-		{Name: "Cancel", Required: true, RepeatCount: 1},
+		{Name: "Cancel", Required: true, RepeatCount: 2},
 		{Name: "AgentSelection", Required: true, RepeatCount: 2, Prompt: &runtime.PromptRequest{
 			Agent: "reviewer",
 			Parts: []runtime.PromptPart{runtime.TextPart{Text: "review"}},

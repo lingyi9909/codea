@@ -3,6 +3,7 @@ package opencode
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -62,6 +63,38 @@ func (c *SSEClient) Subscribe(ctx context.Context) (<-chan SSERawEvent, error) {
 	return ch, nil
 }
 
+// runtimeErrorEvent builds a properly structured runtime_error SSE event
+// using the payload envelope format that MapEvent expects.
+type runtimeErrorEvent struct {
+	Directory string              `json:"directory"`
+	Payload   runtimeErrorPayload `json:"payload"`
+}
+
+type runtimeErrorPayload struct {
+	Type       string                  `json:"type"`
+	Properties runtimeErrorProperties `json:"properties"`
+}
+
+type runtimeErrorProperties struct {
+	Error string `json:"error"`
+	Code  string `json:"code"`
+}
+
+func newRuntimeErrorEvent(errMsg, code string) []byte {
+	evt := runtimeErrorEvent{
+		Directory: "",
+		Payload: runtimeErrorPayload{
+			Type: "runtime_error",
+			Properties: runtimeErrorProperties{
+				Error: errMsg,
+				Code:  code,
+			},
+		},
+	}
+	data, _ := json.Marshal(evt)
+	return data
+}
+
 func (c *SSEClient) readLoop(ctx context.Context, resp *http.Response, ch chan SSERawEvent) {
 	defer resp.Body.Close()
 	defer close(ch)
@@ -108,7 +141,7 @@ func (c *SSEClient) readLoop(ctx context.Context, resp *http.Response, ch chan S
 		seq++
 		select {
 		case ch <- SSERawEvent{
-			Data:     []byte(fmt.Sprintf(`{"type":"runtime_error","error":"%s"}`, scanner.Err().Error())),
+			Data:     newRuntimeErrorEvent(scanner.Err().Error(), "SCANNER_ERROR"),
 			Sequence: seq,
 		}:
 		case <-ctx.Done():
@@ -120,7 +153,7 @@ func (c *SSEClient) readLoop(ctx context.Context, resp *http.Response, ch chan S
 		seq++
 		select {
 		case ch <- SSERawEvent{
-			Data:     []byte(fmt.Sprintf(`{"type":"runtime_error","error":"truncated stream: incomplete event","partial":"%s"}`, strings.Join(dataLines, "\n"))),
+			Data:     newRuntimeErrorEvent("truncated stream: incomplete event", "TRUNCATED_STREAM"),
 			Sequence: seq,
 		}:
 		case <-ctx.Done():

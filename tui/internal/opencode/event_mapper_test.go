@@ -383,6 +383,43 @@ func TestEventMapperExtractsContentFromDelta(t *testing.T) {
 	}
 }
 
+func TestEventMapperRuntimeError(t *testing.T) {
+	raw := `{"directory":"","payload":{"type":"runtime_error","properties":{"error":"scanner error: connection reset","code":"SCANNER_ERROR"}}}`
+	event, err := MapEvent([]byte(raw), 1)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if event.Type != CodeaEventRuntimeError {
+		t.Fatalf("expected runtime.error, got %q", event.Type)
+	}
+	if event.Error == nil {
+		t.Fatal("expected Error to be non-nil for runtime_error")
+	}
+	if event.Error.Code != "SCANNER_ERROR" {
+		t.Fatalf("expected Error.Code=SCANNER_ERROR, got %q", event.Error.Code)
+	}
+	if event.Error.Message != "scanner error: connection reset" {
+		t.Fatalf("expected Error.Message='scanner error: connection reset', got %q", event.Error.Message)
+	}
+}
+
+func TestEventMapperRuntimeErrorDefaultCode(t *testing.T) {
+	raw := `{"directory":"","payload":{"type":"runtime_error","properties":{"error":"something failed"}}}`
+	event, err := MapEvent([]byte(raw), 1)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if event.Error == nil {
+		t.Fatal("expected Error to be non-nil")
+	}
+	if event.Error.Code != string(CodeaEventRuntimeError) {
+		t.Fatalf("expected default Error.Code=runtime.error, got %q", event.Error.Code)
+	}
+	if event.Error.Message != "something failed" {
+		t.Fatalf("expected Error.Message='something failed', got %q", event.Error.Message)
+	}
+}
+
 func TestEventMapperPreservesRawJSON(t *testing.T) {
 	raw := []byte(`{"directory":"/tmp","payload":{"type":"session.status","properties":{"sessionID":"s1"}}}`)
 	event, err := MapEvent(raw, 1)

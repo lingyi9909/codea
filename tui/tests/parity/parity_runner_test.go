@@ -2,6 +2,9 @@ package parity_test
 
 import (
 	"context"
+	"encoding/json"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -94,6 +97,70 @@ func TestCapabilityCompareMissingRequired(t *testing.T) {
 	if !result.HasRequiredFailures() {
 		t.Error("should detect missing required capabilities")
 	}
+}
+
+// TestRealRuntimeEvidence performs a smoke test against a running OpenCode
+// server and records the result as an evidence artifact. When the runtime is not
+// configured, the test produces a skip artifact explaining what is needed.
+func TestRealRuntimeEvidence(t *testing.T) {
+	evidenceDir := filepath.Join("evidence")
+	endpoint := os.Getenv("OPENCODE_ENDPOINT")
+
+	result := struct {
+		Timestamp string `json:"timestamp"`
+		Endpoint  string `json:"endpoint"`
+		Available bool   `json:"available"`
+		Healthy   bool   `json:"healthy,omitempty"`
+		Version   string `json:"version,omitempty"`
+		Error     string `json:"error,omitempty"`
+		Skip      bool   `json:"skip,omitempty"`
+	}{
+		Timestamp: time.Now().UTC().Format(time.RFC3339),
+	}
+
+	if endpoint == "" {
+		endpoint = os.Getenv("OPENCODE_SERVER_URL")
+	}
+	if endpoint == "" {
+		endpoint = "http://127.0.0.1:4141"
+	}
+	result.Endpoint = endpoint
+
+	username := os.Getenv("OPENCODE_SERVER_USERNAME")
+	password := os.Getenv("OPENCODE_SERVER_PASSWORD")
+
+	adapter := opencode.NewOpenCodeAdapter(endpoint, username, password)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	info, err := adapter.Health(ctx)
+	if err != nil {
+		result.Skip = true
+		result.Error = err.Error()
+		result.Available = false
+
+		_ = os.MkdirAll(evidenceDir, 0o755)
+		data, _ := json.MarshalIndent(result, "", "  ")
+		_ = os.WriteFile(filepath.Join(evidenceDir, "runtime-evidence.json"), data, 0o644)
+
+		t.Skipf("real runtime not available at %s: %v — evidence artifact written to %s",
+			endpoint, err, filepath.Join(evidenceDir, "runtime-evidence.json"))
+	}
+
+	result.Available = true
+	result.Healthy = info.Healthy
+	result.Version = info.Version
+
+	_ = os.MkdirAll(evidenceDir, 0o755)
+	data, _ := json.MarshalIndent(result, "", "  ")
+	_ = os.WriteFile(filepath.Join(evidenceDir, "runtime-evidence.json"), data, 0o644)
+
+	if !info.Healthy {
+		t.Errorf("real runtime at %s reports unhealthy: version=%s", endpoint, info.Version)
+	}
+
+	t.Logf("real runtime evidence: healthy=%v version=%s (artifact: %s)",
+		info.Healthy, info.Version, filepath.Join(evidenceDir, "runtime-evidence.json"))
 }
 
 func TestParitySilentLossFailsRequired(t *testing.T) {

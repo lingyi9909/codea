@@ -154,6 +154,57 @@ func TestRunnerCancelParity(t *testing.T) {
 	}
 }
 
+func TestRunnerBothHealthFail(t *testing.T) {
+	baseline := fakeruntime.New()
+	baseline.HealthError = fakeruntime.ErrSimulated
+	candidate := fakeruntime.New()
+	candidate.HealthError = fakeruntime.ErrSimulated
+
+	runner := Runner{Baseline: baseline, Candidate: candidate}
+	ctx := context.Background()
+
+	result := runner.Run(ctx, Scenario{Name: "Health", Required: true})
+	if result.Passed {
+		t.Error("both sides failing Health must NOT pass")
+	}
+	if len(result.Failures) == 0 {
+		t.Error("should have failure reason")
+	}
+}
+
+func TestRunnerBothCreateSessionFail(t *testing.T) {
+	baseline := fakeruntime.New()
+	baseline.SessionErr = fakeruntime.ErrSimulated
+	candidate := fakeruntime.New()
+	candidate.SessionErr = fakeruntime.ErrSimulated
+
+	runner := Runner{Baseline: baseline, Candidate: candidate}
+	ctx := context.Background()
+
+	result := runner.Run(ctx, Scenario{Name: "CreateSession", Required: true})
+	if result.Passed {
+		t.Error("both sides failing CreateSession must NOT pass")
+	}
+}
+
+func TestRunnerBothCancelFail(t *testing.T) {
+	baseline := fakeruntime.New()
+	baseline.CancelError = fakeruntime.ErrSimulated
+	candidate := fakeruntime.New()
+	candidate.CancelError = fakeruntime.ErrSimulated
+
+	runner := Runner{Baseline: baseline, Candidate: candidate}
+	ctx := context.Background()
+
+	result := runner.Run(ctx, Scenario{Name: "Cancel", Required: true})
+	if result.Passed {
+		t.Error("both sides failing Cancel must NOT pass")
+	}
+	if len(result.Failures) == 0 {
+		t.Error("should have failure reason")
+	}
+}
+
 func TestRunnerRunAll(t *testing.T) {
 	baseline := fakeruntime.New()
 	baseline.HealthInfo = runtime.HealthInfo{Healthy: true}
