@@ -8,8 +8,8 @@ current:
   status: awaiting_acceptance
   nextAction: 等待人工验收；验收通过后开始 Task 3
 checkpoint:
-  commit: 871110ae346b27d8629769d5a3bb9f14a7373f73
-  updatedAt: "2026-08-09T12:00:00Z"
+  commit: e47205ce7548376c612f884f5a2450d759a94f01
+  updatedAt: "2026-08-11T12:00:00Z"
 verification:
   status: pass
   commands:
