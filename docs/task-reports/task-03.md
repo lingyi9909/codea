@@ -98,11 +98,11 @@ Runner 通过 AgentRuntime + Codea Event 执行 Scenario，对比 Baseline/Candi
 | 包 | 测试数 |
 |---|--------|
 | `internal/capability` | 14 |
-| `internal/parity` | 26 |
+| `internal/parity` | 27 |
 | `tests/parity` | 4 |
 | `tests/fixtures/fake-runtime` | 11 |
 | `tests/architecture` | 1 |
-| **总计** | **56** |
+| **总计** | **57** |
 
 ## 验证结果
 
