@@ -289,6 +289,11 @@ func TestReconnectingClientTransportErrorRetry(t *testing.T) {
 }
 
 func TestBackoffCounterResetAfterSuccess(t *testing.T) {
+	// Verify that after a successful connection (events received), the backoff
+	// counter resets to 500ms. Without reset, each reconnect cycle would take
+	// progressively longer, resulting in fewer reconnects within a fixed window.
+	// We assert at least 5 reconnect cycles in 6s, only possible if backoff resets.
+
 	var connects atomic.Int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		connects.Add(1)
@@ -302,13 +307,12 @@ func TestBackoffCounterResetAfterSuccess(t *testing.T) {
 			fmt.Fprintf(w, "data: {\"type\":\"answer.delta\",\"properties\":{\"content\":\"msg%d\"}}\n\n", i)
 			flusher.Flush()
 		}
-		// Server closes after 3 events, triggering reconnect.
 	}))
 	defer srv.Close()
 
 	c := NewSSEClient(srv.URL, "", "")
 	rc := NewReconnectingSSEClient(c)
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	ch, err := rc.Subscribe(ctx)
@@ -316,20 +320,31 @@ func TestBackoffCounterResetAfterSuccess(t *testing.T) {
 		t.Fatalf("Subscribe: %v", err)
 	}
 
-	eventCount := 0
-	timeout := time.After(12 * time.Second)
+	var cycles int
+	deadline := time.After(6 * time.Second)
+loop:
 	for {
 		select {
 		case ev, ok := <-ch:
 			if !ok {
-				t.Logf("total events: %d, connects: %d", eventCount, connects.Load())
-				return
+				break loop
 			}
-			eventCount++
-			_ = ev
-		case <-timeout:
+			if IsSSEDisconnect(ev) {
+				cycles++
+			}
+		case <-deadline:
 			cancel()
+			for range ch {
+			}
+			break loop
 		}
+	}
+
+	n := connects.Load()
+	t.Logf("reconnect cycles: %d, connections: %d", cycles, n)
+
+	if cycles < 5 {
+		t.Errorf("expected at least 5 reconnect cycles in 6s (backoff not resetting?), got %d", cycles)
 	}
 }
 

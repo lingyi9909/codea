@@ -255,28 +255,34 @@ func TestAdapterBackpressureBoundedChannel(t *testing.T) {
 	// Slow consumer: 5ms delay between reads ensures the channel fills up
 	// and backpressure propagates.
 	var received int
+	var backpressureCount int
 	timeout := time.After(5 * time.Second)
 loop:
 	for {
 		select {
-		case _, ok := <-ch:
+		case ev, ok := <-ch:
 			if !ok {
 				break loop
 			}
 			received++
+			if ev.Type == CodeaEventRuntimeError && ev.Error != nil &&
+				ev.Error.Kind == runtime.RuntimeErrorBackpressure {
+				backpressureCount++
+			}
 			time.Sleep(5 * time.Millisecond)
 		case <-timeout:
 			cancel()
-			// Drain remaining.
 			for range ch {
 			}
 			break loop
 		}
 	}
 
-	// All sent events should be received (no silent drops).
 	if received < 20 {
 		t.Errorf("received only %d events, expected at least 20 (no silent drops)", received)
 	}
-	t.Logf("received %d events with slow consumer", received)
+	if backpressureCount == 0 {
+		t.Error("expected at least one RuntimeError(Backpressure) event when channel is full")
+	}
+	t.Logf("received %d events, %d backpressure errors with slow consumer", received, backpressureCount)
 }

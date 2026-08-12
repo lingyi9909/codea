@@ -9,7 +9,6 @@ import (
 // OpenCodeAdapter implements runtime.AgentRuntime using the OpenCode HTTP/SSE vendor client.
 type OpenCodeAdapter struct {
 	httpClient *HTTPClient
-	sseClient  *SSEClient
 	reconnect  *ReconnectingSSEClient
 	tracker    *SessionTracker
 }
@@ -18,7 +17,6 @@ type OpenCodeAdapter struct {
 func NewOpenCodeAdapter(baseURL, username, password string) *OpenCodeAdapter {
 	return &OpenCodeAdapter{
 		httpClient: NewHTTPClient(baseURL, username, password),
-		sseClient:  NewSSEClient(baseURL, username, password),
 		reconnect:  NewReconnectingSSEClient(NewSSEClient(baseURL, username, password)),
 		tracker:    NewSessionTracker(),
 	}
@@ -99,8 +97,25 @@ func sendRuntimeEvent(ctx context.Context, ch chan<- runtime.Event, ev runtime.E
 	select {
 	case ch <- ev:
 		return true
-	case <-ctx.Done():
-		return false
+	default:
+		// Channel full — block-send Backpressure error, then original event.
+		// Blocking the backpressure event guarantees it is delivered before
+		// the stalled event, giving consumers visibility into backpressure.
+		bpEvent := runtime.Event{
+			Type:  CodeaEventRuntimeError,
+			Error: runtime.NewBackpressureError("EventChannel", "channel full, backpressure applied", nil),
+		}
+		select {
+		case ch <- bpEvent:
+		case <-ctx.Done():
+			return false
+		}
+		select {
+		case ch <- ev:
+			return true
+		case <-ctx.Done():
+			return false
+		}
 	}
 }
 

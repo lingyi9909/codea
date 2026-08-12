@@ -20,6 +20,7 @@ verification:
     - cd tui && GOOS=windows GOARCH=amd64 GOTOOLCHAIN=local go build ./cmd/codea ./cmd/parity-runner
     - ./scripts/check-runtime-boundary.sh
     - ./scripts/check-execution-state.sh
+    - ./scripts/check-opencode-available.sh
     - tests/execution-state/state_validator_test.sh
   errorSummary: null
   recoveryAdvice: null

@@ -92,7 +92,20 @@ All gates pass:
 - Windows cross-build — clean
 - `check-runtime-boundary.sh` — PASS
 - `check-execution-state.sh` — valid state
+- `check-opencode-available.sh` — OpenCode available
 - `state_validator_test.sh` — valid
+
+## Spec Review Fixes (2026-08-12)
+
+Post-implementation review against the 10-section acceptance criteria:
+
+1. **Backpressure — explicit RuntimeError(Backpressure)**: `sendRuntimeEvent` now detects channel-full via non-blocking send, block-sends a `RuntimeError(Backpressure)` event before blocking on the original event. Zero silent drops preserved. Test verifies backpressure error events are emitted.
+
+2. **Duplicate SSEClient**: Removed unused `sseClient` field from `OpenCodeAdapter` struct. Only the `ReconnectingSSEClient` instance is needed.
+
+3. **Contract test OpenCode gate**: Added `scripts/check-opencode-available.sh` (exit 0 = available, exit 2 = unavailable). When OpenCode is unavailable, verification should be `unable_to_run` per spec. Added to verification command list.
+
+4. **Test semantics — backoff reset**: `TestBackoffCounterResetAfterSuccess` now verifies that backoff resets to 500ms after each successful connection by asserting at least 5 reconnect cycles within a 6-second window. Without reset, accumulated backoff (500ms → 1s → 2s → 5s) would prevent this.
 
 ## Test Summary
 
@@ -118,3 +131,4 @@ All gates pass:
 | `tui/internal/opencode/adapter_test.go` | Modify |
 | `tui/internal/opencode/http_client.go` | Modify |
 | `tui/tests/contract/runtime_recovery_test.go` | Create |
+| `scripts/check-opencode-available.sh` | Create |
