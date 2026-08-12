@@ -226,7 +226,13 @@ func (r *Runner) runPrompt(ctx context.Context, s Scenario, sr *ScenarioResult) 
 		}
 
 		bAgent, bHas := bRec.LastPrompt()
-		if bHas && bAgent != s.Assertions.RequireAgent {
+		if !bHas {
+			sr.Failures = append(sr.Failures, Failure{
+				Reason: "baseline PromptRecorder has no recorded prompt — cannot verify agent",
+			})
+			return
+		}
+		if bAgent != s.Assertions.RequireAgent {
 			sr.Failures = append(sr.Failures, Failure{
 				Reason: fmt.Sprintf("baseline agent mismatch: expected %q, runtime received %q",
 					s.Assertions.RequireAgent, bAgent),
@@ -234,7 +240,14 @@ func (r *Runner) runPrompt(ctx context.Context, s Scenario, sr *ScenarioResult) 
 			return
 		}
 		cAgent, cHas := cRec.LastPrompt()
-		if cHas && cAgent != s.Assertions.RequireAgent {
+		if !cHas {
+			sr.SilentLoss = true
+			sr.Failures = append(sr.Failures, Failure{
+				Reason: "candidate PromptRecorder has no recorded prompt — cannot verify agent",
+			})
+			return
+		}
+		if cAgent != s.Assertions.RequireAgent {
 			sr.SilentLoss = true
 			sr.Failures = append(sr.Failures, Failure{
 				Reason: fmt.Sprintf("silent loss — candidate agent mismatch: expected %q, runtime received %q",

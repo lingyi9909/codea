@@ -332,6 +332,53 @@ func TestRunnerAgentSelectionRequiresPromptRecorder(t *testing.T) {
 // noRecRuntime wraps an AgentRuntime but does NOT implement PromptRecorder.
 type noRecRuntime struct{ runtime.AgentRuntime }
 
+// emptyRecRuntime implements PromptRecorder but LastPrompt returns ok=false,
+// simulating a runtime whose prompt recording is broken or empty.
+type emptyRecRuntime struct{ runtime.AgentRuntime }
+
+func (e *emptyRecRuntime) LastPrompt() (string, bool) { return "", false }
+
+func TestRunnerAgentSelectionEmptyPromptRecorder(t *testing.T) {
+	// Regression: when PromptRecorder is implemented but LastPrompt() returns
+	// ok=false (no prompt recorded), the assertion must FAIL — not silently
+	// fall through. This catches the path where a runtime claims observability
+	// but cannot actually provide evidence.
+	baseline := fakeruntime.New()
+	baseline.Events = []runtime.Event{
+		{Type: runtime.EventType("answer.delta"), Content: "ok"},
+		{Type: runtime.EventType("step.finished")},
+	}
+	candidate := fakeruntime.New()
+	candidate.Events = []runtime.Event{
+		{Type: runtime.EventType("answer.delta"), Content: "ok"},
+		{Type: runtime.EventType("step.finished")},
+	}
+
+	// Wrap candidate in emptyRecRuntime: PromptRecorder is satisfied, but
+	// LastPrompt() returns ("", false) — no observable evidence.
+	runner := Runner{Baseline: baseline, Candidate: &emptyRecRuntime{AgentRuntime: candidate}}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	result := runner.Run(ctx, Scenario{
+		Name:     "AgentSelection",
+		Required: true,
+		Prompt: &runtime.PromptRequest{
+			Agent: "reviewer",
+			Parts: []runtime.PromptPart{runtime.TextPart{Text: "review"}},
+		},
+		Assertions: Assertion{RequireAnswer: true, RequireAgent: "reviewer"},
+	})
+
+	if result.Passed {
+		t.Error("agent selection must FAIL when PromptRecorder has no recorded prompt")
+	}
+	if !result.SilentLoss {
+		t.Error("candidate with empty prompt record should trigger SilentLoss")
+	}
+	t.Logf("failures: %v", result.Failures)
+}
+
 func TestRunnerSlowFirstEventSucceeds(t *testing.T) {
 	// Regression: the inactivity timer must not start until the first event
 	// arrives. A runtime whose first event takes >inactivityFallback (500ms)
