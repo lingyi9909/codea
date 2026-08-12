@@ -8,7 +8,7 @@ current:
   status: awaiting_acceptance
   nextAction: Step 6 — Real OpenCode Long-running Smoke + Full Gate
 checkpoint:
-  commit: 392b26c7f3044a3a2c5326555538080b9a8ebb71
+  commit: 1423a7396484ad2f2946606bb52d5f029e6020d9
   updatedAt: "2026-08-12T00:00:00Z"
 verification:
   status: pass
@@ -35,7 +35,7 @@ tasks:
   "2": {status: completed, completedSteps: [1, 2, 3, 4, 5], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: 174bb2997aa206736775c54a31f6de8ee82261f9, report: docs/task-reports/task-02.md}
   "2A": {status: completed, completedSteps: [1, 2, 3, 4, 5, 6], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: 871110ae346b27d8629769d5a3bb9f14a7373f73, report: docs/task-reports/task-02A.md}
   "3": {status: completed, completedSteps: [1, 2, 3, 4, 5, 6], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: 7ad89af4978faa5e49f8fac24f42b6c1115df460, report: docs/task-reports/task-03.md}
-  "4": {status: awaiting_acceptance, completedSteps: [1, 2, 3, 4, 5, 6], verificationStatus: pass, taskGateStatus: pass, humanAccepted: false, checkpoint: 392b26c7f3044a3a2c5326555538080b9a8ebb71, report: docs/task-reports/task-04.md}
+  "4": {status: awaiting_acceptance, completedSteps: [1, 2, 3, 4, 5, 6], verificationStatus: pass, taskGateStatus: pass, humanAccepted: false, checkpoint: 1423a7396484ad2f2946606bb52d5f029e6020d9, report: docs/task-reports/task-04.md}
   "5": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-05.md}
   "6": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-06.md}
   "7": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-07.md}
