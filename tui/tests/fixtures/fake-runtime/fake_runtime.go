@@ -182,6 +182,17 @@ func (f *FakeRuntime) Prompts() []PromptRecord {
 	return out
 }
 
+// LastPrompt returns the agent of the most recent prompt call, satisfying
+// the parity.PromptRecorder interface.
+func (f *FakeRuntime) LastPrompt() (agent string, ok bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if len(f.prompts) == 0 {
+		return "", false
+	}
+	return f.prompts[len(f.prompts)-1].Request.Agent, true
+}
+
 // Approvals returns all recorded ReplyApproval calls.
 func (f *FakeRuntime) Approvals() []ApprovalRecord {
 	f.mu.Lock()

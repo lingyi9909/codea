@@ -6,7 +6,7 @@
 
 **Date:** 2026-08-11
 
-**Checkpoint:** `213704503784f6120943b8dd957d6e9176e0c8af`
+**Checkpoint:** `59852bfe4544aed6de6bd88b1503d100c3fdc15c`
 
 ## 完成内容
 
@@ -72,6 +72,21 @@ Runner 通过 AgentRuntime + Codea Event 执行 Scenario，对比 Baseline/Candi
 5. **Approval/Reject 驱动 ReplyApproval**：`Scenario.ApprovalDecision` 字段，`collectEvents()` 在事件循环中拦截 `approval.requested` 并调用 `ReplyApproval`。Approval 场景 → `ApprovalOnce`；Reject 场景 → `ApprovalReject`。新增 `TestRunnerApprovalOnce` 和 `TestRunnerApprovalReject` 验证 FakeRuntime 记录到正确的 Decision
 6. **AgentRuntime.Capabilities() 通过接口调用**：集成测试实例化真实 `OpenCodeAdapter`，通过 `var rt runtime.AgentRuntime = adapter` 调用 `rt.Capabilities()`，而非调用包级 helper 函数
 
+### 第三轮（commit `f45bc95`）
+
+7. **6 项阻断修复**：语义断言域载荷验证（Approval/Tool）、AgentSelection 断言、事件类型集 SilentLoss 检测、Approval/Reject ReplyApproval 调用记录、executeOnce 失败累积修复
+
+### 第四轮（commit `59852bf`）
+
+8. **SilentLoss 语义指纹**：`eventFingerprint` + `compareFingerprints()` 比较事件类型计数、answer/reasoning 字符数、tool/approval/raw 事件数、step.finished 完成条件和类型集覆盖。同数不同义场景（answer.delta ×10 vs ×1）可被计数比较捕获
+9. **可配置超时**：`defaultTimeout = 30s`（场景可配置），`inactivityFallback = 500ms`，移除硬编码 200ms。`step.finished/step.failed` 自然完成优先
+10. **SSE 截断保留**：`TRUNCATED_STREAM` 事件含 `Partial`（16KB 内）和 `OriginalSize`，记录截断及原始字节数
+11. **真实 Runtime Evidence**：`TestRealRuntimeEvidence` 覆盖 Health、CreateSession、SSE Subscribe、Prompt、Cancel、ListAgents、Approval；Runtime 不可达时 `t.Skipf`（记录 evidence 但不阻断 suite）；有模型时验证 ApprovalOnce/Reject 完整流程
+
+### 第五轮（本次）
+
+12. **AgentSelection 去自证**：移除 `s.Prompt.Agent != s.Assertions.RequireAgent` 循环比较，改为通过 `PromptRecorder` 接口从 FakeRuntime 记录的实 际 Prompt 中提取 Agent 字段验证。新增 `TestRunnerAgentSelectionVerified` 和 `TestRunnerAgentSelectionMismatch` 确认 runner 检查的是 Runtime 实际接收值而非场景自引用
+
 ## 完整文件变更
 
 | 文件 | 状态 | 步骤 |
@@ -85,10 +100,13 @@ Runner 通过 AgentRuntime + Codea Event 执行 Scenario，对比 Baseline/Candi
 | `tui/internal/parity/scenario.go` | 新增 | Step 4 |
 | `tui/internal/parity/result.go` | 新增 | Step 4 |
 | `tui/internal/parity/scenario_test.go` | 新增 | Step 4 |
-| `tui/internal/parity/runner.go` | 新增+修改 | Step 5 + Fixes |
-| `tui/internal/parity/runner_test.go` | 新增+修改 | Step 5 + Fix 2 |
-| `tui/internal/parity/assertion_test.go` | 新增 | Fix 1/2/5 |
-| `tui/tests/parity/parity_runner_test.go` | 新增+修改 | Step 6 + Fix 3/6 |
+| `tui/internal/parity/runner.go` | 新增+修改 | Step 5 + Fix 8/9/12 |
+| `tui/internal/parity/runner_test.go` | 新增+修改 | Step 5 + Fix 2/12 |
+| `tui/internal/parity/assertion_test.go` | 新增 | Fix 1/2/5/7 |
+| `tui/tests/parity/parity_runner_test.go` | 新增+修改 | Step 6 + Fix 3/6/11 |
+| `tui/tests/fixtures/fake-runtime/fake_runtime.go` | 新增+修改 | Step 3 + Fix 12 |
+| `tui/internal/opencode/sse_client.go` | 修改 | Fix 10 |
+| `tui/tests/contract/real_opencode_smoke_test.go` | 新增 | Fix 11 |
 | `tui/tests/architecture/vendor_boundary_test.go` | 修改 | Fix |
 | `scripts/check-runtime-boundary.sh` | 修改 | Fix |
 | `docs/execution-state.yaml` | 修改 | — |
@@ -98,17 +116,17 @@ Runner 通过 AgentRuntime + Codea Event 执行 Scenario，对比 Baseline/Candi
 | 包 | 测试数 |
 |---|--------|
 | `internal/capability` | 14 |
-| `internal/parity` | 27 |
-| `tests/parity` | 4 |
+| `internal/parity` | 35 |
+| `tests/parity` | 5 |
 | `tests/fixtures/fake-runtime` | 11 |
 | `tests/architecture` | 1 |
-| **总计** | **57** |
+| **总计** | **66** |
 
 ## 验证结果
 
 | 命令 | 结果 |
 |------|------|
-| `go test ./internal/capability/... ./internal/parity/... ./tests/parity/... ./tests/fixtures/fake-runtime/... ./tests/architecture/... -count=1` | PASS（56 测试） |
+| `go test ./internal/capability/... ./internal/parity/... ./tests/parity/... ./tests/fixtures/fake-runtime/... ./tests/architecture/... -count=1` | PASS（65 通过，1 Skip） |
 | `go test -race ./... -count=1` | PASS（全部包，零竞态） |
 | `go vet ./...` | PASS |
 | `go build ./...` | PASS |
@@ -154,6 +172,13 @@ result := inv.Compare(caps)
 - **Approval 场景**：收到 `approval.requested` → `ReplyApproval(ApprovalOnce)` → 验证 FakeRuntime 记录到 ApprovalOnce
 - **Reject 场景**：收到 `approval.requested` → `ReplyApproval(ApprovalReject)` → 验证 FakeRuntime 记录到 ApprovalReject
 - 通过 `TestRunnerApprovalOnce` 和 `TestRunnerApprovalReject` 端到端验证
+
+## AgentSelection 验证
+
+- **PromptRecorder 接口**：定义 `LastPrompt() (agent string, ok bool)` 方法，FakeRuntime 实现该接口返回实际记录的 Prompt Agent
+- **Runner 验证**：`runPrompt()` 通过类型断言检查 Baseline/Candidate 是否实现 `PromptRecorder`，若实现则从 Runtime 实际记录的 Prompt 中提取 Agent 与 `RequireAgent` 比较
+- **去自证**：不再比较 `s.Prompt.Agent != s.Assertions.RequireAgent`（场景自己引用自己），改为检查 Runtime 可观察证据
+- 通过 `TestRunnerAgentSelectionVerified` 和 `TestRunnerAgentSelectionMismatch` 验证
 
 ## SilentLoss 检测
 

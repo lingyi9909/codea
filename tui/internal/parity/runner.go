@@ -10,6 +10,14 @@ import (
 	"codea/tui/internal/runtime"
 )
 
+// PromptRecorder is an optional interface that AgentRuntime implementations
+// may satisfy to expose the actual prompt request received. Parity scenarios
+// use this to verify agent selection through observable evidence rather than
+// self-referential scenario assertion.
+type PromptRecorder interface {
+	LastPrompt() (agent string, ok bool)
+}
+
 // Runner executes parity scenarios against Baseline and Candidate
 // AgentRuntime implementations and compares the results.
 type Runner struct {
@@ -194,15 +202,30 @@ func (r *Runner) runPrompt(ctx context.Context, s Scenario, sr *ScenarioResult) 
 		return
 	}
 
-	// Verify agent through the actual request sent to the runtime.
-	// The Prompt.Agent field in the request is what the runtime receives.
-	if s.Assertions.RequireAgent != "" && s.Prompt != nil {
-		if s.Prompt.Agent != s.Assertions.RequireAgent {
-			sr.Failures = append(sr.Failures, Failure{
-				Reason: fmt.Sprintf("agent mismatch: expected %q, got %q",
-					s.Assertions.RequireAgent, s.Prompt.Agent),
-			})
-			return
+	// Verify agent through the actual request received by each runtime.
+	// PromptRecorder lets FakeRuntime expose what was actually sent, turning
+	// the assertion from self-referential into observable evidence.
+	if s.Assertions.RequireAgent != "" {
+		if rec, ok := r.Baseline.(PromptRecorder); ok {
+			agent, ok2 := rec.LastPrompt()
+			if ok2 && agent != s.Assertions.RequireAgent {
+				sr.Failures = append(sr.Failures, Failure{
+					Reason: fmt.Sprintf("baseline agent mismatch: expected %q, runtime received %q",
+						s.Assertions.RequireAgent, agent),
+				})
+				return
+			}
+		}
+		if rec, ok := r.Candidate.(PromptRecorder); ok {
+			agent, ok2 := rec.LastPrompt()
+			if ok2 && agent != s.Assertions.RequireAgent {
+				sr.SilentLoss = true
+				sr.Failures = append(sr.Failures, Failure{
+					Reason: fmt.Sprintf("silent loss — candidate agent mismatch: expected %q, runtime received %q",
+						s.Assertions.RequireAgent, agent),
+				})
+				return
+			}
 		}
 	}
 

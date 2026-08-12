@@ -187,6 +187,101 @@ func TestRunnerBothCreateSessionFail(t *testing.T) {
 	}
 }
 
+func TestRunnerAgentSelectionVerified(t *testing.T) {
+	// The runner must check the runtime's recorded prompt — not the scenario's
+	// own Prompt.Agent field — to verify that the required agent was actually
+	// delivered to and received by the runtime.
+	baseline := fakeruntime.New()
+	baseline.Events = []runtime.Event{
+		{Type: runtime.EventType("answer.delta"), Content: "review"},
+		{Type: runtime.EventType("step.finished")},
+	}
+	candidate := fakeruntime.New()
+	candidate.Events = []runtime.Event{
+		{Type: runtime.EventType("answer.delta"), Content: "review"},
+		{Type: runtime.EventType("step.finished")},
+	}
+
+	runner := Runner{Baseline: baseline, Candidate: candidate}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	result := runner.Run(ctx, Scenario{
+		Name:     "AgentSelection",
+		Required: true,
+		Prompt: &runtime.PromptRequest{
+			Agent: "reviewer",
+			Parts: []runtime.PromptPart{runtime.TextPart{Text: "review"}},
+		},
+		Assertions: Assertion{RequireAnswer: true, RequireAgent: "reviewer"},
+	})
+
+	if !result.Passed {
+		t.Errorf("agent selection should pass when runtime receives correct agent, failures: %v", result.Failures)
+	}
+
+	// Verify the runtime actually received the agent in the request.
+	agent, ok := baseline.LastPrompt()
+	if !ok || agent != "reviewer" {
+		t.Errorf("baseline should have recorded agent=reviewer, got agent=%q ok=%v", agent, ok)
+	}
+	agent, ok = candidate.LastPrompt()
+	if !ok || agent != "reviewer" {
+		t.Errorf("candidate should have recorded agent=reviewer, got agent=%q ok=%v", agent, ok)
+	}
+}
+
+func TestRunnerAgentSelectionMismatch(t *testing.T) {
+	// When the scenario sends agent="general" but RequireAgent="reviewer",
+	// the runner checks what each runtime *actually received* (via
+	// PromptRecorder) and fails — not because the scenario disagrees with
+	// itself, but because the runtime-recorded agent differs from the
+	// required agent.
+	baseline := fakeruntime.New()
+	baseline.Events = []runtime.Event{
+		{Type: runtime.EventType("answer.delta"), Content: "ok"},
+		{Type: runtime.EventType("step.finished")},
+	}
+	candidate := fakeruntime.New()
+	candidate.Events = []runtime.Event{
+		{Type: runtime.EventType("answer.delta"), Content: "ok"},
+		{Type: runtime.EventType("step.finished")},
+	}
+
+	runner := Runner{Baseline: baseline, Candidate: candidate}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// Prompt.Agent is "general" but RequireAgent expects "reviewer".
+	// The old circular check compared s.Prompt.Agent == RequireAgent.
+	// The new check compares runtime-recorded agent == RequireAgent,
+	// so this correctly fails on the baseline (runtime received "general").
+	result := runner.Run(ctx, Scenario{
+		Name:     "AgentSelection",
+		Required: true,
+		Prompt: &runtime.PromptRequest{
+			Agent: "general",
+			Parts: []runtime.PromptPart{runtime.TextPart{Text: "review"}},
+		},
+		Assertions: Assertion{RequireAnswer: true, RequireAgent: "reviewer"},
+	})
+
+	if result.Passed {
+		t.Error("agent selection should fail when runtime receives wrong agent (general != reviewer)")
+	}
+
+	// Verify baseline recorded "general" — proving we're checking the
+	// runtime's actual received value, not the scenario's self-reference.
+	agent, ok := baseline.LastPrompt()
+	if !ok {
+		t.Error("baseline should have recorded a prompt")
+	}
+	if agent != "general" {
+		t.Errorf("baseline should have received agent=general, got %q", agent)
+	}
+	t.Logf("failures: %v", result.Failures)
+}
+
 func TestRunnerBothCancelFail(t *testing.T) {
 	baseline := fakeruntime.New()
 	baseline.CancelError = fakeruntime.ErrSimulated
