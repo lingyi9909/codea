@@ -10,6 +10,8 @@ import (
 type OpenCodeAdapter struct {
 	httpClient *HTTPClient
 	sseClient  *SSEClient
+	reconnect  *ReconnectingSSEClient
+	tracker    *SessionTracker
 }
 
 // NewOpenCodeAdapter creates an adapter backed by an OpenCode server at baseURL.
@@ -17,6 +19,8 @@ func NewOpenCodeAdapter(baseURL, username, password string) *OpenCodeAdapter {
 	return &OpenCodeAdapter{
 		httpClient: NewHTTPClient(baseURL, username, password),
 		sseClient:  NewSSEClient(baseURL, username, password),
+		reconnect:  NewReconnectingSSEClient(NewSSEClient(baseURL, username, password)),
+		tracker:    NewSessionTracker(),
 	}
 }
 
@@ -49,7 +53,7 @@ func (a *OpenCodeAdapter) Prompt(ctx context.Context, sessionID runtime.SessionI
 }
 
 func (a *OpenCodeAdapter) Subscribe(ctx context.Context) (<-chan runtime.Event, error) {
-	rawCh, err := a.sseClient.Subscribe(ctx)
+	rawCh, err := a.reconnect.Subscribe(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -57,24 +61,47 @@ func (a *OpenCodeAdapter) Subscribe(ctx context.Context) (<-chan runtime.Event, 
 	ch := make(chan runtime.Event, 16)
 	go func() {
 		defer close(ch)
+		recovering := false
 		for raw := range rawCh {
-			event, err := MapEvent(raw.Data, raw.Sequence)
-			if err != nil {
-				event = runtime.Event{
-					Type:     "_unparseable_",
-					Sequence: raw.Sequence,
-					Raw:      raw.Data,
+			if IsSSEDisconnect(raw) {
+				recovering = true
+				ev, _ := MapEvent(raw.Data, raw.Sequence)
+				a.tracker.Record(ev)
+				if !sendRuntimeEvent(ctx, ch, ev) {
+					return
 				}
+				continue
 			}
-			select {
-			case ch <- event:
-			case <-ctx.Done():
+
+			// After reconnect, inject recovery compensation events.
+			if recovering {
+				for _, ev := range a.tracker.Recover(ctx, a.httpClient) {
+					a.tracker.Record(ev)
+					if !sendRuntimeEvent(ctx, ch, ev) {
+						return
+					}
+				}
+				recovering = false
+			}
+
+			ev, _ := MapEvent(raw.Data, raw.Sequence)
+			a.tracker.Record(ev)
+			if !sendRuntimeEvent(ctx, ch, ev) {
 				return
 			}
 		}
 	}()
 
 	return ch, nil
+}
+
+func sendRuntimeEvent(ctx context.Context, ch chan<- runtime.Event, ev runtime.Event) bool {
+	select {
+	case ch <- ev:
+		return true
+	case <-ctx.Done():
+		return false
+	}
 }
 
 func (a *OpenCodeAdapter) ReplyApproval(ctx context.Context, approvalID runtime.ApprovalID, reply runtime.ApprovalReply) error {

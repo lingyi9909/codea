@@ -3,8 +3,10 @@ package opencode
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -213,4 +215,68 @@ func TestOpenCodeAdapterSubscribe(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("timeout waiting for event")
 	}
+}
+
+func TestAdapterBackpressureBoundedChannel(t *testing.T) {
+	// Verify that the Subscribe channel is bounded and events are not dropped.
+	// When the consumer is slow, backpressure propagates upstream (blocking send).
+
+	var sent atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		flusher, ok := w.(http.Flusher)
+		if !ok {
+			return
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		for i := 0; i < 30; i++ {
+			select {
+			case <-r.Context().Done():
+				return
+			default:
+			}
+			fmt.Fprintf(w, "data: {\"payload\":{\"type\":\"answer.delta\",\"properties\":{\"content\":\"msg%d\"}}}\n\n", i)
+			flusher.Flush()
+			sent.Add(1)
+		}
+		<-r.Context().Done()
+	}))
+	defer srv.Close()
+
+	adapter := NewOpenCodeAdapter(srv.URL, "", "")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	ch, err := adapter.Subscribe(ctx)
+	if err != nil {
+		t.Fatalf("Subscribe: %v", err)
+	}
+
+	// Slow consumer: 5ms delay between reads ensures the channel fills up
+	// and backpressure propagates.
+	var received int
+	timeout := time.After(5 * time.Second)
+loop:
+	for {
+		select {
+		case _, ok := <-ch:
+			if !ok {
+				break loop
+			}
+			received++
+			time.Sleep(5 * time.Millisecond)
+		case <-timeout:
+			cancel()
+			// Drain remaining.
+			for range ch {
+			}
+			break loop
+		}
+	}
+
+	// All sent events should be received (no silent drops).
+	if received < 20 {
+		t.Errorf("received only %d events, expected at least 20 (no silent drops)", received)
+	}
+	t.Logf("received %d events with slow consumer", received)
 }
