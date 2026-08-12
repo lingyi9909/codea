@@ -254,8 +254,10 @@ func extractError(event *runtime.Event, props *sseCommonProps) {
 			_ = json.Unmarshal(props.Error, &msg)
 		}
 		event.Error = &runtime.RuntimeError{
-			Code:    code,
-			Message: msg,
+			Kind:      runtime.RuntimeErrorProtocol,
+			Operation: "EventMap",
+			Code:      code,
+			Message:   msg,
 		}
 		// Preserve partial content from truncated events as Raw.
 		if props.Partial != "" {
@@ -274,8 +276,10 @@ func extractError(event *runtime.Event, props *sseCommonProps) {
 		var msg string
 		if err := json.Unmarshal(props.Error, &msg); err == nil {
 			event.Error = &runtime.RuntimeError{
-				Code:    string(CodeaEventSessionError),
-				Message: msg,
+				Kind:      runtime.RuntimeErrorProtocol,
+				Operation: "EventMap",
+				Code:      string(CodeaEventSessionError),
+				Message:   msg,
 			}
 			return
 		}
@@ -285,15 +289,19 @@ func extractError(event *runtime.Event, props *sseCommonProps) {
 				var inner sseErrorInner
 				if err := json.Unmarshal(ed.Data, &inner); err == nil && inner.Message != "" {
 					event.Error = &runtime.RuntimeError{
-						Code:    ed.Name,
-						Message: inner.Message,
+						Kind:      runtime.RuntimeErrorProtocol,
+						Operation: "EventMap",
+						Code:      ed.Name,
+						Message:   inner.Message,
 					}
 					return
 				}
 			}
 			event.Error = &runtime.RuntimeError{
-				Code:    ed.Name,
-				Message: string(props.Error),
+				Kind:      runtime.RuntimeErrorProtocol,
+				Operation: "EventMap",
+				Code:      ed.Name,
+				Message:   string(props.Error),
 			}
 		}
 
@@ -304,8 +312,10 @@ func extractError(event *runtime.Event, props *sseCommonProps) {
 		var msg string
 		if err := json.Unmarshal(props.Error, &msg); err == nil {
 			event.Error = &runtime.RuntimeError{
-				Code:    string(CodeaEventSessionError),
-				Message: msg,
+				Kind:      runtime.RuntimeErrorProtocol,
+				Operation: "EventMap",
+				Code:      string(CodeaEventSessionError),
+				Message:   msg,
 			}
 		}
 	}

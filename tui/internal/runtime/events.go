@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"encoding/json"
+	"fmt"
 	"time"
 )
 
@@ -42,10 +43,41 @@ type ApprovalRequest struct {
 	Permission string
 }
 
-// RuntimeError carries Runtime-level error information.
+// RuntimeErrorKind classifies a RuntimeError for application-level handling.
+type RuntimeErrorKind string
+
+const (
+	RuntimeErrorTransport    RuntimeErrorKind = "transport"
+	RuntimeErrorAuth         RuntimeErrorKind = "auth"
+	RuntimeErrorProtocol     RuntimeErrorKind = "protocol"
+	RuntimeErrorIncompatible RuntimeErrorKind = "incompatible"
+	RuntimeErrorRecovery     RuntimeErrorKind = "recovery"
+	RuntimeErrorBackpressure RuntimeErrorKind = "backpressure"
+	RuntimeErrorCancelled    RuntimeErrorKind = "cancelled"
+)
+
+// RuntimeError carries Runtime-level error information with classification.
 type RuntimeError struct {
-	Code    string
-	Message string
+	Kind          RuntimeErrorKind `json:"kind"`
+	Operation     string           `json:"operation"`
+	Message       string           `json:"message"`
+	Code          string           `json:"code,omitempty"`
+	Retryable     bool             `json:"retryable"`
+	Cause         error            `json:"-"`
+	VendorDetails json.RawMessage  `json:"vendorDetails,omitempty"`
+}
+
+// Error implements the error interface.
+func (e *RuntimeError) Error() string {
+	if e.Cause != nil {
+		return fmt.Sprintf("[%s] %s: %s: %s", e.Kind, e.Operation, e.Message, e.Cause.Error())
+	}
+	return fmt.Sprintf("[%s] %s: %s", e.Kind, e.Operation, e.Message)
+}
+
+// Unwrap returns the underlying cause.
+func (e *RuntimeError) Unwrap() error {
+	return e.Cause
 }
 
 // Sensitivity controls how Raw event data is handled.
