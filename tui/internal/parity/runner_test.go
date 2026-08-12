@@ -2,6 +2,7 @@ package parity
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -280,6 +281,94 @@ func TestRunnerAgentSelectionMismatch(t *testing.T) {
 		t.Errorf("baseline should have received agent=general, got %q", agent)
 	}
 	t.Logf("failures: %v", result.Failures)
+}
+
+func TestRunnerAgentSelectionRequiresPromptRecorder(t *testing.T) {
+	// When RequireAgent is set but a runtime doesn't implement PromptRecorder,
+	// the assertion cannot be verified and must FAIL — not silently pass.
+	// We simulate this with a minimal runtime that wraps FakeRuntime.
+	baseline := fakeruntime.New()
+	baseline.Events = []runtime.Event{
+		{Type: runtime.EventType("answer.delta"), Content: "ok"},
+		{Type: runtime.EventType("step.finished")},
+	}
+	candidate := fakeruntime.New()
+	candidate.Events = []runtime.Event{
+		{Type: runtime.EventType("answer.delta"), Content: "ok"},
+		{Type: runtime.EventType("step.finished")},
+	}
+
+	// noRecRuntime wraps AgentRuntime but deliberately does NOT implement
+	// PromptRecorder, simulating a real adapter that lacks observability.
+	runner := Runner{Baseline: baseline, Candidate: &noRecRuntime{AgentRuntime: candidate}}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	result := runner.Run(ctx, Scenario{
+		Name:     "AgentSelection",
+		Required: true,
+		Prompt: &runtime.PromptRequest{
+			Agent: "reviewer",
+			Parts: []runtime.PromptPart{runtime.TextPart{Text: "review"}},
+		},
+		Assertions: Assertion{RequireAnswer: true, RequireAgent: "reviewer"},
+	})
+
+	if result.Passed {
+		t.Error("agent selection must FAIL when PromptRecorder is not implemented")
+	}
+	found := false
+	for _, f := range result.Failures {
+		if strings.Contains(f.Reason, "PromptRecorder") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("failure reason should mention PromptRecorder, got: %v", result.Failures)
+	}
+}
+
+// noRecRuntime wraps an AgentRuntime but does NOT implement PromptRecorder.
+type noRecRuntime struct{ runtime.AgentRuntime }
+
+func TestRunnerSlowFirstEventSucceeds(t *testing.T) {
+	// Regression: the inactivity timer must not start until the first event
+	// arrives. A runtime whose first event takes >inactivityFallback (500ms)
+	// must still succeed within the total deadline.
+	baseline := fakeruntime.New()
+	baseline.Events = []runtime.Event{
+		{Type: runtime.EventType("answer.delta"), Content: "hello"},
+		{Type: runtime.EventType("step.finished")},
+	}
+	candidate := fakeruntime.New()
+	candidate.EventDelay = 700 * time.Millisecond
+	candidate.Events = []runtime.Event{
+		{Type: runtime.EventType("answer.delta"), Content: "hello"},
+		{Type: runtime.EventType("step.finished")},
+	}
+
+	runner := Runner{Baseline: baseline, Candidate: candidate}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	result := runner.Run(ctx, Scenario{
+		Name:     "Streaming",
+		Required: true,
+		Timeout:  2 * time.Second,
+		Prompt: &runtime.PromptRequest{
+			Agent: "general",
+			Parts: []runtime.PromptPart{runtime.TextPart{Text: "test"}},
+		},
+		Assertions: Assertion{RequireAnswer: true},
+	})
+
+	if !result.Passed {
+		t.Errorf("slow first event (700ms) should still succeed within 2s timeout, failures: %v", result.Failures)
+	}
+	if result.SilentLoss {
+		t.Error("should not have silent loss")
+	}
 }
 
 func TestRunnerBothCancelFail(t *testing.T) {

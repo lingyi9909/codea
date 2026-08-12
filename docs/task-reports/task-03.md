@@ -81,11 +81,17 @@ Runner 通过 AgentRuntime + Codea Event 执行 Scenario，对比 Baseline/Candi
 8. **SilentLoss 语义指纹**：`eventFingerprint` + `compareFingerprints()` 比较事件类型计数、answer/reasoning 字符数、tool/approval/raw 事件数、step.finished 完成条件和类型集覆盖。同数不同义场景（answer.delta ×10 vs ×1）可被计数比较捕获
 9. **可配置超时**：`defaultTimeout = 30s`（场景可配置），`inactivityFallback = 500ms`，移除硬编码 200ms。`step.finished/step.failed` 自然完成优先
 10. **SSE 截断保留**：`TRUNCATED_STREAM` 事件含 `Partial`（16KB 内）和 `OriginalSize`，记录截断及原始字节数
-11. **真实 Runtime Evidence**：`TestRealRuntimeEvidence` 覆盖 Health、CreateSession、SSE Subscribe、Prompt、Cancel、ListAgents、Approval；Runtime 不可达时 `t.Skipf`（记录 evidence 但不阻断 suite）；有模型时验证 ApprovalOnce/Reject 完整流程
+11. **真实 Runtime Evidence**：`TestRealRuntimeEvidence` 覆盖 Health、CreateSession、SSE Subscribe、Prompt、Cancel、ListAgents、Approval（通过 `Capabilities().ToolApproval` 验证）；Runtime 不可达时 `t.Skipf`（记录 evidence 但不阻断 suite）；完整 ApprovalOnce/Reject 流程由 `tests/contract/real_opencode_smoke_test.go` 覆盖
 
 ### 第五轮（本次）
 
 12. **AgentSelection 去自证**：移除 `s.Prompt.Agent != s.Assertions.RequireAgent` 循环比较，改为通过 `PromptRecorder` 接口从 FakeRuntime 记录的实 际 Prompt 中提取 Agent 字段验证。新增 `TestRunnerAgentSelectionVerified` 和 `TestRunnerAgentSelectionMismatch` 确认 runner 检查的是 Runtime 实际接收值而非场景自引用
+
+### 第六轮（本次）
+
+13. **首事件超时修复**：inactivity timer 最初为 nil，首事件到达后才启动，避免真实 Runtime 首个事件超过 500ms 被误截断。新增 `FakeRuntime.EventDelay` 支持延迟注入。`TestRunnerSlowFirstEventSucceeds` 验证 700ms 延迟首事件在 2s 总超时内成功
+14. **AgentSelection 不可观察 FAIL**：`RequireAgent` 存在但任一 Runtime 未实现 `PromptRecorder` 时明确 FAIL，不得静默通过。新增 `TestRunnerAgentSelectionRequiresPromptRecorder` 和 `noRecRuntime` 测试包装器验证
+15. **报告修正**：Health/CreateSession/Cancel RepeatCount 修正为 2；`t.Skip` 声明修正为真实行为；Evidence 测试覆盖描述修正
 
 ## 完整文件变更
 
@@ -116,11 +122,11 @@ Runner 通过 AgentRuntime + Codea Event 执行 Scenario，对比 Baseline/Candi
 | 包 | 测试数 |
 |---|--------|
 | `internal/capability` | 14 |
-| `internal/parity` | 35 |
+| `internal/parity` | 37 |
 | `tests/parity` | 5 |
 | `tests/fixtures/fake-runtime` | 11 |
 | `tests/architecture` | 1 |
-| **总计** | **66** |
+| **总计** | **68** |
 
 ## 验证结果
 
@@ -152,8 +158,8 @@ result := inv.Compare(caps)
 
 | 场景 | Required | RepeatCount | Assertions | ApprovalDecision |
 |------|----------|-------------|-----------|-----------------|
-| Health | yes | 1 | — | — |
-| CreateSession | yes | 1 | — | — |
+| Health | yes | 2 | — | — |
+| CreateSession | yes | 2 | — | — |
 | Prompt | yes | 2 | RequireAnswer | — |
 | Streaming | yes | 2 | RequireAnswer | — |
 | Answer | yes | 2 | RequireAnswer | — |
@@ -161,11 +167,11 @@ result := inv.Compare(caps)
 | ToolLifecycle | yes | 2 | RequireTool | — |
 | Approval | yes | 2 | RequireApproval | ApprovalOnce |
 | Reject | yes | 2 | RequireApproval | ApprovalReject |
-| Cancel | yes | 1 | — | — |
+| Cancel | yes | 2 | — | — |
 | AgentSelection | yes | 2 | RequireAnswer + RequireAgent:"reviewer" | — |
 | RawEventHandling | yes | 2 | RequireRaw | — |
 
-全部 12 个 Required 场景通过，每个 Prompt 场景含 2 次重放（RepeatCount=2）。
+全部 12 个 Required 场景通过，每个场景含 2 次重放（RepeatCount=2）。
 
 ## Approval/Reject 流程
 
@@ -176,9 +182,9 @@ result := inv.Compare(caps)
 ## AgentSelection 验证
 
 - **PromptRecorder 接口**：定义 `LastPrompt() (agent string, ok bool)` 方法，FakeRuntime 实现该接口返回实际记录的 Prompt Agent
-- **Runner 验证**：`runPrompt()` 通过类型断言检查 Baseline/Candidate 是否实现 `PromptRecorder`，若实现则从 Runtime 实际记录的 Prompt 中提取 Agent 与 `RequireAgent` 比较
+- **Runner 验证**：`runPrompt()` 通过类型断言检查 Baseline/Candidate 是否实现 `PromptRecorder`。若任一 Runtime 未实现该接口且 `RequireAgent` 存在，场景直接 FAIL（Required 断言不得因缺乏可观察性而静默通过）。若双方均实现，则从 Runtime 实际记录的 Prompt 中提取 Agent 与 `RequireAgent` 比较
 - **去自证**：不再比较 `s.Prompt.Agent != s.Assertions.RequireAgent`（场景自己引用自己），改为检查 Runtime 可观察证据
-- 通过 `TestRunnerAgentSelectionVerified` 和 `TestRunnerAgentSelectionMismatch` 验证
+- 通过 `TestRunnerAgentSelectionVerified`、`TestRunnerAgentSelectionMismatch` 和 `TestRunnerAgentSelectionRequiresPromptRecorder` 验证
 
 ## SilentLoss 检测
 
@@ -192,7 +198,7 @@ result := inv.Compare(caps)
 - 不实现 SSE reconnect/recovery/history compensation/backpressure（属 Task 4）
 - 不引入 OpenCode DTO 到 capability/parity 包
 - Fake Runtime 输出 Codea Domain Event，不复制 OpenCode 协议
-- 不执行 `t.Skip`，不空实现，不伪造结果
+- Fake Runtime 不空实现、不伪造结果。真实 Runtime 证据测试在 OpenCode 不可达时 `t.Skipf`（写入 evidence 但不中断 suite）；完整 ApprovalOnce/Reject 流程由 `tests/contract/real_opencode_smoke_test.go` 覆盖
 
 ## Vendor Boundary Gate
 

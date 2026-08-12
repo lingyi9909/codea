@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"time"
 
 	"codea/tui/internal/runtime"
 )
@@ -38,6 +39,10 @@ type FakeRuntime struct {
 
 	// Events are sent to subscribers when Prompt is called.
 	Events []runtime.Event
+
+	// EventDelay, if > 0, makes Prompt sleep before publishing events.
+	// Use this to test timeout / inactivity behavior with slow runtimes.
+	EventDelay time.Duration
 
 	// CancelError, if set, is returned by Cancel.
 	CancelError error
@@ -93,6 +98,35 @@ func (f *FakeRuntime) CreateSession(ctx context.Context, req runtime.CreateSessi
 func (f *FakeRuntime) Prompt(ctx context.Context, sessionID runtime.SessionID, req runtime.PromptRequest) error {
 	f.mu.Lock()
 	f.prompts = append(f.prompts, PromptRecord{SessionID: sessionID, Request: req})
+	delay := f.EventDelay
+
+	if delay > 0 {
+		// Delayed publish: copy state, unlock, then sleep and send.
+		events := make([]runtime.Event, len(f.Events))
+		copy(events, f.Events)
+		subs := make(map[chan runtime.Event]context.Context, len(f.subscribers))
+		for ch, sctx := range f.subscribers {
+			subs[ch] = sctx
+		}
+		f.mu.Unlock()
+
+		select {
+		case <-time.After(delay):
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+
+		for _, ev := range events {
+			for ch, sctx := range subs {
+				select {
+				case ch <- ev:
+				case <-sctx.Done():
+				default:
+				}
+			}
+		}
+		return nil
+	}
 
 	for _, ev := range f.Events {
 		for ch, sctx := range f.subscribers {

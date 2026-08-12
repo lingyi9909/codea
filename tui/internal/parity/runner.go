@@ -205,27 +205,42 @@ func (r *Runner) runPrompt(ctx context.Context, s Scenario, sr *ScenarioResult) 
 	// Verify agent through the actual request received by each runtime.
 	// PromptRecorder lets FakeRuntime expose what was actually sent, turning
 	// the assertion from self-referential into observable evidence.
+	// When RequireAgent is set but a runtime doesn't implement PromptRecorder,
+	// the assertion cannot be verified and the scenario must FAIL — a required
+	// assertion must not silently pass due to insufficient observability.
 	if s.Assertions.RequireAgent != "" {
-		if rec, ok := r.Baseline.(PromptRecorder); ok {
-			agent, ok2 := rec.LastPrompt()
-			if ok2 && agent != s.Assertions.RequireAgent {
-				sr.Failures = append(sr.Failures, Failure{
-					Reason: fmt.Sprintf("baseline agent mismatch: expected %q, runtime received %q",
-						s.Assertions.RequireAgent, agent),
-				})
-				return
+		bRec, bOK := r.Baseline.(PromptRecorder)
+		cRec, cOK := r.Candidate.(PromptRecorder)
+		if !bOK || !cOK {
+			missing := []string{}
+			if !bOK {
+				missing = append(missing, "baseline")
 			}
+			if !cOK {
+				missing = append(missing, "candidate")
+			}
+			sr.Failures = append(sr.Failures, Failure{
+				Reason: fmt.Sprintf("agent assertion requires PromptRecorder but %s does not implement it", strings.Join(missing, " and ")),
+			})
+			return
 		}
-		if rec, ok := r.Candidate.(PromptRecorder); ok {
-			agent, ok2 := rec.LastPrompt()
-			if ok2 && agent != s.Assertions.RequireAgent {
-				sr.SilentLoss = true
-				sr.Failures = append(sr.Failures, Failure{
-					Reason: fmt.Sprintf("silent loss — candidate agent mismatch: expected %q, runtime received %q",
-						s.Assertions.RequireAgent, agent),
-				})
-				return
-			}
+
+		bAgent, bHas := bRec.LastPrompt()
+		if bHas && bAgent != s.Assertions.RequireAgent {
+			sr.Failures = append(sr.Failures, Failure{
+				Reason: fmt.Sprintf("baseline agent mismatch: expected %q, runtime received %q",
+					s.Assertions.RequireAgent, bAgent),
+			})
+			return
+		}
+		cAgent, cHas := cRec.LastPrompt()
+		if cHas && cAgent != s.Assertions.RequireAgent {
+			sr.SilentLoss = true
+			sr.Failures = append(sr.Failures, Failure{
+				Reason: fmt.Sprintf("silent loss — candidate agent mismatch: expected %q, runtime received %q",
+					s.Assertions.RequireAgent, cAgent),
+			})
+			return
 		}
 	}
 
@@ -438,7 +453,11 @@ func (r *Runner) collectEvents(ctx context.Context, rt runtime.AgentRuntime, req
 
 	var events []runtime.Event
 	deadline := time.After(timeout)
-	inactivity := time.After(inactivityFallback)
+
+	// Inactivity starts as nil — don't start the inactivity clock until the
+	// first event arrives. Otherwise a real runtime whose first event takes
+	// >500ms gets truncated before it ever produces output.
+	var inactivity <-chan time.Time
 
 	for {
 		select {
@@ -448,13 +467,13 @@ func (r *Runner) collectEvents(ctx context.Context, rt runtime.AgentRuntime, req
 			}
 			events = append(events, ev)
 
+			// Reset inactivity timer on each event after the first.
+			inactivity = time.After(inactivityFallback)
+
 			// Natural completion: step finished or failed.
 			if ev.Type == "step.finished" || ev.Type == "step.failed" {
 				return events, nil
 			}
-
-			// Reset inactivity timer on each event.
-			inactivity = time.After(inactivityFallback)
 
 			if approvalDecision != nil && ev.Type == "approval.requested" && ev.Approval != nil && ev.Approval.ID != "" {
 				if err := rt.ReplyApproval(ctx, runtime.ApprovalID(ev.Approval.ID), runtime.ApprovalReply{Decision: *approvalDecision}); err != nil {
