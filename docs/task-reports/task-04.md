@@ -2,7 +2,7 @@
 
 ## Overview
 
-Checkpoint: 1423a7396484ad2f2946606bb52d5f029e6020d9
+Checkpoint: d79a2e8d186655180de85bc455cfba7fce7f9569
 
 补齐生产级 SSE 恢复、状态补偿、错误分类、背压与真实 Runtime 长连接验证。
 
