@@ -223,6 +223,120 @@ func TestRecoverySkipsKnownMessages(t *testing.T) {
 	}
 }
 
+func TestRecoveryCompensatesMissingPart(t *testing.T) {
+	// Known message m1 with known part p1. History now has m1 with p1 + new p2.
+	// Recovery must emit a part.updated event for p2 only (not p1).
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if strings.Contains(r.URL.Path, "/session/status") {
+			json.NewEncoder(w).Encode(OpenCodeSessionsResponse{
+				Data: []OpenCodeSessionV2Info{
+					{ID: "s1", Time: OpenCodeSessionV2InfoTime{Created: 1000}},
+				},
+			})
+			return
+		}
+		if strings.Contains(r.URL.Path, "/message") {
+			json.NewEncoder(w).Encode(OpenCodeSessionMessagesResponse{
+				Data: []OpenCodeSessionMessage{
+					map[string]any{
+						"id":   "m1",
+						"type": "assistant",
+						"content": []map[string]any{
+							{"id": "part-1", "type": "text"},
+							{"id": "part-2", "type": "text"},
+						},
+					},
+				},
+			})
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer srv.Close()
+
+	client := NewHTTPClient(srv.URL, "", "")
+	tracker := NewSessionTracker()
+
+	// Pre-record: m1 is known, part-1 is known.
+	tracker.Record(runtime.Event{SessionID: "s1", MessageID: "m1", PartID: "part-1"})
+
+	events := tracker.Recover(context.Background(), client)
+
+	// Should have: session recovery + part compensation (part-2 only) + connected marker.
+	var partEvents []runtime.Event
+	for _, ev := range events {
+		if ev.Type == CodeaEventPartUpdated {
+			partEvents = append(partEvents, ev)
+		}
+	}
+	if len(partEvents) != 1 {
+		t.Fatalf("expected 1 part compensation event, got %d", len(partEvents))
+	}
+	if partEvents[0].PartID != "part-2" {
+		t.Errorf("expected part-2, got %s", partEvents[0].PartID)
+	}
+	if partEvents[0].Metadata["recovered"] != "true" {
+		t.Error("part compensation must have recovered=true metadata")
+	}
+
+	// Verify no duplicate part-1 events.
+	for _, ev := range partEvents {
+		if ev.PartID == "part-1" {
+			t.Error("part-1 should NOT be emitted (already known)")
+		}
+	}
+}
+
+func TestRecoveryDedupesKnownPart(t *testing.T) {
+	// Known m1 with known p1. History still has only m1/p1 — no new parts.
+	// Recovery must emit zero part events (no duplicates).
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if strings.Contains(r.URL.Path, "/session/status") {
+			json.NewEncoder(w).Encode(OpenCodeSessionsResponse{
+				Data: []OpenCodeSessionV2Info{
+					{ID: "s1", Time: OpenCodeSessionV2InfoTime{Created: 1000}},
+				},
+			})
+			return
+		}
+		if strings.Contains(r.URL.Path, "/message") {
+			json.NewEncoder(w).Encode(OpenCodeSessionMessagesResponse{
+				Data: []OpenCodeSessionMessage{
+					map[string]any{
+						"id":   "m1",
+						"type": "assistant",
+						"content": []map[string]any{
+							{"id": "part-1", "type": "text"},
+						},
+					},
+				},
+			})
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer srv.Close()
+
+	client := NewHTTPClient(srv.URL, "", "")
+	tracker := NewSessionTracker()
+
+	// Pre-record: m1 and part-1 are both known.
+	tracker.Record(runtime.Event{SessionID: "s1", MessageID: "m1", PartID: "part-1"})
+
+	events := tracker.Recover(context.Background(), client)
+
+	// Zero part compensation events.
+	for _, ev := range events {
+		if ev.Type == CodeaEventPartUpdated {
+			t.Errorf("unexpected part event for already-known part: %s", ev.PartID)
+		}
+	}
+}
+
 func TestRecoverySessionStatusError(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)

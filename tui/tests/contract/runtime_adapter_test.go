@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
-	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -15,16 +15,11 @@ import (
 )
 
 func TestAgentRuntimeContract(t *testing.T) {
-	var mu sync.Mutex
-	sessions := make(map[string]bool)
 	permissions := make(map[string]string)
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		mu.Lock()
-		defer mu.Unlock()
 
-		// Handle /permission/*/reply generically
 		if strings.HasPrefix(r.URL.Path, "/permission/") && strings.HasSuffix(r.URL.Path, "/reply") {
 			var req opencode.OpenCodePermissionReplyRequest
 			json.NewDecoder(r.Body).Decode(&req)
@@ -35,6 +30,9 @@ func TestAgentRuntimeContract(t *testing.T) {
 		}
 
 		switch r.URL.Path {
+		case "/session/status":
+			w.WriteHeader(http.StatusOK)
+			json.NewEncoder(w).Encode(opencode.OpenCodeSessionsResponse{Data: []opencode.OpenCodeSessionV2Info{}})
 		case "/global/health":
 			w.WriteHeader(http.StatusOK)
 			json.NewEncoder(w).Encode(map[string]any{"healthy": true, "version": "1.18.11"})
@@ -66,7 +64,6 @@ func TestAgentRuntimeContract(t *testing.T) {
 			<-r.Context().Done()
 
 		case "/session/ses_contract/abort":
-			delete(sessions, "ses_contract")
 			w.WriteHeader(http.StatusOK)
 			json.NewEncoder(w).Encode(true)
 
@@ -122,6 +119,10 @@ func TestAgentRuntimeContract(t *testing.T) {
 	}
 	eventCount := 0
 	for evt := range ch {
+		// Skip recovery/infra events injected by ReconnectHook (connected markers, recovery errors).
+		if evt.Type == opencode.CodeaEventRuntimeConnected || evt.Type == opencode.CodeaEventRuntimeError {
+			continue
+		}
 		if evt.Type == "" {
 			t.Fatal("event has empty Type")
 		}
@@ -176,3 +177,119 @@ func TestAgentRuntimeContract(t *testing.T) {
 		t.Fatalf("Capabilities: missing required capabilities")
 	}
 }
+
+func TestAgentRuntimeRecoveryContract(t *testing.T) {
+	var sseConnects atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+
+		// Recovery: return a session NOT present in the live SSE stream.
+		if r.URL.Path == "/session/status" {
+			w.WriteHeader(http.StatusOK)
+			json.NewEncoder(w).Encode(opencode.OpenCodeSessionsResponse{
+				Data: []opencode.OpenCodeSessionV2Info{
+					{
+						ID:    "recovered_session",
+						Title: "Recovered Session",
+						Time:  opencode.OpenCodeSessionV2InfoTime{Created: 1000},
+					},
+				},
+			})
+			return
+		}
+
+		// Recovery: return messages for the recovered session.
+		if strings.Contains(r.URL.Path, "/message") {
+			w.WriteHeader(http.StatusOK)
+			json.NewEncoder(w).Encode(opencode.OpenCodeSessionMessagesResponse{
+				Data: []opencode.OpenCodeSessionMessage{
+					map[string]any{
+						"id":   "recovered_msg",
+						"type": "assistant",
+						"content": []map[string]any{
+							{"id": "recovered_part", "type": "text"},
+						},
+					},
+				},
+			})
+			return
+		}
+
+		// Permission reply.
+		if strings.HasSuffix(r.URL.Path, "/reply") {
+			w.WriteHeader(http.StatusOK)
+			json.NewEncoder(w).Encode(true)
+			return
+		}
+
+		// SSE event stream.
+		if r.URL.Path == "/global/event" {
+			connNum := sseConnects.Add(1)
+			flusher, _ := w.(http.Flusher)
+			w.Header().Set("Content-Type", "text/event-stream")
+			w.WriteHeader(http.StatusOK)
+
+			if connNum == 1 {
+				// First connection: send live events including an approval
+				// request, then close to trigger disconnect + reconnect + recovery.
+				events := []string{
+					`{"directory":"/tmp","payload":{"type":"answer.delta","properties":{"sessionID":"live_session","content":"hello"}}}`,
+					`{"directory":"/tmp","payload":{"type":"permission.asked","properties":{"id":"perm_recovery","permission":"write","sessionID":"live_session"}}}`,
+				}
+				for _, evt := range events {
+					w.Write([]byte("data: " + evt + "\n\n"))
+					flusher.Flush()
+				}
+				// Close to simulate disconnect.
+				return
+			}
+
+			// Subsequent connections: keep alive so we can drain recovery events.
+			<-r.Context().Done()
+			return
+		}
+
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer srv.Close()
+
+	adapter := opencode.NewOpenCodeAdapter(srv.URL, "", "")
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	ch, err := adapter.Subscribe(ctx)
+	if err != nil {
+		t.Fatalf("Subscribe: %v", err)
+	}
+
+	var seenDisconnect, seenRecovery, seenApprovalReq bool
+	for ev := range ch {
+		switch {
+		case ev.Type == opencode.CodeaEventRuntimeError && ev.Error != nil &&
+			ev.Error.Code == "DISCONNECTED":
+			seenDisconnect = true
+		case ev.Type == opencode.CodeaEventSessionCreated &&
+			ev.Metadata["recovered"] == "true":
+			seenRecovery = true
+		case ev.Type == opencode.CodeaEventApprovalRequested:
+			seenApprovalReq = true
+		}
+
+		if seenDisconnect && seenRecovery && seenApprovalReq {
+			cancel()
+		}
+	}
+
+	if !seenDisconnect {
+		t.Error("did not observe disconnect event")
+	}
+	if !seenRecovery {
+		t.Error("did not observe recovery event (session.created with recovered=true)")
+	}
+	if !seenApprovalReq {
+		t.Error("did not observe approval.requested event")
+	}
+	t.Logf("disconnect=%v recovery=%v approval=%v", seenDisconnect, seenRecovery, seenApprovalReq)
+}
+

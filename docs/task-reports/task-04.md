@@ -95,6 +95,52 @@ All gates pass:
 - `check-opencode-available.sh` — OpenCode available
 - `state_validator_test.sh` — valid
 
+## Round 5 Review Fixes (2026-08-12) — 4 Blocking Issues
+
+### Blocking 1: Part-level Recovery (SilentLoss)
+
+- Modified `Recover()` in `recovery.go` to emit `part.updated` compensation events for
+  missing Parts on known Messages
+- Added `partRecoveryEvent()` function
+- Added tests: `TestRecoveryCompensatesMissingPart`, `TestRecoveryDedupesKnownPart`
+
+### Blocking 2: Recovery Timing
+
+- Moved recovery invocation to `ReconnectHook`, which fires immediately after SSE
+  connection success, before draining live events
+- Created recovery event wrapper (`recoveryEventWrapper` / `wrapRecoveryEvent` /
+  `unwrapRecoveryEvent`) to transport `runtime.Event` through the `SSERawEvent` channel
+- Added `MakeRecoveryHook` on `SessionTracker`
+- Updated `adapter.go` Subscribe to unwrap recovery events directly
+
+### Blocking 3: RuntimeError Propagation + 400/404 Fix
+
+- Added `HTTPError` struct type in `http_client.go` with StatusCode, Method, Path, Body
+- Modified `HTTPClient.do()` to return `*HTTPError` for non-expected status codes
+- Modified `SSEClient.Subscribe()` to return `*HTTPError` for non-200 responses
+- Added `classifyError()` in `adapter.go`: context.Canceled→Cancelled, 401/403→Auth,
+  5xx→Transport, 4xx→Protocol, network→Transport
+- All 7 AgentRuntime API methods now wrap errors via `classifyError`
+- Updated `extractHTTPStatus()` in `reconnect.go` to use `errors.As` for `*HTTPError`
+- Updated `IsRetryableHTTP()` to classify all 4xx as non-retryable
+- Auth errors (401/403) now emit AUTH_ERROR event before closing channel (no more silent drops)
+- Added `runtimeErrorKindFromCode()` in `event_mapper.go` to map SSE error codes to
+  RuntimeErrorKind (AUTH_ERROR→Auth, DISCONNECTED/CONNECT_FAILED/SCANNER_ERROR→Transport)
+- Tests added: `TestSSE400NoRetry`, `TestSSE404NoRetry`, `TestReconnectingClient401EmitsAuthEvent`,
+  `TestSSE401EmitsAuthRuntimeError`, `TestHTTPAdapterTransportErrorClassification`,
+  `TestHTTPAdapterCancelledClassification`, `TestHTTPAdapterProtocolErrorClassification`
+
+### Blocking 4: Contract Test Actually Verifies Recovery
+
+- Added `TestAgentRuntimeRecoveryContract` — forces SSE disconnect, provides recovery data
+  via `/session/status` + `/session/:id/message`, asserts `seenDisconnect && seenRecovery &&
+  seenApprovalReq` all true
+
+### Same-round Fixes
+
+- Backpressure test precision: verifies exactly 30 domain events + backpressure errors > 0
+- `nextAction` in execution-state.yaml: updated to "等待人工验收"
+
 ## Spec Review Fixes (2026-08-12)
 
 Post-implementation review against the 10-section acceptance criteria:

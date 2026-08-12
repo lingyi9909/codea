@@ -12,6 +12,18 @@ import (
 	"time"
 )
 
+// HTTPError carries a typed HTTP error with status code for classification.
+type HTTPError struct {
+	StatusCode int
+	Method     string
+	Path       string
+	Body       []byte
+}
+
+func (e *HTTPError) Error() string {
+	return fmt.Sprintf("%s %s returned HTTP %d: %s", e.Method, e.Path, e.StatusCode, strings.TrimSpace(string(e.Body)))
+}
+
 type HTTPClient struct {
 	baseURL  string
 	username string
@@ -187,5 +199,10 @@ func (client *HTTPClient) do(req *http.Request, expectedStatus ...int) (*http.Re
 	}
 	defer resp.Body.Close()
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, 64*1024))
-	return nil, fmt.Errorf("%s %s returned HTTP %d: %s", req.Method, req.URL.Path, resp.StatusCode, strings.TrimSpace(string(body)))
+	return nil, &HTTPError{
+		StatusCode: resp.StatusCode,
+		Method:     req.Method,
+		Path:       req.URL.Path,
+		Body:       body,
+	}
 }

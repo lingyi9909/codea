@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -55,7 +54,12 @@ func (c *SSEClient) Subscribe(ctx context.Context) (<-chan SSERawEvent, error) {
 	if resp.StatusCode != http.StatusOK {
 		defer resp.Body.Close()
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 64*1024))
-		return nil, fmt.Errorf("SSE subscribe returned HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+		return nil, &HTTPError{
+			StatusCode: resp.StatusCode,
+			Method:     http.MethodGet,
+			Path:       "/global/event",
+			Body:       body,
+		}
 	}
 
 	ch := make(chan SSERawEvent, 16)

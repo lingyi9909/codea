@@ -3,6 +3,7 @@ package opencode
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"sync"
 	"time"
 
@@ -112,10 +113,19 @@ func (t *SessionTracker) Recover(ctx context.Context, client *HTTPClient) []runt
 			if !s.messages[msgID] {
 				s.messages[msgID] = true
 				events = append(events, messageRecoveryEvent(t.nextSeq(), info.ID, msgID, rawMsg))
-			}
-			for _, pid := range partIDs {
-				if !s.parts[pid] {
-					s.parts[pid] = true
+				// New message — record all parts without emitting individual events.
+				for _, pid := range partIDs {
+					if !s.parts[pid] {
+						s.parts[pid] = true
+					}
+				}
+			} else {
+				// Known message — emit compensation for each missing part.
+				for _, pid := range partIDs {
+					if !s.parts[pid] {
+						s.parts[pid] = true
+						events = append(events, partRecoveryEvent(t.nextSeq(), info.ID, msgID, pid, rawMsg))
+					}
 				}
 			}
 		}
@@ -200,5 +210,55 @@ func messageRecoveryEvent(seq int64, sessionID, messageID string, raw any) runti
 		MessageID: messageID,
 		Metadata:  map[string]string{"recovered": "true"},
 		Raw:       rawJSON,
+	}
+}
+
+func partRecoveryEvent(seq int64, sessionID, messageID, partID string, raw any) runtime.Event {
+	rawJSON, _ := json.Marshal(raw)
+	return runtime.Event{
+		Type:      CodeaEventPartUpdated,
+		Sequence:  seq,
+		SessionID: sessionID,
+		MessageID: messageID,
+		PartID:    partID,
+		Metadata:  map[string]string{"recovered": "true"},
+		Raw:       rawJSON,
+	}
+}
+
+// recoveryEventWrapper marks an SSERawEvent as a synthetic recovery event so the
+// adapter can unwrap it directly without going through MapEvent.
+type recoveryEventWrapper struct {
+	CodeaRecovery bool         `json:"__codea_recovery"`
+	Event         runtime.Event `json:"event"`
+}
+
+func wrapRecoveryEvent(ev runtime.Event) ([]byte, error) {
+	return json.Marshal(recoveryEventWrapper{CodeaRecovery: true, Event: ev})
+}
+
+func unwrapRecoveryEvent(data []byte) (runtime.Event, bool) {
+	var w recoveryEventWrapper
+	if err := json.Unmarshal(data, &w); err != nil || !w.CodeaRecovery {
+		return runtime.Event{}, false
+	}
+	return w.Event, true
+}
+
+// MakeRecoveryHook returns a ReconnectHook that runs SessionTracker.Recover
+// and converts the resulting runtime.Events to SSERawEvent for injection into
+// the reconnected SSE stream.
+func (t *SessionTracker) MakeRecoveryHook(client *HTTPClient) ReconnectHook {
+	return func(ctx context.Context) ([]SSERawEvent, error) {
+		events := t.Recover(ctx, client)
+		raw := make([]SSERawEvent, 0, len(events))
+		for _, ev := range events {
+			data, err := wrapRecoveryEvent(ev)
+			if err != nil {
+				return nil, fmt.Errorf("wrap recovery event: %w", err)
+			}
+			raw = append(raw, SSERawEvent{Data: data})
+		}
+		return raw, nil
 	}
 }

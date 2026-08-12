@@ -41,6 +41,8 @@ func TestIsRetryableHTTP(t *testing.T) {
 		{"transport error", 0, fmt.Errorf("connection refused"), true},
 		{"500", http.StatusInternalServerError, nil, true},
 		{"503", http.StatusServiceUnavailable, nil, true},
+		{"400", http.StatusBadRequest, nil, false},
+		{"404", http.StatusNotFound, nil, false},
 		{"401", http.StatusUnauthorized, nil, false},
 		{"403", http.StatusForbidden, nil, false},
 		{"200 OK", http.StatusOK, nil, false},
@@ -408,5 +410,114 @@ func TestDisconnectEventSequence(t *testing.T) {
 	}
 	if len(disconnectSeqs) == 0 {
 		t.Error("expected at least one disconnect event")
+	}
+}
+
+func TestSSE400NoRetry(t *testing.T) {
+	var connects atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		connects.Add(1)
+		w.WriteHeader(http.StatusBadRequest)
+	}))
+	defer srv.Close()
+
+	c := NewSSEClient(srv.URL, "", "")
+	rc := NewReconnectingSSEClient(c)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	ch, err := rc.Subscribe(ctx)
+	if err != nil {
+		t.Fatalf("Subscribe: %v", err)
+	}
+
+	deadline := time.After(3 * time.Second)
+	for {
+		select {
+		case _, ok := <-ch:
+			if !ok {
+				if connects.Load() > 1 {
+					t.Errorf("expected exactly 1 connect for 400, got %d", connects.Load())
+				}
+				return
+			}
+		case <-deadline:
+			t.Fatal("channel did not close within 3s for 400")
+		}
+	}
+}
+
+func TestSSE404NoRetry(t *testing.T) {
+	var connects atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		connects.Add(1)
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer srv.Close()
+
+	c := NewSSEClient(srv.URL, "", "")
+	rc := NewReconnectingSSEClient(c)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	ch, err := rc.Subscribe(ctx)
+	if err != nil {
+		t.Fatalf("Subscribe: %v", err)
+	}
+
+	deadline := time.After(3 * time.Second)
+	for {
+		select {
+		case _, ok := <-ch:
+			if !ok {
+				if connects.Load() > 1 {
+					t.Errorf("expected exactly 1 connect for 404, got %d", connects.Load())
+				}
+				return
+			}
+		case <-deadline:
+			t.Fatal("channel did not close within 3s for 404")
+		}
+	}
+}
+
+func TestReconnectingClient401EmitsAuthEvent(t *testing.T) {
+	var connects atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		connects.Add(1)
+		w.WriteHeader(http.StatusUnauthorized)
+	}))
+	defer srv.Close()
+
+	c := NewSSEClient(srv.URL, "", "")
+	rc := NewReconnectingSSEClient(c)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	ch, err := rc.Subscribe(ctx)
+	if err != nil {
+		t.Fatalf("Subscribe: %v", err)
+	}
+
+	var sawAuth bool
+	deadline := time.After(3 * time.Second)
+	for {
+		select {
+		case ev, ok := <-ch:
+			if !ok {
+				if !sawAuth {
+					t.Error("expected auth error event before channel close on 401")
+				}
+				if connects.Load() > 1 {
+					t.Errorf("expected exactly 1 connect, got %d", connects.Load())
+				}
+				return
+			}
+			if strings.Contains(string(ev.Data), "AUTH_ERROR") {
+				sawAuth = true
+			}
+		case <-deadline:
+			t.Fatal("channel did not close within 3s for 401")
+		}
 	}
 }

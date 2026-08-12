@@ -3,6 +3,7 @@ package opencode
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -175,6 +176,13 @@ func TestOpenCodeAdapterListAgents(t *testing.T) {
 
 func TestOpenCodeAdapterSubscribe(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Handle recovery API calls (triggered by ReconnectHook).
+		if r.URL.Path == "/session/status" {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			json.NewEncoder(w).Encode(OpenCodeSessionsResponse{Data: []OpenCodeSessionV2Info{}})
+			return
+		}
 		if r.Method != http.MethodGet || r.URL.Path != "/global/event" {
 			t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
 			w.WriteHeader(http.StatusNotFound)
@@ -201,19 +209,36 @@ func TestOpenCodeAdapterSubscribe(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
+	// Drain recovery marker events injected by ReconnectHook.
+	var evt runtime.Event
 	select {
-	case evt, ok := <-ch:
+	case e, ok := <-ch:
 		if !ok {
 			t.Fatal("channel closed unexpectedly")
 		}
-		if evt.Type != "session.status" {
-			t.Fatalf("expected type session.status, got %q", evt.Type)
-		}
-		if evt.SessionID != "s1" {
-			t.Fatalf("expected SessionID=s1, got %q", evt.SessionID)
-		}
+		evt = e
 	case <-time.After(time.Second):
 		t.Fatal("timeout waiting for event")
+	}
+
+	// If first event is the recovery-connected marker, read next.
+	if evt.Type == CodeaEventRuntimeConnected && evt.Metadata["recovered"] == "true" {
+		select {
+		case e, ok := <-ch:
+			if !ok {
+				t.Fatal("channel closed before receiving session.status")
+			}
+			evt = e
+		case <-time.After(time.Second):
+			t.Fatal("timeout waiting for session.status after recovery marker")
+		}
+	}
+
+	if evt.Type != "session.status" {
+		t.Fatalf("expected type session.status, got %q", evt.Type)
+	}
+	if evt.SessionID != "s1" {
+		t.Fatalf("expected SessionID=s1, got %q", evt.SessionID)
 	}
 }
 
@@ -223,6 +248,12 @@ func TestAdapterBackpressureBoundedChannel(t *testing.T) {
 
 	var sent atomic.Int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/session/status" {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			json.NewEncoder(w).Encode(OpenCodeSessionsResponse{Data: []OpenCodeSessionV2Info{}})
+			return
+		}
 		flusher, ok := w.(http.Flusher)
 		if !ok {
 			return
@@ -254,8 +285,8 @@ func TestAdapterBackpressureBoundedChannel(t *testing.T) {
 
 	// Slow consumer: 5ms delay between reads ensures the channel fills up
 	// and backpressure propagates.
-	var received int
-	var backpressureCount int
+	var domainEvents int
+	var backpressureErrors int
 	timeout := time.After(5 * time.Second)
 loop:
 	for {
@@ -264,11 +295,17 @@ loop:
 			if !ok {
 				break loop
 			}
-			received++
-			if ev.Type == CodeaEventRuntimeError && ev.Error != nil &&
-				ev.Error.Kind == runtime.RuntimeErrorBackpressure {
-				backpressureCount++
+			// Skip recovery/infra events.
+			if ev.Type == CodeaEventRuntimeConnected {
+				continue
 			}
+			if ev.Type == CodeaEventRuntimeError {
+				if ev.Error != nil && ev.Error.Kind == runtime.RuntimeErrorBackpressure {
+					backpressureErrors++
+				}
+				continue
+			}
+			domainEvents++
 			time.Sleep(5 * time.Millisecond)
 		case <-timeout:
 			cancel()
@@ -278,11 +315,105 @@ loop:
 		}
 	}
 
-	if received < 20 {
-		t.Errorf("received only %d events, expected at least 20 (no silent drops)", received)
+	if domainEvents != 30 {
+		t.Errorf("expected exactly 30 domain events, got %d (no silent drops)", domainEvents)
 	}
-	if backpressureCount == 0 {
+	if backpressureErrors == 0 {
 		t.Error("expected at least one RuntimeError(Backpressure) event when channel is full")
 	}
-	t.Logf("received %d events, %d backpressure errors with slow consumer", received, backpressureCount)
+	t.Logf("domain events: %d, backpressure errors: %d", domainEvents, backpressureErrors)
+}
+
+func TestSSE401EmitsAuthRuntimeError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+	}))
+	defer srv.Close()
+
+	adapter := NewOpenCodeAdapter(srv.URL, "", "")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	ch, err := adapter.Subscribe(ctx)
+	if err != nil {
+		t.Fatalf("Subscribe: %v", err)
+	}
+
+	var sawAuth bool
+	deadline := time.After(3 * time.Second)
+	for {
+		select {
+		case ev, ok := <-ch:
+			if !ok {
+				if !sawAuth {
+					t.Error("expected auth RuntimeError event before channel close on 401")
+				}
+				return
+			}
+			if ev.Type == CodeaEventRuntimeError && ev.Error != nil && ev.Error.Kind == runtime.RuntimeErrorAuth {
+				sawAuth = true
+			}
+		case <-deadline:
+			t.Fatal("channel did not close within 3s for 401")
+		}
+	}
+}
+
+func TestHTTPAdapterTransportErrorClassification(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+
+	adapter := NewOpenCodeAdapter(srv.URL, "", "")
+	_, err := adapter.Health(context.Background())
+	if err == nil {
+		t.Fatal("expected error for HTTP 500")
+	}
+	if !runtime.IsTransport(err) {
+		t.Fatalf("expected Transport error, got %v (kind: %v)", err, runtimeErrorKind(err))
+	}
+}
+
+func TestHTTPAdapterCancelledClassification(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		<-r.Context().Done()
+	}))
+	defer srv.Close()
+
+	adapter := NewOpenCodeAdapter(srv.URL, "", "")
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, err := adapter.Health(ctx)
+	if err == nil {
+		t.Fatal("expected error for cancelled context")
+	}
+	if !runtime.IsCancelled(err) {
+		t.Fatalf("expected Cancelled error, got %v (kind: %v)", err, runtimeErrorKind(err))
+	}
+}
+
+func TestHTTPAdapterProtocolErrorClassification(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+	}))
+	defer srv.Close()
+
+	adapter := NewOpenCodeAdapter(srv.URL, "", "")
+	_, err := adapter.Health(context.Background())
+	if err == nil {
+		t.Fatal("expected error for HTTP 400")
+	}
+	if !runtime.IsProtocol(err) {
+		t.Fatalf("expected Protocol error, got %v (kind: %v)", err, runtimeErrorKind(err))
+	}
+}
+
+func runtimeErrorKind(err error) string {
+	var r *runtime.RuntimeError
+	if errors.As(err, &r) {
+		return string(r.Kind)
+	}
+	return "none"
 }

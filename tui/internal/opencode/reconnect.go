@@ -2,6 +2,7 @@ package opencode
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -25,13 +26,18 @@ func Backoff(attempt int) time.Duration {
 
 // IsRetryableHTTP reports whether an HTTP error from Subscribe is retryable.
 // 401/403 are not retryable without credential changes.
+// 4xx client errors are protocol errors and not retryable.
 // 5xx and transport errors (err != nil with no HTTP status) are retryable.
-// When err != nil and statusCode is non-zero (extracted from error string),
-// the HTTP status takes precedence.
+// Non-HTTP transport errors are retryable.
 func IsRetryableHTTP(statusCode int, err error) bool {
 	if statusCode == http.StatusUnauthorized || statusCode == http.StatusForbidden {
 		return false
 	}
+	// Client errors (4xx) are protocol errors — not retryable.
+	if statusCode >= 400 && statusCode < 500 {
+		return false
+	}
+	// Transport-level error (no HTTP status) — retryable.
 	if err != nil && statusCode == 0 {
 		return true
 	}
@@ -91,6 +97,15 @@ func (r *ReconnectingSSEClient) Subscribe(ctx context.Context) (<-chan SSERawEve
 				}
 				status := extractHTTPStatus(err)
 				if !IsRetryableHTTP(status, err) {
+					// Emit Auth RuntimeError for 401/403 before closing.
+					if status == http.StatusUnauthorized || status == http.StatusForbidden {
+						seq++
+						ev := SSERawEvent{
+							Data:     newRuntimeErrorEvent(err.Error(), "AUTH_ERROR"),
+							Sequence: seq,
+						}
+						sendEvent(ctx, ch, ev)
+					}
 					return
 				}
 				// Emit a disconnect event before backoff.
@@ -194,6 +209,11 @@ func sleepBackoff(ctx context.Context, attempt int) bool {
 }
 
 func extractHTTPStatus(err error) int {
+	var httpErr *HTTPError
+	if errors.As(err, &httpErr) {
+		return httpErr.StatusCode
+	}
+	// Fallback string matching for non-HTTPError errors.
 	s := err.Error()
 	if strings.Contains(s, "401") {
 		return http.StatusUnauthorized

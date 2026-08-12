@@ -254,7 +254,7 @@ func extractError(event *runtime.Event, props *sseCommonProps) {
 			_ = json.Unmarshal(props.Error, &msg)
 		}
 		event.Error = &runtime.RuntimeError{
-			Kind:      runtime.RuntimeErrorProtocol,
+			Kind:      runtimeErrorKindFromCode(code),
 			Operation: "EventMap",
 			Code:      code,
 			Message:   msg,
@@ -366,6 +366,20 @@ func unparseableEvent(raw []byte, rawSize int, sequence int64) runtime.Event {
 		RawType:         "_unparseable_",
 		RawTruncated:    len(rawPayload) < rawSize,
 		RawOriginalSize: rawSize,
+	}
+}
+
+// runtimeErrorKindFromCode maps a runtime_error code string to the appropriate
+// RuntimeErrorKind. Known transport-level codes (disconnects, scanner errors)
+// map to Transport; auth-related codes map to Auth; everything else is Protocol.
+func runtimeErrorKindFromCode(code string) runtime.RuntimeErrorKind {
+	switch code {
+	case "AUTH_ERROR", "UNAUTHORIZED", "FORBIDDEN":
+		return runtime.RuntimeErrorAuth
+	case "DISCONNECTED", "CONNECT_FAILED", "SCANNER_ERROR", "TRANSPORT_ERROR":
+		return runtime.RuntimeErrorTransport
+	default:
+		return runtime.RuntimeErrorProtocol
 	}
 }
 

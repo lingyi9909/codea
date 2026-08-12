@@ -6,7 +6,7 @@ current:
   task: "4"
   step: 6
   status: awaiting_acceptance
-  nextAction: Step 6 — Real OpenCode Long-running Smoke + Full Gate
+  nextAction: 等待人工验收
 checkpoint:
   commit: 1423a7396484ad2f2946606bb52d5f029e6020d9
   updatedAt: "2026-08-12T00:00:00Z"

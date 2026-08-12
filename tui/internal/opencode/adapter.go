@@ -2,6 +2,8 @@ package opencode
 
 import (
 	"context"
+	"errors"
+	"net/http"
 
 	"codea/tui/internal/runtime"
 )
@@ -15,17 +17,42 @@ type OpenCodeAdapter struct {
 
 // NewOpenCodeAdapter creates an adapter backed by an OpenCode server at baseURL.
 func NewOpenCodeAdapter(baseURL, username, password string) *OpenCodeAdapter {
-	return &OpenCodeAdapter{
+	a := &OpenCodeAdapter{
 		httpClient: NewHTTPClient(baseURL, username, password),
 		reconnect:  NewReconnectingSSEClient(NewSSEClient(baseURL, username, password)),
 		tracker:    NewSessionTracker(),
 	}
+	a.reconnect.SetReconnectHook(a.tracker.MakeRecoveryHook(a.httpClient))
+	return a
+}
+
+// classifyError maps a raw error from the HTTP client to a RuntimeError so
+// callers can use errors.As / runtime.IsXxx for stable error discrimination.
+func classifyError(op string, err error) error {
+	if err == nil {
+		return nil
+	}
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return runtime.NewCancelledError(op, err.Error(), err)
+	}
+	var httpErr *HTTPError
+	if errors.As(err, &httpErr) {
+		switch {
+		case httpErr.StatusCode == http.StatusUnauthorized || httpErr.StatusCode == http.StatusForbidden:
+			return runtime.NewAuthError(op, httpErr.Error(), err)
+		case httpErr.StatusCode >= 500:
+			return runtime.NewTransportError(op, httpErr.Error(), err)
+		default:
+			return runtime.NewProtocolError(op, httpErr.Error(), err)
+		}
+	}
+	return runtime.NewTransportError(op, err.Error(), err)
 }
 
 func (a *OpenCodeAdapter) Health(ctx context.Context) (runtime.HealthInfo, error) {
 	resp, err := a.httpClient.Health(ctx)
 	if err != nil {
-		return runtime.HealthInfo{}, err
+		return runtime.HealthInfo{}, classifyError("Health", err)
 	}
 	return runtime.HealthInfo{
 		Healthy: resp.Healthy,
@@ -37,7 +64,7 @@ func (a *OpenCodeAdapter) CreateSession(ctx context.Context, req runtime.CreateS
 	input := MapCreateSessionRequest(req)
 	session, err := a.httpClient.CreateSession(ctx, &input)
 	if err != nil {
-		return runtime.Session{}, err
+		return runtime.Session{}, classifyError("CreateSession", err)
 	}
 	return runtime.Session{ID: session.ID}, nil
 }
@@ -47,22 +74,30 @@ func (a *OpenCodeAdapter) Prompt(ctx context.Context, sessionID runtime.SessionI
 	if err != nil {
 		return err
 	}
-	return a.httpClient.SendPrompt(ctx, sid, &input)
+	return classifyError("Prompt", a.httpClient.SendPrompt(ctx, sid, &input))
 }
 
 func (a *OpenCodeAdapter) Subscribe(ctx context.Context) (<-chan runtime.Event, error) {
 	rawCh, err := a.reconnect.Subscribe(ctx)
 	if err != nil {
-		return nil, err
+		return nil, classifyError("Subscribe", err)
 	}
 
 	ch := make(chan runtime.Event, 16)
 	go func() {
 		defer close(ch)
-		recovering := false
 		for raw := range rawCh {
+			// Recovery events injected by ReconnectHook — unwrap directly.
+			if ev, ok := unwrapRecoveryEvent(raw.Data); ok {
+				a.tracker.Record(ev)
+				if !sendRuntimeEvent(ctx, ch, ev) {
+					return
+				}
+				continue
+			}
+
+			// Disconnect event — record and forward.
 			if IsSSEDisconnect(raw) {
-				recovering = true
 				ev, _ := MapEvent(raw.Data, raw.Sequence)
 				a.tracker.Record(ev)
 				if !sendRuntimeEvent(ctx, ch, ev) {
@@ -71,17 +106,7 @@ func (a *OpenCodeAdapter) Subscribe(ctx context.Context) (<-chan runtime.Event, 
 				continue
 			}
 
-			// After reconnect, inject recovery compensation events.
-			if recovering {
-				for _, ev := range a.tracker.Recover(ctx, a.httpClient) {
-					a.tracker.Record(ev)
-					if !sendRuntimeEvent(ctx, ch, ev) {
-						return
-					}
-				}
-				recovering = false
-			}
-
+			// Live event — map, record, forward.
 			ev, _ := MapEvent(raw.Data, raw.Sequence)
 			a.tracker.Record(ev)
 			if !sendRuntimeEvent(ctx, ch, ev) {
@@ -121,17 +146,17 @@ func sendRuntimeEvent(ctx context.Context, ch chan<- runtime.Event, ev runtime.E
 
 func (a *OpenCodeAdapter) ReplyApproval(ctx context.Context, approvalID runtime.ApprovalID, reply runtime.ApprovalReply) error {
 	input := MapApprovalReply(reply)
-	return a.httpClient.ApprovePermission(ctx, string(approvalID), &input)
+	return classifyError("ReplyApproval", a.httpClient.ApprovePermission(ctx, string(approvalID), &input))
 }
 
 func (a *OpenCodeAdapter) Cancel(ctx context.Context, sessionID runtime.SessionID) error {
-	return a.httpClient.AbortSession(ctx, string(sessionID))
+	return classifyError("Cancel", a.httpClient.AbortSession(ctx, string(sessionID)))
 }
 
 func (a *OpenCodeAdapter) ListAgents(ctx context.Context) ([]runtime.Agent, error) {
 	agents, err := a.httpClient.ListAgents(ctx)
 	if err != nil {
-		return nil, err
+		return nil, classifyError("ListAgents", err)
 	}
 	result := make([]runtime.Agent, len(agents))
 	for i, a := range agents {
