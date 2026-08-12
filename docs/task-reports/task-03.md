@@ -2,9 +2,9 @@
 
 **Task:** 3
 
-**Status:** awaiting_acceptance
+**Status:** completed
 
-**Date:** 2026-08-11
+**Date:** 2026-08-12
 
 **Checkpoint:** `7ad89af4978faa5e49f8fac24f42b6c1115df460`
 
@@ -122,11 +122,11 @@ Runner 通过 AgentRuntime + Codea Event 执行 Scenario，对比 Baseline/Candi
 | 包 | 测试数 |
 |---|--------|
 | `internal/capability` | 14 |
-| `internal/parity` | 37 |
+| `internal/parity` | 38 |
 | `tests/parity` | 5 |
 | `tests/fixtures/fake-runtime` | 11 |
 | `tests/architecture` | 1 |
-| **总计** | **68** |
+| **总计** | **69** |
 
 ## 验证结果
 
@@ -207,13 +207,11 @@ result := inv.Compare(caps)
 ## 未解决问题
 
 - 无阻塞项
-- Task 3 人工验收 pending
-- Task 4 保持 pending
 
 ## Gate 结论
 
 - **Verification:** `pass`（8 项自动验证全部通过）
-- **Task Gate:** `pass`
-- **Human acceptance:** `false`
-- **Task 3:** `awaiting_acceptance`
+- **Task Gate:** `pass`（9/9，含人工验收）
+- **Human acceptance:** `true`（2026-08-12 验收通过）
+- **Task 3:** `completed`
 - **Task 4:** `pending`

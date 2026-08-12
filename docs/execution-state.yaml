@@ -3,17 +3,17 @@ project: codea-v1
 plan: docs/superpowers/plans/2026-07-30-codea-v1-plan.md
 taskOrder: ["0", "1", "2", "2A", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21"]
 current:
-  task: "3"
-  step: 6
-  status: awaiting_acceptance
-  nextAction: 等待人工验收；验收通过后开始 Task 4
+  task: "4"
+  step: 1
+  status: pending
+  nextAction: 开始 Task 4 Phase 2 — Runtime 恢复与补偿
 checkpoint:
   commit: 7ad89af4978faa5e49f8fac24f42b6c1115df460
-  updatedAt: "2026-08-11T14:00:00Z"
+  updatedAt: "2026-08-12T00:00:00Z"
 verification:
-  status: pass
+  status: not_run
   commands:
-    - cd tui && GOTOOLCHAIN=local go test ./internal/capability/... ./internal/parity/... ./tests/parity/... ./tests/fixtures/fake-runtime/... -count=1
+    - cd tui && GOTOOLCHAIN=local go test ./... -count=1
     - cd tui && GOTOOLCHAIN=local go test -race ./... -count=1
     - cd tui && GOTOOLCHAIN=local go vet ./...
     - cd tui && GOTOOLCHAIN=local go build ./...
@@ -24,17 +24,8 @@ verification:
   errorSummary: null
   recoveryAdvice: null
 taskGate:
-  status: pass
-  gateItems:
-    "1": {description: "Task 2/2A 无退化 — 所有已有测试继续通过", status: pass}
-    "2": {description: "Capability Inventory — 从 runtime/capabilities.yaml 加载 required/optional/deferred", status: pass}
-    "3": {description: "Capability Compare — Product Requirement vs RuntimeCapabilities，Required+missing=FAIL", status: pass}
-    "4": {description: "Fake AgentRuntime — 实现 runtime.AgentRuntime，输出 Codea Domain Event，零 OpenCode 协议复制", status: pass}
-    "5": {description: "Parity Scenario/Result — 12 个 V1 Required 场景定义", status: pass}
-    "6": {description: "Parity Runner — Baseline/Candidate 通过 AgentRuntime+Codea Event 执行，SilentLoss=FAIL", status: pass}
-    "7": {description: "Vendor Boundary — capability/parity 包零 OpenCode DTO 导入", status: pass}
-    "8": {description: "Windows x64 cross-build 通过", status: pass}
-    "9": {description: "人工验收", status: pending}
+  status: not_evaluated
+  gateItems: {}
 humanAcceptance:
   accepted: false
 tasks:
@@ -42,7 +33,7 @@ tasks:
   "1": {status: completed, completedSteps: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: 50e32c2673d1324c040d5c2296b25196307a4662, report: docs/task-reports/task-01.md}
   "2": {status: completed, completedSteps: [1, 2, 3, 4, 5], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: 174bb2997aa206736775c54a31f6de8ee82261f9, report: docs/task-reports/task-02.md}
   "2A": {status: completed, completedSteps: [1, 2, 3, 4, 5, 6], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: 871110ae346b27d8629769d5a3bb9f14a7373f73, report: docs/task-reports/task-02A.md}
-  "3": {status: awaiting_acceptance, completedSteps: [1, 2, 3, 4, 5, 6], verificationStatus: pass, taskGateStatus: pass, humanAccepted: false, checkpoint: 7ad89af4978faa5e49f8fac24f42b6c1115df460, report: docs/task-reports/task-03.md}
+  "3": {status: completed, completedSteps: [1, 2, 3, 4, 5, 6], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: 7ad89af4978faa5e49f8fac24f42b6c1115df460, report: docs/task-reports/task-03.md}
   "4": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-04.md}
   "5": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-05.md}
   "6": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-06.md}
