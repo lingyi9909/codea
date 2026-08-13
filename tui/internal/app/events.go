@@ -9,4 +9,8 @@ const (
 	eventTypeStepFinished runtime.EventType = "step.finished"
 	eventTypeSessionError runtime.EventType = "session.error"
 	eventTypeRuntimeError runtime.EventType = "runtime.error"
+
+	eventTypeToolCalled  runtime.EventType = "tool.called"
+	eventTypeToolSuccess runtime.EventType = "tool.success"
+	eventTypeToolFailed  runtime.EventType = "tool.failed"
 )

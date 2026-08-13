@@ -22,6 +22,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case subscribedMsg:
 		m.eventCh = msg.ch
+		m.runtimeStatus = runtime.RuntimeHealthy
 		return m, waitForEvent(msg.ch)
 
 	case runtimeEventMsg:
@@ -56,6 +57,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyMsg:
 		return m, m.handleKey(msg)
+
+	case tea.WindowSizeMsg:
+		m.width = msg.Width
+		m.height = msg.Height
+		return m, nil
 	}
 
 	return m, nil
@@ -68,6 +74,11 @@ func (m *Model) handleKey(msg tea.KeyMsg) tea.Cmd {
 		return m.submit()
 	case key.Matches(msg, m.keys.Newline):
 		m.input += "\n"
+		return nil
+	case key.Matches(msg, m.keys.Quit):
+		return tea.Quit
+	case key.Matches(msg, m.keys.ClearScreen):
+		m.clearChat()
 		return nil
 	case key.Matches(msg, m.keys.ToggleThink):
 		m.reasoningExpanded = !m.reasoningExpanded
@@ -102,6 +113,12 @@ func (m *Model) submit() tea.Cmd {
 		ChatMessage{Role: RoleAssistant},
 	)
 	m.isStreaming = true
+	m.proc.Reset()
+	m.reasoningActive = false
+	m.reasoningContent = ""
+	m.reasoningDuration = 0
+	m.reasoningExpanded = false
+	m.tools = make([]ToolActivity, 0)
 
 	raw := m.input
 	req := runtime.PromptRequest{
@@ -124,6 +141,12 @@ func (m *Model) processRuntimeEvent(ev runtime.Event) {
 	switch ev.Type {
 	case eventTypeStepFinished, eventTypeSessionError, eventTypeRuntimeError:
 		m.finishStreaming()
+	case eventTypeToolCalled:
+		m.addTool(ev)
+	case eventTypeToolSuccess:
+		m.updateTool(ev, ToolSuccess)
+	case eventTypeToolFailed:
+		m.updateTool(ev, ToolFailed)
 	}
 
 	for _, pe := range m.proc.Process(ev) {
@@ -177,4 +200,35 @@ func deleteLastRune(s string) string {
 		return s
 	}
 	return string(r[:len(r)-1])
+}
+
+// addTool records a newly started tool invocation.
+func (m *Model) addTool(ev runtime.Event) {
+	if ev.Tool == nil {
+		return
+	}
+	m.tools = append(m.tools, ToolActivity{Name: ev.Tool.Name, CallID: ev.Tool.CallID, Status: ToolRunning})
+}
+
+// updateTool marks a previously started tool invocation as completed.
+func (m *Model) updateTool(ev runtime.Event, status ToolStatus) {
+	if ev.Tool == nil {
+		return
+	}
+	for i := range m.tools {
+		if m.tools[i].CallID == ev.Tool.CallID {
+			m.tools[i].Status = status
+			return
+		}
+	}
+}
+
+// clearChat resets the visible conversation, tools, and reasoning state.
+func (m *Model) clearChat() {
+	m.messages = make([]ChatMessage, 0)
+	m.tools = make([]ToolActivity, 0)
+	m.reasoningActive = false
+	m.reasoningContent = ""
+	m.reasoningExpanded = false
+	m.reasoningDuration = 0
 }
