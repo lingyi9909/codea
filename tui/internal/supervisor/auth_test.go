@@ -131,10 +131,25 @@ func TestBuildArgsShape(t *testing.T) {
 	}
 }
 
-func TestBuildArgsBindsLocalhostNotWildcard(t *testing.T) {
-	args := buildArgs(Config{Hostname: "127.0.0.1"}, 12345)
+func TestBuildArgsCannotExposeRuntime(t *testing.T) {
+	args := buildArgs(Config{Hostname: "0.0.0.0"}, 12345)
 	joined := strings.Join(args, " ")
 	if strings.Contains(joined, "0.0.0.0") {
-		t.Fatalf("args must not bind 0.0.0.0: %v", args)
+		t.Fatalf("buildArgs exposed a wildcard bind: %v", args)
+	}
+	if !strings.Contains(joined, "127.0.0.1") {
+		t.Fatalf("buildArgs must hard-lock loopback: %v", args)
+	}
+}
+
+func TestSupervisorForcesLoopback(t *testing.T) {
+	s := NewSupervisor(Config{Hostname: "0.0.0.0"})
+	if s.config.Hostname != "127.0.0.1" {
+		t.Fatalf("hostname = %q, want forced loopback 127.0.0.1", s.config.Hostname)
+	}
+	args := buildArgs(s.config, 12345)
+	joined := strings.Join(args, " ")
+	if strings.Contains(joined, "0.0.0.0") {
+		t.Fatalf("supervisor would bind wildcard: %v", args)
 	}
 }

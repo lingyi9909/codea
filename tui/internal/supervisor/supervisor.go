@@ -31,7 +31,7 @@ var probeClient = &http.Client{Timeout: 2 * time.Second}
 // Config configures a RuntimeSupervisor.
 type Config struct {
 	OpenCodeBin    string
-	Hostname       string // default 127.0.0.1 (never 0.0.0.0)
+	Hostname       string // forced to 127.0.0.1 (loopback-only; V1 has no remote runtime)
 	Port           int    // 0 selects a free local port
 	ConfigDir      string
 	ProjectRoot    string
@@ -56,9 +56,9 @@ type Supervisor struct {
 }
 
 func NewSupervisor(config Config) *Supervisor {
-	if config.Hostname == "" {
-		config.Hostname = defaultHostname
-	}
+	// Hard-lock loopback: V1 has no remote-runtime requirement, so a caller
+	// value like 0.0.0.0 would expose the runtime on the LAN. Ignore it.
+	config.Hostname = defaultHostname
 	if config.StartupTimeout == 0 {
 		config.StartupTimeout = defaultStartupTimeout
 	}
@@ -329,10 +329,13 @@ func findFreePort() (int, error) {
 	return ln.Addr().(*net.TCPAddr).Port, nil
 }
 
-func buildArgs(config Config, port int) []string {
+// buildArgs returns the fixed `opencode serve` invocation. The hostname is
+// hard-locked to loopback (V1 has no remote runtime), so config.Hostname is
+// deliberately ignored to prevent a wildcard bind.
+func buildArgs(_ Config, port int) []string {
 	return []string{
 		"serve",
-		"--hostname", config.Hostname,
+		"--hostname", defaultHostname,
 		"--port", fmt.Sprintf("%d", port),
 	}
 }
