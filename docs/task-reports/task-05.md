@@ -2,7 +2,7 @@
 
 ## Overview
 
-Checkpoint: bf6fd3e6ada5e1b2b97df61cb8eadafc3da9ef38
+Checkpoint: 0b8671405de68bb6e85d33f037ca3d80d249cad9
 
 Runtime 进程生命周期管理：`RuntimeSupervisor` 负责 Start/Stop/Status（不进入 `AgentRuntime`）、每次启动随机 Basic Auth、`127.0.0.1` 只监听、跨平台（darwin/Windows）进程组信号控制、readiness 探测、Crash 检测，以及 Supervisor 启动的 Runtime 可被 `OpenCodeAdapter` 直接驱动的集成契约。
 
@@ -85,12 +85,60 @@ Task 5 专项契约：Supervisor lifecycle / Basic Auth / readiness / crash dete
 
 本机存在一个 Task 4 遗留的 OpenCode 进程（`/tmp/opencode serve --port 14242`，Task 4 人工 smoke 遗留，非 Task 5 Supervisor 产生）。Task 5 全部测试使用随机端口并显式 `Stop()`，`TestChildProcessNotLeftBehind` 证明 Supervisor 无孤儿进程。
 
+## Round 1 Review — 人工验收反馈与修复
+
+人工验收结论：**暂不通过，Task 5 保持 blocked**，2 个阻塞问题。
+
+### Blocking 1 — Windows force-kill 未清理整棵进程树
+
+原 `killProcess()` = `cmd.Process.Kill()` 只杀主进程，遗留子进程孤儿。修复为 **Windows Job Object**：
+
+- `attachProcess(cmd)`：`CreateJobObjectW` 创建 Job → `SetInformationJobObject` 设置 `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE` → `AssignProcessToJobObject` 把启动后的 opencode 挂入 Job，句柄存入 `sync.Map`（`*exec.Cmd` → `syscall.Handle`）
+- `killProcess(cmd)`：`TerminateJobObject` 整树强杀 + `CloseHandle`
+- `detachProcess(cmd)`（`monitor` 在 `cmd.Wait()` 后调用）：`LoadAndDelete` 关闭句柄，`KILL_ON_JOB_CLOSE` 保证 opencode 崩溃后无孤儿
+- 全部 Win32 调用经 `syscall.NewLazyDLL`（无 x/sys 依赖，保持纯离线）
+
+新增 `process_windows_test.go`（`//go:build windows`，真机运行）：
+
+- `TestStopTerminatesProcessTree`：spawn 子进程 → Stop → 父/子进程均消失（0 orphan）
+- `TestStopForceKillFallback`：优雅退出无效 → StopTimeout 后 `TerminateJobObject` 强杀
+
+### Blocking 2 — Start→Healthy 与 monitor→Crashed 竞态
+
+原 `Start` 无条件 `s.status = runtime.RuntimeHealthy`，可能覆盖 monitor 已写入的 `Crashed`，遗留 stale Healthy。修复：
+
+- 新增 `runID uint64`（每次启动自增的 run generation），`startProcess` 返回 runID
+- 新增 `markHealthy(runID) bool`：锁内 CAS 校验 `s.runID == runID && s.status == Starting` 才置 `Healthy`，否则返回 false（Start 返回错误）
+- `monitor`/`cleanupFailedStart` 以 runID 守卫，陈旧 monitor 不再污染新实例
+
+新增白盒单测（确定性验证 CAS 不变量）：
+
+- `TestMarkHealthyAcceptsCurrentStarting` / `TestMarkHealthyRejectsAfterCrash` / `TestMarkHealthyRejectsStaleRun`
+
+新增集成回归测试 `TestHealthyThenExitSettlesCrashed`：fake 返回 `healthy:true` 后立即退出（`FAKE_OPENCODE_MODE=healthy-then-exit`，固定 body + Content-Length + Flush 避免截断）→ 最终状态必为 `Crashed`，永不为 `Healthy`。
+
+### Round 1 验证
+
+| Gate | Result |
+|------|--------|
+| `go test ./... -count=1` | PASS（15 packages） |
+| `go test -race ./internal/supervisor/... -count=1` | PASS（无竞态） |
+| `go vet ./...` | clean |
+| `go build ./...` | clean |
+| `GOOS=windows GOARCH=amd64 go build ./cmd/codea ./cmd/parity-runner` | PASS |
+| `GOOS=darwin GOARCH=amd64 go build ./cmd/codea ./cmd/parity-runner` | PASS |
+| `GOOS=windows GOARCH=amd64 go test -c ./internal/supervisor/` | PASS（Windows 测试编译通过） |
+| `check-runtime-boundary.sh` | PASS |
+| `check-execution-state.sh` | valid |
+
+Windows 真机 lifecycle smoke（`TestStopTerminatesProcessTree` / `TestStopForceKillFallback`）仍 `unable_to_run`（本机无 Windows 真机），Task 5 保持 blocked。
+
 ## Test Summary
 
 | Package | Tests |
 |---------|-------|
 | internal/runtime | status.go（5 状态常量） |
-| internal/supervisor | 34 tests（状态机 + auth + readiness + 进程控制） |
+| internal/supervisor | 38 darwin tests + 2 windows tests（状态机 + auth + readiness + 进程控制 + Healthy/CAS） |
 | internal/supervisor/fakeopencode | 测试专用 fake binary（main 包） |
 | tests/contract | 1（`TestSupervisorAdapterContract`，真实 OpenCode） |
 
@@ -106,6 +154,7 @@ Task 5 专项契约：Supervisor lifecycle / Basic Auth / readiness / crash dete
 | `tui/internal/supervisor/auth_test.go` | Create |
 | `tui/internal/supervisor/readiness_test.go` | Create |
 | `tui/internal/supervisor/process_unix_test.go` | Create |
+| `tui/internal/supervisor/process_windows_test.go` | Create（Round 1） |
 | `tui/internal/supervisor/fake_runtime_test.go` | Create |
 | `tui/internal/supervisor/fakeopencode/main.go` | Create |
 | `tui/tests/contract/supervisor_adapter_contract_test.go` | Create |
@@ -120,3 +169,4 @@ Task 5 专项契约：Supervisor lifecycle / Basic Auth / readiness / crash dete
 | `3026bf5` | Step 4 — darwin 进程组控制 |
 | `9eeba53` | Step 5 — Windows 进程组控制（cross-build） |
 | `bf6fd3e` | Step 6 — Supervisor↔Adapter 集成契约（Final Implementation Commit） |
+| `0b86714` | Round 1 — Windows Job Object 整树强杀 + Healthy/Crashed CAS（新 Final Implementation Commit） |
