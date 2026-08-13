@@ -3,29 +3,20 @@ project: codea-v1
 plan: docs/superpowers/plans/2026-07-30-codea-v1-plan.md
 taskOrder: ["0", "1", "2", "2A", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21"]
 current:
-  task: "4"
-  step: 6
-  status: awaiting_acceptance
-  nextAction: 等待人工验收
+  task: "5"
+  step: 1
+  status: in_progress
+  nextAction: 执行 Task 5 Step 1：Supervisor Domain + 状态机
 checkpoint:
   commit: 3a737da675eb1f3f4752aaf150de75fbbda8bba1
   updatedAt: "2026-08-13T00:00:00Z"
 verification:
-  status: pass
-  commands:
-    - cd tui && GOTOOLCHAIN=local go test ./... -count=1
-    - cd tui && GOTOOLCHAIN=local go test -race ./... -count=1
-    - cd tui && GOTOOLCHAIN=local go vet ./...
-    - cd tui && GOTOOLCHAIN=local go build ./...
-    - cd tui && GOOS=windows GOARCH=amd64 GOTOOLCHAIN=local go build ./cmd/codea ./cmd/parity-runner
-    - ./scripts/check-runtime-boundary.sh
-    - ./scripts/check-execution-state.sh
-    - ./scripts/check-opencode-available.sh
-    - tests/execution-state/state_validator_test.sh
+  status: not_run
+  commands: []
   errorSummary: null
   recoveryAdvice: null
 taskGate:
-  status: pass
+  status: not_evaluated
   gateItems: {}
 humanAcceptance:
   accepted: false
@@ -35,8 +26,8 @@ tasks:
   "2": {status: completed, completedSteps: [1, 2, 3, 4, 5], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: 174bb2997aa206736775c54a31f6de8ee82261f9, report: docs/task-reports/task-02.md}
   "2A": {status: completed, completedSteps: [1, 2, 3, 4, 5, 6], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: 871110ae346b27d8629769d5a3bb9f14a7373f73, report: docs/task-reports/task-02A.md}
   "3": {status: completed, completedSteps: [1, 2, 3, 4, 5, 6], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: 7ad89af4978faa5e49f8fac24f42b6c1115df460, report: docs/task-reports/task-03.md}
-  "4": {status: awaiting_acceptance, completedSteps: [1, 2, 3, 4, 5, 6], verificationStatus: pass, taskGateStatus: pass, humanAccepted: false, checkpoint: 3a737da675eb1f3f4752aaf150de75fbbda8bba1, report: docs/task-reports/task-04.md}
-  "5": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-05.md}
+  "4": {status: completed, completedSteps: [1, 2, 3, 4, 5, 6], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: 3a737da675eb1f3f4752aaf150de75fbbda8bba1, report: docs/task-reports/task-04.md}
+  "5": {status: in_progress, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-05.md}
   "6": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-06.md}
   "7": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-07.md}
   "8": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-08.md}
