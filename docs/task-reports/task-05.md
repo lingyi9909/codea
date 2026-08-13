@@ -2,7 +2,7 @@
 
 ## Overview
 
-Checkpoint: 0b8671405de68bb6e85d33f037ca3d80d249cad9
+Checkpoint: cbe692aaff6700c257d3e0806801dcf8d3396870
 
 Runtime 进程生命周期管理：`RuntimeSupervisor` 负责 Start/Stop/Status（不进入 `AgentRuntime`）、每次启动随机 Basic Auth、`127.0.0.1` 只监听、跨平台（darwin/Windows）进程组信号控制、readiness 探测、Crash 检测，以及 Supervisor 启动的 Runtime 可被 `OpenCodeAdapter` 直接驱动的集成契约。
 
@@ -135,12 +135,44 @@ Task 5 专项契约：Supervisor lifecycle / Basic Auth / readiness / crash dete
 
 Windows 真机 lifecycle smoke（`TestStopTerminatesProcessTree` / `TestStopForceKillFallback`）仍 `unable_to_run`（本机无 Windows 真机），Task 5 保持 blocked。
 
+## Round 2 Review — localhost-only 强制 + 最终收口
+
+人工验收反馈：Task 5 的「127.0.0.1 only」声明与实际实现不一致——`NewSupervisor(Config{Hostname: "0.0.0.0"})` 仍会启动 `opencode serve --hostname 0.0.0.0`，违背「never 0.0.0.0」的注释与安全约束。修复为**硬锁 loopback**：
+
+- `NewSupervisor`：无条件 `config.Hostname = defaultHostname`（忽略调用方传入的任意 hostname），V1 无 remote-runtime 需求，杜绝 LAN 暴露
+- `buildArgs`：`--hostname` 直接硬编码 `defaultHostname`（`127.0.0.1`），参数签名改为 `_ Config` 明确表明忽略 config.Hostname，防止通配符绑定
+- `Config.Hostname` 注释更新为 `forced to 127.0.0.1 (loopback-only; V1 has no remote runtime)`
+
+新增两个**非循环**回归测试（`auth_test.go`）：
+
+- `TestSupervisorForcesLoopback`：`NewSupervisor(Config{Hostname: "0.0.0.0"})` → 断言 `config.Hostname == "127.0.0.1"`，且 `buildArgs` 产物不含 `0.0.0.0`
+- `TestBuildArgsCannotExposeRuntime`：直接向 `buildArgs` 传入 `Config{Hostname: "0.0.0.0"}` → 断言产物不含 `0.0.0.0` 且必含 `127.0.0.1`（不再让测试自己传 `127.0.0.1` 来自证）
+
+### Round 2 验证
+
+| Gate | Result |
+|------|--------|
+| `go test ./... -count=1` | PASS |
+| `go test -race ./internal/supervisor/... -count=1` | PASS |
+| `go vet ./...` | clean |
+| `go build ./...` | clean |
+| `GOOS=windows GOARCH=amd64 go build ./cmd/codea ./cmd/parity-runner` | PASS |
+| `GOOS=darwin GOARCH=amd64 go build ./cmd/codea ./cmd/parity-runner` | PASS |
+| `check-runtime-boundary.sh` | PASS |
+| `check-execution-state.sh` | valid |
+
+## Windows x64 real lifecycle smoke — accepted residual risk
+
+Windows x64 real lifecycle smoke（真机进程树清理验证）**未独立执行**。真实 Windows 进程树清理行为（Job Object 整树强杀 + 0 orphan）延期到 Windows 集成环境 / 发行验收阶段验证。该风险经人工接受，**不阻塞 Task 6**。
+
+这是 accepted residual risk / 未独立验证，**不是验证通过**。Windows 侧当前已通过 x64 cross-build 验证编译正确性；真机行为在 Windows 集成 / 发行验收阶段补齐。
+
 ## Test Summary
 
 | Package | Tests |
 |---------|-------|
 | internal/runtime | status.go（5 状态常量） |
-| internal/supervisor | 40 darwin tests + 2 windows tests（状态机 + auth + readiness + 进程控制 + Healthy/CAS + 空格路径） |
+| internal/supervisor | 41 darwin tests + 2 windows tests（状态机 + auth + readiness + 进程控制 + Healthy/CAS + 空格路径 + loopback 硬锁） |
 | internal/supervisor/fakeopencode | 测试专用 fake binary（main 包） |
 | tests/contract | 1（`TestSupervisorAdapterContract`，真实 OpenCode） |
 
@@ -158,6 +190,8 @@ Windows 真机 lifecycle smoke（`TestStopTerminatesProcessTree` / `TestStopForc
 | `tui/internal/supervisor/process_unix_test.go` | Create |
 | `tui/internal/supervisor/process_windows_test.go` | Create（Round 1） |
 | `tui/internal/supervisor/paths_test.go` | Create（Round 1，test-only，空格路径） |
+| `tui/internal/supervisor/supervisor.go` | Modify（Round 2 — loopback 硬锁） |
+| `tui/internal/supervisor/auth_test.go` | Modify（Round 2 — 非循环 loopback 测试） |
 | `tui/internal/supervisor/fake_runtime_test.go` | Create |
 | `tui/internal/supervisor/fakeopencode/main.go` | Create |
 | `tui/tests/contract/supervisor_adapter_contract_test.go` | Create |
@@ -174,3 +208,4 @@ Windows 真机 lifecycle smoke（`TestStopTerminatesProcessTree` / `TestStopForc
 | `bf6fd3e` | Step 6 — Supervisor↔Adapter 集成契约（Final Implementation Commit） |
 | `0b86714` | Round 1 — Windows Job Object 整树强杀 + Healthy/Crashed CAS（新 Final Implementation Commit） |
 | `de4e9db` | Round 1 — 空格路径跨平台测试（test-only，不改实现） |
+| `cbe692a` | Round 2 — localhost-only 硬锁（新 Final Implementation Commit） |
