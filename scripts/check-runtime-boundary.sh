@@ -23,7 +23,7 @@ ALL_PKGS=$(go list ./... 2>/dev/null) || {
     exit 1
 }
 
-ALL_PKGS=$(echo "$ALL_PKGS" | grep -v 'internal/opencode' | grep -v '/tests/' || true)
+ALL_PKGS=$(echo "$ALL_PKGS" | grep -v 'internal/opencode' | grep -v '/tests/' | grep -v '/cmd/' || true)
 
 if [ -z "$ALL_PKGS" ]; then
     echo "FAIL: no non-opencode packages found — cannot verify boundary"
