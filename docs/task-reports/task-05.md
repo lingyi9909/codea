@@ -117,6 +117,8 @@ Task 5 专项契约：Supervisor lifecycle / Basic Auth / readiness / crash dete
 
 新增集成回归测试 `TestHealthyThenExitSettlesCrashed`：fake 返回 `healthy:true` 后立即退出（`FAKE_OPENCODE_MODE=healthy-then-exit`，固定 body + Content-Length + Flush 避免截断）→ 最终状态必为 `Crashed`，永不为 `Healthy`。
 
+另补「path/configDir with spaces」跨平台测试（`paths_test.go`，test-only commit `de4e9db`）：`TestBuildEnvConfigDirWithSpaces`（env 携带空格路径逐字透传）+ `TestStartWithSpacesInPaths`（OpenCodeBin/ConfigDir/ProjectRoot 三处含空格仍 Start→Healthy），补齐 Windows Required Gate 的空格路径项。
+
 ### Round 1 验证
 
 | Gate | Result |
@@ -138,7 +140,7 @@ Windows 真机 lifecycle smoke（`TestStopTerminatesProcessTree` / `TestStopForc
 | Package | Tests |
 |---------|-------|
 | internal/runtime | status.go（5 状态常量） |
-| internal/supervisor | 38 darwin tests + 2 windows tests（状态机 + auth + readiness + 进程控制 + Healthy/CAS） |
+| internal/supervisor | 40 darwin tests + 2 windows tests（状态机 + auth + readiness + 进程控制 + Healthy/CAS + 空格路径） |
 | internal/supervisor/fakeopencode | 测试专用 fake binary（main 包） |
 | tests/contract | 1（`TestSupervisorAdapterContract`，真实 OpenCode） |
 
@@ -155,6 +157,7 @@ Windows 真机 lifecycle smoke（`TestStopTerminatesProcessTree` / `TestStopForc
 | `tui/internal/supervisor/readiness_test.go` | Create |
 | `tui/internal/supervisor/process_unix_test.go` | Create |
 | `tui/internal/supervisor/process_windows_test.go` | Create（Round 1） |
+| `tui/internal/supervisor/paths_test.go` | Create（Round 1，test-only，空格路径） |
 | `tui/internal/supervisor/fake_runtime_test.go` | Create |
 | `tui/internal/supervisor/fakeopencode/main.go` | Create |
 | `tui/tests/contract/supervisor_adapter_contract_test.go` | Create |
@@ -170,3 +173,4 @@ Windows 真机 lifecycle smoke（`TestStopTerminatesProcessTree` / `TestStopForc
 | `9eeba53` | Step 5 — Windows 进程组控制（cross-build） |
 | `bf6fd3e` | Step 6 — Supervisor↔Adapter 集成契约（Final Implementation Commit） |
 | `0b86714` | Round 1 — Windows Job Object 整树强杀 + Healthy/Crashed CAS（新 Final Implementation Commit） |
+| `de4e9db` | Round 1 — 空格路径跨平台测试（test-only，不改实现） |
