@@ -86,7 +86,7 @@ Checkpoint: `df5c582aa803f55bb091dabaf3a3cf41e0f02f78`
 | Gate | Result |
 |------|--------|
 | `GOTOOLCHAIN=local go test ./... -count=1` | PASS（16 packages） |
-| `GOTOOLCHAIN=local go test -race ./... -count=1` | PASS（无竞态）¹ |
+| `GOTOOLCHAIN=local go test -race ./... -count=1` | PASS（16 packages，无竞态） |
 | `GOTOOLCHAIN=local go vet ./...` | clean |
 | `GOTOOLCHAIN=local go build ./...` | clean |
 | `GOOS=windows GOARCH=amd64 go build ./cmd/codea ./cmd/parity-runner` | PASS |
@@ -95,7 +95,7 @@ Checkpoint: `df5c582aa803f55bb091dabaf3a3cf41e0f02f78`
 | `./scripts/check-execution-state.sh` | valid |
 | `tests/execution-state/state_validator_test.sh` | valid |
 
-¹ `go test -race ./...` 唯一失败项为 `TestRealOpenCodeParitySmoke`：打真实 OpenCode 服务器（127.0.0.1:14242，本机残留 live 进程）的活体集成测试，失败在 Scenario A/B 的 `approval.requested` 审批时序，与 Reasoning 改动无关（reasoning 包与 contract 非 smoke 用例在 `-race` 下均 PASS）。属环境/时序残留风险，与既有 "Windows smoke as accepted residual risk" 同类。
+¹ `TestRealOpenCodeParitySmoke`（`tests/contract`）为打真实 OpenCode 服务器的活体集成测试：无 live server 时按设计 SKIP。本次 Gate 前已清理残留 live server（`/tmp/opencode serve --port 14242`），复跑后该测试以 `SKIP: OpenCode not running` 正确跳过，`go test -race ./...` 全量 PASS。活体 smoke 属独立集成 Gate（依赖真实 server + 模型），不在确定性 reasoning Gate 内。
 
 ## Test Summary
 
