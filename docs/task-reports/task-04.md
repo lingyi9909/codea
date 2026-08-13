@@ -2,7 +2,7 @@
 
 ## Overview
 
-Checkpoint: 338591f0d3f78c490fe05415bba5e6fe11a26741
+Checkpoint: 3a737da675eb1f3f4752aaf150de75fbbda8bba1
 
 补齐生产级 SSE 恢复、状态补偿、错误分类、背压与真实 Runtime 长连接验证。
 
@@ -186,6 +186,52 @@ Checkpoint now points to the Final Implementation Commit
 `338591f0d3f78c490fe05415bba5e6fe11a26741` (the round-6 code+test commit), not
 an evidence/docs/state commit. `docs/execution-state.yaml` and this report both
 reference the same SHA.
+
+## Round 7 Review Fixes (2026-08-13) — 3 Blocking Issues
+
+### Blocking 1: Non-retryable SSE failure must emit explicit runtime.error
+
+`reconnect.go` previously emitted an Auth RuntimeError only for 401/403 and
+silently closed the channel for any other non-retryable status (400/404). The
+Application therefore saw a normal stream end instead of a Protocol error.
+
+- All non-retryable subscribe failures now emit a terminal `runtime_error`
+  before closing: 401/403 → `AUTH_ERROR`, every other non-retryable status →
+  `PROTOCOL_ERROR`.
+- `sendEvent` now blocks (returns early on context cancel) so the terminal
+  error is guaranteed delivered before the channel closes.
+- Tests: `TestSSE400NoRetry` / `TestSSE404NoRetry` assert a `PROTOCOL_ERROR`
+  event arrives before close; `TestSSE400EmitsProtocolRuntimeError` verifies the
+  full adapter chain maps it to a `RuntimeError(Protocol)`.
+
+### Blocking 2: Recovery vs live SSE duplicate events
+
+Recovery's REST query runs while live SSE events enter the reconnect buffer,
+so a message/part present in the snapshot could also arrive as a live event and
+be delivered twice.
+
+- `SessionTracker` now tracks the message/part IDs compensated by the most recent
+  `Recover()` pass in `recoveredMsgIDs` / `recoveredPartIDs`.
+- `ShouldSuppressLive` provides suppress-once semantics: the first live
+  `message.updated` / `part.updated` matching a recovered ID is dropped; a
+  subsequent genuine update for the same ID passes through.
+- `adapter.go` consults `ShouldSuppressLive` in the live-event path.
+- Tests: `TestShouldSuppressLiveDedup` (unit) and `TestAdapterDedupsRecoveryAndLiveMessage`
+  (integration) — the latter constructs the exact race (message M in the recovery
+  snapshot AND its live `message.updated` already in the post-reconnect buffer)
+  and asserts the Application receives M exactly once.
+
+### Blocking 3: VendorDetails actually populated from vendor errors
+
+`RuntimeError.VendorDetails` was defined but never written.
+
+- `classifyError` (`adapter.go`) now serializes `HTTPError` (statusCode, method,
+  path, body) into `VendorDetails` for every classified HTTP error.
+- `extractError` (`event_mapper.go`) now sets `VendorDetails` to the raw vendor
+  error JSON for all five `RuntimeError` construction sites.
+- Tests: `TestHTTPAdapterErrorVendorDetails` (real HTTP→Adapter conversion chain)
+  and `TestEventMapperErrorVendorDetails` (real SSE→Mapper conversion chain) prove
+  the field is auto-populated by the Adapter/Mapper, not by the test itself.
 
 ## Spec Review Fixes (2026-08-12)
 
