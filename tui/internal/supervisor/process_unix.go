@@ -13,6 +13,13 @@ func configureProcess(cmd *exec.Cmd) {
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 }
 
+// attachProcess is a no-op on darwin: process-group signalling needs no extra
+// OS handle to be tracked.
+func attachProcess(cmd *exec.Cmd) error { return nil }
+
+// detachProcess is a no-op on darwin.
+func detachProcess(cmd *exec.Cmd) {}
+
 // terminateProcess sends SIGTERM to the process group (graceful shutdown).
 func terminateProcess(cmd *exec.Cmd) error {
 	return syscall.Kill(-cmd.Process.Pid, syscall.SIGTERM)

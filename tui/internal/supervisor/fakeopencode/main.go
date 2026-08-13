@@ -65,6 +65,21 @@ func main() {
 			_, _ = w.Write([]byte(`{"error":"not ready"}`))
 			return
 		}
+		if mode == "healthy-then-exit" {
+			// Deliver a complete (Content-Length) healthy response, then exit
+			// immediately — reproducing "health succeeded then process died".
+			// Content-Length avoids the truncated chunked-body problem when the
+			// process dies before the handler returns.
+			const body = `{"healthy":true,"version":"fake"}`
+			w.Header().Set("Content-Length", strconv.Itoa(len(body)))
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(body))
+			if f, ok := w.(http.Flusher); ok {
+				f.Flush()
+			}
+			os.Exit(0)
+			return
+		}
 		_ = json.NewEncoder(w).Encode(map[string]any{"healthy": true, "version": "fake"})
 	})
 

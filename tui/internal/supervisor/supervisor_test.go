@@ -148,6 +148,20 @@ func TestConcurrentStartSingleProcess(t *testing.T) {
 	}
 }
 
+func TestHealthyThenExitSettlesCrashed(t *testing.T) {
+	t.Setenv("FAKE_OPENCODE_MODE", "healthy-then-exit")
+	s := newTestSupervisor(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+
+	// Start may return nil (raced to Healthy before the process died) or an
+	// error (process exited before the CAS check). Either way the process is
+	// gone, and the supervisor must reconcile to Crashed — never a stale Healthy.
+	_ = s.Start(ctx)
+
+	waitForStatus(t, s, runtime.RuntimeCrashed, 5*time.Second)
+}
+
 func TestRestartAfterStop(t *testing.T) {
 	s := newTestSupervisor(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
@@ -178,4 +192,49 @@ func TestRestartAfterStop(t *testing.T) {
 	}
 	// Port may or may not differ (auto-allocation), but must be valid either way.
 	_ = firstPort
+}
+
+func TestMarkHealthyAcceptsCurrentStarting(t *testing.T) {
+	s := newTestSupervisor(t)
+	s.mu.Lock()
+	s.status = runtime.RuntimeStarting
+	s.runID = 7
+	s.mu.Unlock()
+
+	if !s.markHealthy(7) {
+		t.Fatal("markHealthy should accept the current run in Starting state")
+	}
+	if got := s.Status(); got != runtime.RuntimeHealthy {
+		t.Fatalf("status = %s, want %s", got, runtime.RuntimeHealthy)
+	}
+}
+
+func TestMarkHealthyRejectsAfterCrash(t *testing.T) {
+	s := newTestSupervisor(t)
+	s.mu.Lock()
+	s.status = runtime.RuntimeCrashed
+	s.runID = 7
+	s.mu.Unlock()
+
+	if s.markHealthy(7) {
+		t.Fatal("markHealthy must not overwrite Crashed with Healthy")
+	}
+	if got := s.Status(); got != runtime.RuntimeCrashed {
+		t.Fatalf("status = %s, want %s", got, runtime.RuntimeCrashed)
+	}
+}
+
+func TestMarkHealthyRejectsStaleRun(t *testing.T) {
+	s := newTestSupervisor(t)
+	s.mu.Lock()
+	s.status = runtime.RuntimeStarting
+	s.runID = 9 // current run
+	s.mu.Unlock()
+
+	if s.markHealthy(7) {
+		t.Fatal("markHealthy must reject a stale runID")
+	}
+	if got := s.Status(); got != runtime.RuntimeStarting {
+		t.Fatalf("status = %s, want %s", got, runtime.RuntimeStarting)
+	}
 }

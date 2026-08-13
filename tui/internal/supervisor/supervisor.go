@@ -52,6 +52,7 @@ type Supervisor struct {
 	password string
 	lastErr  error
 	exitCh   chan struct{}
+	runID    uint64
 }
 
 func NewSupervisor(config Config) *Supervisor {
@@ -114,34 +115,50 @@ func (s *Supervisor) LastError() error {
 // and leaves status Healthy. It returns an error on startup failure and sets
 // status Crashed.
 func (s *Supervisor) Start(ctx context.Context) error {
-	cmd, exitCh, err := s.startProcess()
+	cmd, exitCh, runID, err := s.startProcess()
 	if err != nil {
 		return err
 	}
 
-	go s.monitor(cmd, exitCh)
+	go s.monitor(cmd, exitCh, runID)
 
 	if err := s.waitForReady(ctx); err != nil {
-		s.cleanupFailedStart(cmd, exitCh, err)
+		s.cleanupFailedStart(cmd, exitCh, runID, err)
 		return err
 	}
 
-	s.mu.Lock()
-	s.status = runtime.RuntimeHealthy
-	s.mu.Unlock()
+	// Only transition to Healthy if this run is still the current one and the
+	// monitor has not already reconciled a crash. Prevents a stale Healthy from
+	// overwriting a concurrent Crashed write.
+	if !s.markHealthy(runID) {
+		return fmt.Errorf("opencode exited before startup completed")
+	}
 	return nil
+}
+
+// markHealthy transitions Starting → Healthy only if runID is still the current
+// run and status is still Starting. Returns false (leaving status untouched)
+// if the monitor already moved to Crashed/Stopped or a newer run took over.
+func (s *Supervisor) markHealthy(runID uint64) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.runID != runID || s.status != runtime.RuntimeStarting {
+		return false
+	}
+	s.status = runtime.RuntimeHealthy
+	return true
 }
 
 // startProcess performs the guarded state transition and process spawn under
 // one lock acquisition, so a concurrent Stop can never observe Starting with a
 // nil cmd.
-func (s *Supervisor) startProcess() (*exec.Cmd, chan struct{}, error) {
+func (s *Supervisor) startProcess() (*exec.Cmd, chan struct{}, uint64, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	switch s.status {
 	case runtime.RuntimeStarting, runtime.RuntimeHealthy:
-		return nil, nil, fmt.Errorf("runtime already running (status %s)", s.status)
+		return nil, nil, 0, fmt.Errorf("runtime already running (status %s)", s.status)
 	}
 	s.status = runtime.RuntimeStarting
 
@@ -149,7 +166,7 @@ func (s *Supervisor) startProcess() (*exec.Cmd, chan struct{}, error) {
 	if err != nil {
 		s.status = runtime.RuntimeCrashed
 		s.lastErr = err
-		return nil, nil, err
+		return nil, nil, 0, err
 	}
 
 	port := s.config.Port
@@ -158,7 +175,7 @@ func (s *Supervisor) startProcess() (*exec.Cmd, chan struct{}, error) {
 		if err != nil {
 			s.status = runtime.RuntimeCrashed
 			s.lastErr = err
-			return nil, nil, err
+			return nil, nil, 0, err
 		}
 	}
 
@@ -172,9 +189,19 @@ func (s *Supervisor) startProcess() (*exec.Cmd, chan struct{}, error) {
 	if err := cmd.Start(); err != nil {
 		s.status = runtime.RuntimeCrashed
 		s.lastErr = fmt.Errorf("start opencode: %w", err)
-		return nil, nil, s.lastErr
+		return nil, nil, 0, s.lastErr
 	}
 
+	if err := attachProcess(cmd); err != nil {
+		_ = cmd.Process.Kill()
+		_ = cmd.Wait()
+		s.status = runtime.RuntimeCrashed
+		s.lastErr = fmt.Errorf("attach process: %w", err)
+		return nil, nil, 0, s.lastErr
+	}
+
+	s.runID++
+	runID := s.runID
 	exitCh := make(chan struct{})
 	s.cmd = cmd
 	s.port = port
@@ -182,7 +209,7 @@ func (s *Supervisor) startProcess() (*exec.Cmd, chan struct{}, error) {
 	s.lastErr = nil
 	s.exitCh = exitCh
 
-	return cmd, exitCh, nil
+	return cmd, exitCh, runID, nil
 }
 
 // Stop gracefully terminates the process group, waits up to StopTimeout, then
@@ -214,9 +241,17 @@ func (s *Supervisor) Stop() error {
 
 // monitor is the sole caller of cmd.Wait(). It reconciles the terminal state
 // once the process exits and closes exitCh to release Stop/Start waiters.
-func (s *Supervisor) monitor(cmd *exec.Cmd, exitCh chan struct{}) {
+func (s *Supervisor) monitor(cmd *exec.Cmd, exitCh chan struct{}, runID uint64) {
 	err := cmd.Wait()
+	detachProcess(cmd)
+
 	s.mu.Lock()
+	if s.runID != runID {
+		// A newer run has taken over; this stale monitor must not touch status.
+		s.mu.Unlock()
+		close(exitCh)
+		return
+	}
 	if s.status == runtime.RuntimeStopping {
 		s.status = runtime.RuntimeStopped
 	} else {
@@ -228,10 +263,11 @@ func (s *Supervisor) monitor(cmd *exec.Cmd, exitCh chan struct{}) {
 }
 
 // cleanupFailedStart terminates a process that started but never became ready.
-// If Stop() already took over shutdown, it does nothing.
-func (s *Supervisor) cleanupFailedStart(cmd *exec.Cmd, exitCh chan struct{}, err error) {
+// If Stop() already took over shutdown, or a newer run has started, it does
+// nothing.
+func (s *Supervisor) cleanupFailedStart(cmd *exec.Cmd, exitCh chan struct{}, runID uint64, err error) {
 	s.mu.Lock()
-	if s.status == runtime.RuntimeStopping || s.status == runtime.RuntimeStopped {
+	if s.runID != runID || s.status == runtime.RuntimeStopping || s.status == runtime.RuntimeStopped {
 		s.mu.Unlock()
 		return
 	}
@@ -241,8 +277,10 @@ func (s *Supervisor) cleanupFailedStart(cmd *exec.Cmd, exitCh chan struct{}, err
 	stopProcess(cmd, exitCh, s.config.StopTimeout)
 
 	s.mu.Lock()
-	s.status = runtime.RuntimeCrashed
-	s.lastErr = err
+	if s.runID == runID {
+		s.status = runtime.RuntimeCrashed
+		s.lastErr = err
+	}
 	s.mu.Unlock()
 }
 
