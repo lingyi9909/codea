@@ -15,6 +15,10 @@ func answerDelta(content string) runtime.Event {
 	return runtime.Event{Type: runtime.EventType("answer.delta"), Content: content}
 }
 
+func stepStarted() runtime.Event {
+	return runtime.Event{Type: runtime.EventType("step.started")}
+}
+
 func assertProcEvents(t *testing.T, got []Event, want ...Event) {
 	t.Helper()
 	if len(got) != len(want) {
@@ -117,6 +121,7 @@ func TestProcessorMultipleReasoningBlocks(t *testing.T) {
 	feedAll(p,
 		reasoningDelta("first"),
 		answerDelta("mid"),
+		stepStarted(),
 		answerDelta("<think>second</think>end"),
 	)
 	p.Flush()
@@ -130,6 +135,52 @@ func TestProcessorMultipleReasoningBlocks(t *testing.T) {
 	}
 	if snap.Blocks[1].Content != "second" || snap.Blocks[1].State != BlockCompleted {
 		t.Fatalf("block 1 unexpected: %+v", snap.Blocks[1])
+	}
+}
+
+// TestProcessorStructuredPrefixThinkDedupSingleChunk guards the de-dup bug:
+// a non-empty answer prefix must NOT lift structured reasoning's suppression of
+// a following <think> duplicate within the same cycle.
+func TestProcessorStructuredPrefixThinkDedupSingleChunk(t *testing.T) {
+	p := NewProcessor()
+	got := feedAll(p,
+		reasoningDelta("I think"),
+		answerDelta("prefix <think>duplicate</think>suffix"),
+	)
+	got = append(got, p.Flush()...)
+	assertProcEvents(t, got,
+		Event{Kind: EventReasoningStart},
+		Event{Kind: EventReasoningDelta, Content: "I think"},
+		Event{Kind: EventReasoningEnd},
+		Event{Kind: EventAnswerDelta, Content: "prefix "},
+		Event{Kind: EventAnswerDelta, Content: "suffix"},
+	)
+	if n := countEvents(got, EventReasoningDelta); n != 1 {
+		t.Fatalf("expected reasoning emitted exactly once, got %d", n)
+	}
+}
+
+// TestProcessorStructuredPrefixThinkDedupCrossChunk is the streaming variant:
+// the <think>/</think> tags are split across answer chunks. Suppression must
+// still hold, reasoning emitted once, and prefix + final answer fully preserved.
+func TestProcessorStructuredPrefixThinkDedupCrossChunk(t *testing.T) {
+	p := NewProcessor()
+	got := feedAll(p,
+		reasoningDelta("I think"),
+		answerDelta("prefix <thi"),
+		answerDelta("nk>duplicate</th"),
+		answerDelta("ink>suffix"),
+	)
+	got = append(got, p.Flush()...)
+	assertProcEvents(t, got,
+		Event{Kind: EventReasoningStart},
+		Event{Kind: EventReasoningDelta, Content: "I think"},
+		Event{Kind: EventReasoningEnd},
+		Event{Kind: EventAnswerDelta, Content: "prefix "},
+		Event{Kind: EventAnswerDelta, Content: "suffix"},
+	)
+	if n := countEvents(got, EventReasoningDelta); n != 1 {
+		t.Fatalf("expected reasoning emitted exactly once, got %d", n)
 	}
 }
 

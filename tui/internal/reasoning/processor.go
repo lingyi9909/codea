@@ -11,6 +11,7 @@ import (
 const (
 	eventTypeSessionError runtime.EventType = "session.error"
 	eventTypeRuntimeError runtime.EventType = "runtime.error"
+	eventTypeStepStarted  runtime.EventType = "step.started"
 )
 
 // source tracks where the active reasoning block originated, so the processor
@@ -57,6 +58,9 @@ type Processor struct {
 	normalizer     *Normalizer
 	tagParser      *TagParser
 	tracker        *Tracker
+	// structuredSeen suppresses <think> fallback content for the entire
+	// answer/reasoning cycle once structured reasoning has been observed. It is
+	// reset only on step.started (the cycle boundary), never on answer deltas.
 	structuredSeen bool
 	activeSource   source
 }
@@ -127,9 +131,6 @@ func (p *Processor) handleText(content string) []Event {
 		switch pe.Type {
 		case ParserEventAnswerDelta:
 			out = append(out, Event{Kind: EventAnswerDelta, Content: pe.Content})
-			if pe.Content != "" {
-				p.structuredSeen = false
-			}
 		case ParserEventReasoningStart:
 			// Deferred: a block starts on its first non-empty delta so an empty
 			// <think></think> never produces a garbage block.
@@ -154,6 +155,10 @@ func (p *Processor) handleOther(ev runtime.Event) []Event {
 	switch ev.Type {
 	case eventTypeSessionError, eventTypeRuntimeError:
 		return p.finalize(true)
+	case eventTypeStepStarted:
+		out := p.finalize(false)
+		p.structuredSeen = false
+		return out
 	}
 	return nil
 }
@@ -197,9 +202,6 @@ func (p *Processor) finalize(interrupted bool) []Event {
 		switch pe.Type {
 		case ParserEventAnswerDelta:
 			out = append(out, Event{Kind: EventAnswerDelta, Content: pe.Content})
-			if pe.Content != "" {
-				p.structuredSeen = false
-			}
 		case ParserEventReasoningDelta:
 			if !p.structuredSeen {
 				p.activeSource = sourceFallback
