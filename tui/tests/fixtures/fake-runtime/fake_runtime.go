@@ -50,6 +50,9 @@ type FakeRuntime struct {
 	// ReplyApprovalError, if set, is returned by ReplyApproval.
 	ReplyApprovalError error
 
+	// SubscribeError, if set, is returned by Subscribe.
+	SubscribeError error
+
 	// ApprovalOnceEvents are sent to subscribers when ReplyApproval is called
 	// with ApprovalOnce, simulating the runtime continuing after approval.
 	ApprovalOnceEvents []runtime.Event
@@ -142,6 +145,9 @@ func (f *FakeRuntime) Prompt(ctx context.Context, sessionID runtime.SessionID, r
 }
 
 func (f *FakeRuntime) Subscribe(ctx context.Context) (<-chan runtime.Event, error) {
+	if f.SubscribeError != nil {
+		return nil, f.SubscribeError
+	}
 	ch := make(chan runtime.Event, 64)
 	f.mu.Lock()
 	f.subscribers[ch] = ctx

@@ -24,6 +24,9 @@ type subscribeErrMsg struct {
 	err error
 }
 
+// eventStreamClosedMsg signals the runtime event channel was closed.
+type eventStreamClosedMsg struct{}
+
 // tickMsg drives the ~50ms merge refresh used to coalesce high-frequency
 // streaming redraws and keep live duration/status text moving.
 type tickMsg struct {
