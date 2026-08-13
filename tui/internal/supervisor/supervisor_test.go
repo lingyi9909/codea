@@ -1,0 +1,181 @@
+package supervisor
+
+import (
+	"context"
+	"sync"
+	"testing"
+	"time"
+
+	"codea/tui/internal/runtime"
+)
+
+func TestDefaultStatusStopped(t *testing.T) {
+	s := newTestSupervisor(t)
+	if got := s.Status(); got != runtime.RuntimeStopped {
+		t.Fatalf("initial status = %s, want %s", got, runtime.RuntimeStopped)
+	}
+	if s.Port() != 0 {
+		t.Fatalf("initial port = %d, want 0", s.Port())
+	}
+}
+
+func TestStartReachesHealthy(t *testing.T) {
+	s := newTestSupervisor(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+
+	if err := s.Start(ctx); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	defer s.Stop()
+
+	if got := s.Status(); got != runtime.RuntimeHealthy {
+		t.Fatalf("status after Start = %s, want %s", got, runtime.RuntimeHealthy)
+	}
+	if s.Port() <= 0 {
+		t.Fatalf("port = %d, want > 0", s.Port())
+	}
+	if got := s.BaseURL(); got == "" {
+		t.Fatal("BaseURL must not be empty")
+	}
+}
+
+func TestStartWhileHealthyErrors(t *testing.T) {
+	s := newTestSupervisor(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+
+	if err := s.Start(ctx); err != nil {
+		t.Fatalf("first Start: %v", err)
+	}
+	defer s.Stop()
+
+	if err := s.Start(ctx); err == nil {
+		t.Fatal("second Start while healthy should error")
+	}
+	// State must remain Healthy, not be corrupted by the rejected Start.
+	if got := s.Status(); got != runtime.RuntimeHealthy {
+		t.Fatalf("status after rejected Start = %s, want %s", got, runtime.RuntimeHealthy)
+	}
+}
+
+func TestStopIdempotent(t *testing.T) {
+	s := newTestSupervisor(t)
+
+	// Stop before any Start is a no-op.
+	if err := s.Stop(); err != nil {
+		t.Fatalf("Stop before Start: %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	if err := s.Start(ctx); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+
+	if err := s.Stop(); err != nil {
+		t.Fatalf("first Stop: %v", err)
+	}
+	if got := s.Status(); got != runtime.RuntimeStopped {
+		t.Fatalf("status after Stop = %s, want %s", got, runtime.RuntimeStopped)
+	}
+
+	// Second Stop is idempotent and must not panic.
+	if err := s.Stop(); err != nil {
+		t.Fatalf("second Stop: %v", err)
+	}
+	if got := s.Status(); got != runtime.RuntimeStopped {
+		t.Fatalf("status after second Stop = %s, want %s", got, runtime.RuntimeStopped)
+	}
+}
+
+func TestUnexpectedExitCrashes(t *testing.T) {
+	s := newTestSupervisor(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+
+	if err := s.Start(ctx); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	if s.Status() != runtime.RuntimeHealthy {
+		t.Fatalf("want healthy before crash, got %s", s.Status())
+	}
+
+	// Simulate the OpenCode process being killed externally.
+	s.mu.Lock()
+	proc := s.cmd.Process
+	s.mu.Unlock()
+	if err := proc.Kill(); err != nil {
+		t.Fatalf("external kill: %v", err)
+	}
+
+	waitForStatus(t, s, runtime.RuntimeCrashed, 5*time.Second)
+	if s.LastError() == nil {
+		t.Fatal("expected a non-nil LastError after unexpected exit")
+	}
+}
+
+func TestConcurrentStartSingleProcess(t *testing.T) {
+	s := newTestSupervisor(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+
+	const n = 8
+	errs := make([]error, n)
+	var wg sync.WaitGroup
+	for i := 0; i < n; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			errs[i] = s.Start(ctx)
+		}(i)
+	}
+	wg.Wait()
+
+	successes := 0
+	for _, err := range errs {
+		if err == nil {
+			successes++
+		}
+	}
+	if successes != 1 {
+		t.Fatalf("expected exactly 1 successful Start, got %d (errs=%v)", successes, errs)
+	}
+	defer s.Stop()
+
+	if got := s.Status(); got != runtime.RuntimeHealthy {
+		t.Fatalf("status = %s, want %s", got, runtime.RuntimeHealthy)
+	}
+}
+
+func TestRestartAfterStop(t *testing.T) {
+	s := newTestSupervisor(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+
+	if err := s.Start(ctx); err != nil {
+		t.Fatalf("first Start: %v", err)
+	}
+	firstPassword := s.Password()
+	firstPort := s.Port()
+	if err := s.Stop(); err != nil {
+		t.Fatalf("Stop: %v", err)
+	}
+
+	if err := s.Start(ctx); err != nil {
+		t.Fatalf("second Start: %v", err)
+	}
+	defer s.Stop()
+
+	if got := s.Status(); got != runtime.RuntimeHealthy {
+		t.Fatalf("status after restart = %s, want %s", got, runtime.RuntimeHealthy)
+	}
+	if s.Password() == firstPassword {
+		t.Fatal("restart must generate a new password")
+	}
+	if s.Port() == 0 {
+		t.Fatal("restart must have a valid port")
+	}
+	// Port may or may not differ (auto-allocation), but must be valid either way.
+	_ = firstPort
+}
