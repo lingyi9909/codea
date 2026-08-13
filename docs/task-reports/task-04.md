@@ -2,7 +2,7 @@
 
 ## Overview
 
-Checkpoint: d79a2e8d186655180de85bc455cfba7fce7f9569
+Checkpoint: 338591f0d3f78c490fe05415bba5e6fe11a26741
 
 补齐生产级 SSE 恢复、状态补偿、错误分类、背压与真实 Runtime 长连接验证。
 
@@ -140,6 +140,52 @@ All gates pass:
 
 - Backpressure test precision: verifies exactly 30 domain events + backpressure errors > 0
 - `nextAction` in execution-state.yaml: updated to "等待人工验收"
+
+## Round 6 Review Fixes (2026-08-13) — 2 Blocking Issues
+
+### Blocking 1: Real OpenCode Disconnect/Reconnect/Recovery Required Gate
+
+Real OpenCode v1.18.11 gate (not `httptest.Server`). Added
+`tui/tests/contract/real_recovery_contract_test.go` which drives a
+`disconnectProxy` against the live server to force SSE termination and verify
+the full cycle.
+
+Root-cause fixes required to make the real gate pass:
+
+- **Nested ID extraction** (`event_mapper.go`): real OpenCode nests message/part
+  IDs under `properties.info.id` (`message.updated`) and `properties.part.*`
+  (`message.part.updated`); the mapper previously read only flat top-level
+  fields, so recovered parts carried empty IDs.
+- **Real API shape** (`http_client.go`, `recovery.go`): `GET /session` returns a
+  raw array (not `{data:[...]}`), and `GET /session/:id/message` returns
+  `{info:{id}, parts:[{id}]}`. Recovery now parses both shapes.
+- **Initial-connect suppression** (`reconnect.go`): `ReconnectHook` fires only
+  on reconnects, not the first connect, preventing every historical session from
+  being re-emitted as new on startup.
+
+Real evidence (run against OpenCode v1.18.11 at `127.0.0.1:14242`):
+
+```
+Phase 1: totalEvents=394 msgs=259 parts=5 recoveredMsgs=257 recoveredParts=2
+         curRecoveredMsgs=1 curRecoveredPts=2 answer=true tool=true
+         disconnected=true recovery=true
+No-duplicate check: 259 unique message IDs tracked
+Phase 2: approval=true approved=true events=14   (external_directory → ask)
+Cancel (post-reconnect): ok
+Cancel 2 (post-reconnect): ok (idempotent)
+```
+
+This demonstrates: real `/global/event` → forced disconnect → reconnect →
+real session/message history recovery → missing message/part compensation
+(`curRecoveredMsgs=1`, `curRecoveredPts=2`) → no-duplicate/no-loss (259 unique
+IDs) → Approval/Cancel after reconnect.
+
+### Blocking 2: Checkpoint Layering
+
+Checkpoint now points to the Final Implementation Commit
+`338591f0d3f78c490fe05415bba5e6fe11a26741` (the round-6 code+test commit), not
+an evidence/docs/state commit. `docs/execution-state.yaml` and this report both
+reference the same SHA.
 
 ## Spec Review Fixes (2026-08-12)
 
