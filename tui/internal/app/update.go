@@ -69,6 +69,9 @@ func (m *Model) handleKey(msg tea.KeyMsg) tea.Cmd {
 	case key.Matches(msg, m.keys.Newline):
 		m.input += "\n"
 		return nil
+	case key.Matches(msg, m.keys.ToggleThink):
+		m.reasoningExpanded = !m.reasoningExpanded
+		return nil
 	default:
 		m.handleTyping(msg)
 		return nil
