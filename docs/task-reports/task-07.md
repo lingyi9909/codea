@@ -1,0 +1,137 @@
+# Task 7 Report — TUI 基础 + SSE 事件流
+
+## Overview
+
+Checkpoint: `876b20036cf99141f1f53e20bf7a870c0fd56f45`
+
+建立 Bubble Tea 应用骨架：Tokyo Night 主题、Chat 页面、输入框、Runtime 状态、`AgentRuntime.Subscribe()` 非阻塞接入、Runtime Event→UI Message 转换、Reasoning Processor→UI 流式展示、streaming answer、reasoning 默认折叠 + duration、工具活动时间线、窗口 resize、快捷键、~50ms 合并刷新、`cmd/codea` TUI 启动。
+
+严格边界：App 只依赖 `runtime` + `reasoning` + `theme` + Bubble Tea；不 import opencode/supervisor（在 `cmd/codea` composition root 中接线）。`Subscribe()` 通过 tea.Cmd 包装，绝不阻塞 Bubble Tea Update。Reasoning 只消费 Task 6 Processor，不自行解析 `<think>`。streaming answer 追加到单条 assistant message。
+
+## Step 1 — Theme + Page + KeyMap
+
+- Created `tui/internal/theme/theme.go`：Tokyo Night 调色板（`#c0caf5` Primary / `#e0af68` Accent / `#9ece6a` Success / `#f7768e` Error / `#292e42` Border / `#1a1b26` Background 等）+ 5 个派生 Style（Chat/Muted/Accent/Success/Error）。仅依赖 lipgloss，零 Runtime/Vendor 知识。
+- Created `tui/internal/app/page.go`：`Page` 枚举，V1 仅 `PageChat`；Session/Skill/Agent 页面留给后续 Task。
+- Created `tui/internal/app/keymap.go`：`KeyMap` + `DefaultKeyMap()` — enter 提交、alt+enter/ctrl+j 换行、ctrl+c 退出、ctrl+t 切换 thinking、ctrl+l 清屏、`?` 帮助。
+- Tests：`theme_test.go`、`page_test.go`、`keymap_test.go`。
+
+## Step 2 — App Model + ChatMessage
+
+- Created `tui/internal/app/model.go`：`Role`（user/assistant/info）、`ChatMessage{Role,Content,Finished}`、`ToolStatus`/`ToolActivity`（工具活动与消息内容分离）、`Model` 结构体 + `NewModel(client)`。Model 无 `permissionModel`/`feedbackModel`（Task 8 边界）。所有 mutation 在 Update 单 goroutine 内，无需 mutex。
+- Created `tui/internal/app/messages.go`：内部 tea.Msg 类型 — `subscribedMsg`/`runtimeEventMsg`/`subscribeErrMsg`/`eventStreamClosedMsg`/`tickMsg`/`runtimeStatusMsg`/`promptResultMsg`。
+- Tests：`model_test.go`。
+
+## Step 3 — Runtime Subscribe + Tea Cmd（非阻塞）
+
+- Created `tui/internal/app/commands.go`：
+  - `SubscribeEvents(client)` → `subscribedMsg{ch}` 或 `subscribeErrMsg`，不阻塞。
+  - `waitForEvent(ch)` → 每次消费一个事件并包装为 `runtimeEventMsg`，Update 处理完再重发，事件逐个消费、Update 永不阻塞在 channel 上。
+  - `TickCmd()` → `tea.Tick(50ms)` 合并刷新。
+  - `PromptCmd` / `CreateSessionAndPromptCmd` → 非阻塞 prompt 提交。
+- Created `tui/internal/app/events.go`：Codea domain 事件类型常量（`step.finished`/`session.error`/`runtime.error`/`tool.called`/`tool.success`/`tool.failed`），非 Vendor DTO。
+- Modified `tui/tests/fixtures/fake-runtime/fake_runtime.go`：新增 `SubscribeError` 字段，测试订阅失败路径。
+- Tests：`commands_test.go`（Subscribe 成功/失败、waitForEvent 关闭、Tick、Prompt）。
+
+## Step 4 — Prompt 输入 + Streaming Answer
+
+- Created `tui/internal/app/update.go`：`Init()` = `tea.Batch(SubscribeEvents, TickCmd)`；`Update()` 处理订阅生命周期、key、prompt 提交、streaming 事件。
+  - `submit()`：空白忽略；append user + assistant message；reset processor/reasoning/tools；构建 `runtime.PromptRequest{MessageID, Agent:"general", Parts:[TextPart]}`（复用现有 Domain Contract，不重简化）；首个 prompt 走 `CreateSessionAndPromptCmd`，后续复用 session。
+  - `appendAnswer()`：delta 追加到单条 in-flight assistant message，绝不为每个 delta 新建消息。
+  - `processRuntimeEvent()`：消费 `step.finished`/`session.error`/`runtime.error` → finishStreaming；tool 事件 → addTool/updateTool；再经 `m.proc.Process(ev)` 消费 answer/reasoning 事件。
+- Tests：`submit_test.go`（11 项：空白、消息 append、有/无 session、typing/space/backspace/newline、answer delta 追加、step.finished、reasoning delta）。
+
+## Step 5 — Reasoning UI
+
+- Created `tui/internal/app/view.go` 中 reasoning 渲染：streaming 中显示原始内容；结束后默认折叠为 `✓ Spent Xs thinking`；`ctrl+t` 展开/折叠；duration 直接消费 Task 6 `EventReasoningEnd.Duration`，TUI 不重算。
+- `update.go`：`EventReasoningStart` → active + 清空 content；`EventReasoningDelta` → 累加 content；`EventReasoningEnd` → inactive + 记录 duration + 默认折叠。
+- Tests：`reasoning_test.go`（toggle、formatDuration、renderReasoning 四态）。
+
+## Step 6 — Tool/Status/View + main.go 接线
+
+- Created `tui/internal/app/view.go` 完整 View：header（app 名 + Runtime 状态点/标签）、状态行（Ready/◌ Working）、工具时间线（◌/✓/✗ + 名称）、输入行、footer 快捷键提示。
+  - `statusLabel`/`statusDot`（Healthy/Crashed → `●`，其余 `○`）、`toolSymbol`（success/failed/running）、`formatDuration`、`renderReasoning` 折叠/展开。
+- Rewrote `tui/cmd/codea/main.go`：读取 `OPENCODE_URL`/`OPENCODE_USERNAME`/`OPENCODE_PASSWORD` 环境变量，构造 `opencode.NewOpenCodeAdapter`，`app.NewModel(adapter)`，`tea.NewProgram(model, tea.WithAltScreen())` 启动。这是 composition root 唯一接触 vendor 层的位置。
+- Modified `scripts/check-runtime-boundary.sh`：允许 `cmd/` composition root import opencode（对齐脚本注释与 `tests/architecture/vendor_boundary_test.go` 的 `isCmd` 排除逻辑）。修复前该脚本误把 `cmd/codea` 接线 vendor adapter 判为泄漏。
+- Tests：`view_test.go`（statusLabel/statusDot/toolSymbol 表、renderHeader/StatusLine/Tools、View 含消息、WindowSizeMsg、Quit `tea.QuitMsg`、ClearScreen、tool 事件、subscribe healthy）。
+
+## Full Gate Verification
+
+针对 Final Implementation Commit `876b20036cf99141f1f53e20bf7a870c0fd56f45`：
+
+| Gate | Result |
+|------|--------|
+| `GOTOOLCHAIN=local go test ./... -count=1` | PASS（19 packages，无失败） |
+| `GOTOOLCHAIN=local go test -race ./... -count=1` | PASS（19 packages，无竞态） |
+| `GOTOOLCHAIN=local go vet ./...` | clean |
+| `GOTOOLCHAIN=local go build ./...` | clean |
+| `GOOS=windows GOARCH=amd64 GOTOOLCHAIN=local go build ./cmd/codea ./cmd/parity-runner` | PASS |
+| `GOOS=darwin GOARCH=amd64 GOTOOLCHAIN=local go build ./cmd/codea ./cmd/parity-runner` | PASS |
+| `./scripts/check-runtime-boundary.sh` | PASS（无 vendor DTO 泄漏） |
+| `./scripts/check-execution-state.sh` | valid |
+| `tests/execution-state/state_validator_test.sh` | valid |
+
+## Test Summary
+
+| Package | Tests |
+|---------|-------|
+| internal/theme | theme_test |
+| internal/app | model / keymap / page / commands / update / submit（11）/ reasoning / view（表驱动 + 行为） |
+| tests/fixtures/fake-runtime | SubscribeError 路径 |
+
+覆盖清单：Theme 调色板与派生 Style、Page 枚举、KeyMap 绑定、Model 构造与依赖隔离、Subscribe 成功/失败/关闭、非阻塞 waitForEvent、Tick 合并刷新、Prompt/CreateSessionAndPrompt 命令、空白输入忽略、消息 append、streaming answer 单消息追加、typing/space/backspace/newline、step.finished 结束、reasoning start/delta/end + duration + 默认折叠、statusLabel/statusDot/toolSymbol、WindowSizeMsg resize、Quit/ClearScreen/工具事件/subscribe healthy、cmd/codea composition root 接线。
+
+## Files Changed
+
+| File | Action |
+|------|--------|
+| `tui/internal/theme/theme.go` | Create |
+| `tui/internal/theme/theme_test.go` | Create |
+| `tui/internal/app/model.go` | Create |
+| `tui/internal/app/model_test.go` | Create |
+| `tui/internal/app/page.go` | Create |
+| `tui/internal/app/page_test.go` | Create |
+| `tui/internal/app/keymap.go` | Create |
+| `tui/internal/app/keymap_test.go` | Create |
+| `tui/internal/app/messages.go` | Create |
+| `tui/internal/app/commands.go` | Create |
+| `tui/internal/app/commands_test.go` | Create |
+| `tui/internal/app/events.go` | Create |
+| `tui/internal/app/update.go` | Create |
+| `tui/internal/app/update_test.go` | Create |
+| `tui/internal/app/submit_test.go` | Create |
+| `tui/internal/app/reasoning_test.go` | Create |
+| `tui/internal/app/view.go` | Create |
+| `tui/internal/app/view_test.go` | Create |
+| `tui/cmd/codea/main.go` | Modify |
+| `tui/go.mod` / `tui/go.sum` | Modify（新增 bubbletea/bubbles/lipgloss 依赖） |
+| `tui/tests/fixtures/fake-runtime/fake_runtime.go` | Modify（SubscribeError） |
+| `scripts/check-runtime-boundary.sh` | Modify（允许 cmd/ composition root） |
+
+## 提交记录
+
+| Commit | Step |
+|--------|------|
+| `cdcc90d` | Step 1 — Tokyo Night theme + Page + KeyMap |
+| `f8bea96` | Step 2 — App Model + ChatMessage + message types |
+| `b6e8443` | Step 3 — non-blocking Runtime Subscribe + tea.Cmd |
+| `80d551a` | Step 4 — prompt input + streaming answer |
+| `516205c` | Step 5 — reasoning UI (toggle + summary + duration) |
+| `cedf98b` | Step 6 — tool/status/view + cmd/codea wiring |
+| `876b200` | 收口修复 — boundary check 允许 cmd/ composition root（Final Implementation Commit） |
+
+## 与计划偏差
+
+1. 计划 `Model` 含 `permissionModel PermissionModel` / `feedbackModel FeedbackModel` 字段；按 Task 7 边界（Session/Approval 属 Task 8，Permission/Feedback 字段不实现）移除，改由 `ToolActivity` 只读展示工具活动。
+2. 计划用 `opencode.NewAdapter`；实际 adapter 构造器为 `opencode.NewOpenCodeAdapter`。
+3. 计划 Step 6/7（安装依赖 + `git add -A`）拆分为逐 step TDD commit，避免一次 `git add -A` 混入无关 artifact（`tui/tests/parity/evidence/runtime-evidence.json` 时间戳变更被排除）。
+4. 修复了 `scripts/check-runtime-boundary.sh` 与 `tests/architecture/vendor_boundary_test.go` 的不一致：shell 脚本误将 `cmd/` composition root 接线 vendor adapter 判为泄漏，现已对齐脚本注释与 Go 测试的 `isCmd` 排除逻辑。
+
+## Gate 结论
+
+- verification：pass
+- Task Gate：pass
+- 进入 `awaiting_acceptance`，等待人工验收；验收前不启动 Task 8。
+
+## 人工验收
+
+待人工按 23 项 Gate 验收。验收通过后标记 `completed` 并启动 Task 8（Session/Resume/Tool Approval）。
