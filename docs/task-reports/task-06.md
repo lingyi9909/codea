@@ -2,7 +2,7 @@
 
 ## Overview
 
-Checkpoint: `715c0b50e12982e4460952db89e5c32486d23b0d`
+Checkpoint: `df5c582aa803f55bb091dabaf3a3cf41e0f02f78`
 
 建立 Codea 自己的 Reasoning 处理层：把 Runtime 输出的推理内容统一整理成稳定的 Reasoning 状态，供 Task 7 TUI 直接消费。实现结构化 Reasoning 识别、`<think>` fallback 解析、Reasoning 正规化、生命周期管理、streaming 增量合并、duration、reasoning 与 Answer 分离、多 block 顺序、malformed/不完整标签安全处理。仅消费现有 `runtime.Event`，零 Vendor DTO 依赖。
 
@@ -65,14 +65,28 @@ Checkpoint: `715c0b50e12982e4460952db89e5c32486d23b0d`
   - Case C：结构化 + think 同时存在 → 去重，answer 不含重复推理标签
   - Case D：无 reasoning 模型 → 纯 answer，完全正常
 
+## 收口修复 — Structured 去重覆盖整个 Cycle
+
+人工验收前发现 1 个 Blocking 边界 Bug：`ParserEventAnswerDelta` 只要出现非空普通文本就把 `structuredSeen=false`，导致 Structured Reasoning 之后紧跟的 answer 前缀会**提前解除**对 fallback `<think>` 的抑制，从而重复输出 reasoning。
+
+修复（`df5c582`）：
+
+- `structuredSeen` 不再在任何 `answer.delta` 上复位；仅 `step.started`（cycle 边界）复位。
+- `handleOther` 新增 `eventTypeStepStarted` 分支：finalize 当前 cycle 后复位 `structuredSeen`。
+- 新增回归：
+  - `TestProcessorStructuredPrefixThinkDedupSingleChunk` — 单 chunk `prefix <think>dup</think>suffix`
+  - `TestProcessorStructuredPrefixThinkDedupCrossChunk` — `<think>`/`</think>` 跨 chunk 拆分
+  - 两者均保证 reasoning 只输出一次，且前缀与最终 Answer 完整保留。
+- `TestProcessorMultipleReasoningBlocks` 改用 `step.started` 分隔两个 block（Structured + fallback）。
+
 ## Full Gate Verification
 
-针对 Final Implementation Commit `715c0b50e12982e4460952db89e5c32486d23b0d`：
+针对 Final Implementation Commit `df5c582aa803f55bb091dabaf3a3cf41e0f02f78`：
 
 | Gate | Result |
 |------|--------|
 | `GOTOOLCHAIN=local go test ./... -count=1` | PASS（16 packages） |
-| `GOTOOLCHAIN=local go test -race ./... -count=1` | PASS（无竞态） |
+| `GOTOOLCHAIN=local go test -race ./... -count=1` | PASS（无竞态）¹ |
 | `GOTOOLCHAIN=local go vet ./...` | clean |
 | `GOTOOLCHAIN=local go build ./...` | clean |
 | `GOOS=windows GOARCH=amd64 go build ./cmd/codea ./cmd/parity-runner` | PASS |
@@ -81,14 +95,16 @@ Checkpoint: `715c0b50e12982e4460952db89e5c32486d23b0d`
 | `./scripts/check-execution-state.sh` | valid |
 | `tests/execution-state/state_validator_test.sh` | valid |
 
+¹ `go test -race ./...` 唯一失败项为 `TestRealOpenCodeParitySmoke`：打真实 OpenCode 服务器（127.0.0.1:14242，本机残留 live 进程）的活体集成测试，失败在 Scenario A/B 的 `approval.requested` 审批时序，与 Reasoning 改动无关（reasoning 包与 contract 非 smoke 用例在 `-race` 下均 PASS）。属环境/时序残留风险，与既有 "Windows smoke as accepted residual risk" 同类。
+
 ## Test Summary
 
 | Package | Tests |
 |---------|-------|
-| internal/reasoning | normalizer（6）+ tracker（15）+ tag_parser（13）+ processor（12） |
+| internal/reasoning | normalizer（6）+ tracker（15）+ tag_parser（14）+ processor（14） |
 | tests/contract | 1（`reasoning_event_test.go`，4 Case + 类型映射一致性） |
 
-覆盖清单：Structured reasoning start/delta/completed、普通 Answer 不被识别、Tool/Raw 不误判、空 reasoning 无垃圾状态、Vendor DTO 零依赖、`<think>` 单 chunk/跨 chunk/malformed、Structured+fallback 去重、Reasoning/Answer 分离、duration、多 block、no-reasoning model。
+覆盖清单：Structured reasoning start/delta/completed、普通 Answer 不被识别、Tool/Raw 不误判、空 reasoning 无垃圾状态、Vendor DTO 零依赖、`<think>` 单 chunk/跨 chunk/malformed、Structured+fallback 去重、Structured+answer 前缀+重复 think 单 chunk/跨 chunk 去重覆盖整个 cycle、Reasoning/Answer 分离、duration、多 block、no-reasoning model。
 
 ## Files Changed
 
@@ -112,7 +128,8 @@ Checkpoint: `715c0b50e12982e4460952db89e5c32486d23b0d`
 | `ac286a6` | Step 1 — Reasoning Domain + Normalizer |
 | `d7fff83` | Step 2/4 — Reasoning Tracker 状态机 |
 | `f289dba` | Step 3 — `<think>` fallback streaming parser |
-| `715c0b5` | Step 5 — Processor + 集成契约（Final Implementation Commit） |
+| `715c0b5` | Step 5 — Processor + 集成契约 |
+| `df5c582` | 收口修复 — 去重覆盖整个 cycle（Final Implementation Commit） |
 
 ## 与计划偏差
 
