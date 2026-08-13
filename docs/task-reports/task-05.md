@@ -1,0 +1,122 @@
+# Task 5 Report — Runtime Supervisor + Basic Auth + 跨平台进程管理
+
+## Overview
+
+Checkpoint: bf6fd3e6ada5e1b2b97df61cb8eadafc3da9ef38
+
+Runtime 进程生命周期管理：`RuntimeSupervisor` 负责 Start/Stop/Status（不进入 `AgentRuntime`）、每次启动随机 Basic Auth、`127.0.0.1` 只监听、跨平台（darwin/Windows）进程组信号控制、readiness 探测、Crash 检测，以及 Supervisor 启动的 Runtime 可被 `OpenCodeAdapter` 直接驱动的集成契约。
+
+## Step 1 — RuntimeStatus Domain + Supervisor 状态机
+
+- Created `tui/internal/runtime/status.go`：
+  - `RuntimeStatus` 字符串类型 + 5 个状态常量：`RuntimeStopped` / `RuntimeStarting` / `RuntimeHealthy` / `RuntimeStopping` / `RuntimeCrashed`
+- Created `tui/internal/supervisor/supervisor.go`：
+  - `Config{OpenCodeBin, Hostname, Port, ConfigDir, ProjectRoot, StartupTimeout, StopTimeout}`
+  - `Supervisor` 结构：`mu` 保护 `status/cmd/port/username/password/lastErr/exitCh`
+  - `NewSupervisor` 默认值：hostname=`127.0.0.1`、username=`opencode`、StartupTimeout=30s、StopTimeout=5s
+  - `Start` → `startProcess`（单次加锁完成状态迁移 + 进程 spawn，杜绝并发 Start 竞态）→ `monitor` goroutine → `waitForReady` → `Healthy`
+  - `monitor` 是**唯一** `cmd.Wait()` 调用方，进程退出后关闭 `exitCh`；非 Stop 流程退出 → `Crashed` + `lastErr`
+  - `Stop` 幂等；`Stopped/Crashed` 上为安全 no-op；`Stopping` 上等待 `exitCh`
+  - `cleanupFailedStart` 处理「已 spawn 但未 ready」的失败启动
+  - 使用 `exec.Command`（**非** `CommandContext`，避免 Start ctx 取消误杀进程）
+- Tests（`supervisor_test.go`）：`TestDefaultStatusStopped` / `TestStartReachesHealthy` / `TestStartWhileHealthyErrors` / `TestStopIdempotent` / `TestUnexpectedExitCrashes` / `TestConcurrentStartSingleProcess` / `TestRestartAfterStop`
+
+## Step 2 — Basic Auth + 启动参数/环境变量
+
+- `generatePassword()`：`crypto/rand` 32 字节 → 64 hex 字符（每次启动随机）
+- `buildEnv`：注入 `OPENCODE_SERVER_USERNAME` / `OPENCODE_SERVER_PASSWORD` / `OPENCODE_CONFIG_DIR` + 6 个离线变量（`OPENCODE_DISABLE_CLAUDE_CODE` / `MODELS_FETCH` / `AUTOUPDATE` / `EMBEDDED_WEB_UI` / `LSP_DOWNLOAD` / `DEFAULT_PLUGINS`）
+- `buildArgs`：`serve --hostname <host> --port <port>`，密码**绝不**进入 args（`TestBuildArgsNeverContainsPassword`）；只绑定 `127.0.0.1`（`TestBuildArgsBindsLocalhostNotWildcard`）
+- Tests（`auth_test.go`）：密码非空/长度 64/唯一性、username 默认 opencode、hostname 默认 127.0.0.1、env 携带凭据/ConfigDir/离线变量、args 形状与不含密码
+
+## Step 3 — Port 自动分配 + Ready 探测
+
+- `findFreePort()`：`net.Listen("tcp", "127.0.0.1:0")` 自动选口；`Config.Port=0` 时使用
+- `probeReady()`：GET `/global/health` + Basic Auth，要求 200 **且** `healthy:true`；`probeClient` 2s 超时防挂起；`readyInterval` 200ms 轮询
+- `waitForReady` 监听 ctx.Done / deadline / exitCh / ticker 四路
+- Tests（`readiness_test.go`）：healthy/带 BasicAuth/401/500/`healthy:false` 拒绝、端口有效性、固定端口、BaseURL、auth-required 启动、startup timeout → Crashed、ctx cancel 中断、进程即退 fail-fast
+
+## Step 4 — darwin 进程组控制
+
+- Created `tui/internal/supervisor/process_unix.go`（`//go:build darwin`）：
+  - `configureProcess`：`SysProcAttr{Setpgid: true}`（新进程组，整树可信号）
+  - `terminateProcess`：`syscall.Kill(-pid, SIGTERM)`（整组优雅退出）
+  - `killProcess`：`syscall.Kill(-pid, SIGKILL)`（整组强杀）
+- Tests（`process_unix_test.go`，`//go:build darwin`）：`TestStopGraceful` / `TestStopForceKillFallback`（忽略 SIGTERM → 强杀兜底）/ `TestChildProcessNotLeftBehind`（子进程一并清理，无孤儿）/ `TestStopAfterCrashNoPanic`
+
+## Step 5 — Windows 进程组控制（cross-build 验证）
+
+- Created `tui/internal/supervisor/process_windows.go`（`//go:build windows`）：
+  - `configureProcess`：`CREATE_NEW_PROCESS_GROUP`
+  - `terminateProcess`：`GenerateConsoleCtrlEvent(CTRL_BREAK_EVENT)`（优雅请求，best-effort）
+  - `killProcess`：`TerminateProcess` 兜底
+- Cross-build 验证：`GOOS=windows GOARCH=amd64 go build ./internal/supervisor/...` 与 `go build ./cmd/codea ./cmd/parity-runner` 均通过
+
+## Step 6 — Supervisor ↔ OpenCodeAdapter 集成契约
+
+- Created `tui/tests/contract/supervisor_adapter_contract_test.go`（位于 `tests/contract`，通过 Runtime 边界门禁）：
+  - `Supervisor.Start()` → `Healthy` → 取 `BaseURL/Username/Password` → `NewOpenCodeAdapter(...)` → `Health()` 成功 → 错密码 `IsAuth` 失败 → `CreateSession()` → `Subscribe()` 收到 `runtime.connected` → `Stop()` 后端口不可达 + `Stopped` → 重启获得**新密码** + 有效新端口 → Adapter 用新凭证工作、旧凭证失效
+  - `isolateOpenCodeEnv` 把 `HOME`/`XDG_*` 指向临时目录，真实 OpenCode 不触碰开发者真实配置/缓存，保持纯离线
+- 真实 OpenCode v1.18.11 冒烟通过（`docs/spike-artifacts/opencode`，darwin-arm64）：`TestSupervisorAdapterContract` PASS（1.17s，未 skip）
+
+## Full Gate Verification
+
+针对 Final Implementation Commit `bf6fd3e6ada5e1b2b97df61cb8eadafc3da9ef38`：
+
+| Gate | Result |
+|------|--------|
+| `go test ./... -count=1` | PASS（15 packages） |
+| `go test -race ./... -count=1` | PASS（无竞态） |
+| `go vet ./...` | clean |
+| `go build ./...` | clean |
+| `GOOS=windows GOARCH=amd64 go build ./cmd/codea ./cmd/parity-runner` | PASS |
+| `GOOS=darwin GOARCH=amd64 go build ./cmd/codea ./cmd/parity-runner` | PASS |
+| `check-runtime-boundary.sh` | PASS（无 vendor DTO 泄漏） |
+| `check-execution-state.sh` | valid |
+| `state_validator_test.sh` | valid |
+| `check-opencode-available.sh` | available |
+
+Task 5 专项契约：Supervisor lifecycle / Basic Auth / readiness / crash detection / graceful shutdown / force-kill fallback / real OpenCode supervisor smoke / offline regression 全部通过。
+
+## Windows 真实 lifecycle smoke — unable_to_run
+
+本机无 Windows 真机，`Windows x64 real lifecycle smoke`（真机进程树清理验证）无法执行。Windows 侧已通过 **x64 cross-build** 验证编译正确性；真机行为按清单第 15 节标记 `unable_to_run`，补齐 Windows 环境后再验。
+
+## 遗留说明
+
+本机存在一个 Task 4 遗留的 OpenCode 进程（`/tmp/opencode serve --port 14242`，Task 4 人工 smoke 遗留，非 Task 5 Supervisor 产生）。Task 5 全部测试使用随机端口并显式 `Stop()`，`TestChildProcessNotLeftBehind` 证明 Supervisor 无孤儿进程。
+
+## Test Summary
+
+| Package | Tests |
+|---------|-------|
+| internal/runtime | status.go（5 状态常量） |
+| internal/supervisor | 34 tests（状态机 + auth + readiness + 进程控制） |
+| internal/supervisor/fakeopencode | 测试专用 fake binary（main 包） |
+| tests/contract | 1（`TestSupervisorAdapterContract`，真实 OpenCode） |
+
+## Files Changed
+
+| File | Action |
+|------|--------|
+| `tui/internal/runtime/status.go` | Create |
+| `tui/internal/supervisor/supervisor.go` | Create |
+| `tui/internal/supervisor/process_unix.go` | Create |
+| `tui/internal/supervisor/process_windows.go` | Create |
+| `tui/internal/supervisor/supervisor_test.go` | Create |
+| `tui/internal/supervisor/auth_test.go` | Create |
+| `tui/internal/supervisor/readiness_test.go` | Create |
+| `tui/internal/supervisor/process_unix_test.go` | Create |
+| `tui/internal/supervisor/fake_runtime_test.go` | Create |
+| `tui/internal/supervisor/fakeopencode/main.go` | Create |
+| `tui/tests/contract/supervisor_adapter_contract_test.go` | Create |
+
+## 提交记录
+
+| Commit | Step |
+|--------|------|
+| `dba4e28` | Step 1 — Supervisor domain + 状态机 |
+| `959943f` | Step 2 — Basic Auth + 启动 args/env |
+| `5c84c2a` | Step 3 — Port 分配 + Ready 探测 |
+| `3026bf5` | Step 4 — darwin 进程组控制 |
+| `9eeba53` | Step 5 — Windows 进程组控制（cross-build） |
+| `bf6fd3e` | Step 6 — Supervisor↔Adapter 集成契约（Final Implementation Commit） |

@@ -4,19 +4,28 @@ plan: docs/superpowers/plans/2026-07-30-codea-v1-plan.md
 taskOrder: ["0", "1", "2", "2A", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21"]
 current:
   task: "5"
-  step: 1
-  status: in_progress
-  nextAction: 执行 Task 5 Step 1：Supervisor Domain + 状态机
+  step: 6
+  status: blocked
+  nextAction: 补齐 Windows 真机环境后执行 Windows x64 real lifecycle smoke，再转 awaiting_acceptance
 checkpoint:
-  commit: 3a737da675eb1f3f4752aaf150de75fbbda8bba1
+  commit: bf6fd3e6ada5e1b2b97df61cb8eadafc3da9ef38
   updatedAt: "2026-08-13T00:00:00Z"
 verification:
-  status: not_run
-  commands: []
-  errorSummary: null
-  recoveryAdvice: null
+  status: unable_to_run
+  commands:
+    - "GOTOOLCHAIN=local go test ./... -count=1"
+    - "GOTOOLCHAIN=local go test -race ./... -count=1"
+    - "GOTOOLCHAIN=local go vet ./..."
+    - "GOTOOLCHAIN=local go build ./..."
+    - "GOOS=windows GOARCH=amd64 GOTOOLCHAIN=local go build ./cmd/codea ./cmd/parity-runner"
+    - "GOOS=darwin GOARCH=amd64 GOTOOLCHAIN=local go build ./cmd/codea ./cmd/parity-runner"
+    - "./scripts/check-runtime-boundary.sh"
+    - "./scripts/check-execution-state.sh"
+    - "tests/execution-state/state_validator_test.sh"
+  errorSummary: "macOS/Windows 全部可运行 gate 通过；无 Windows 真机，Windows x64 real lifecycle smoke 无法执行"
+  recoveryAdvice: "补齐 Windows 真机后重跑 Windows x64 real lifecycle smoke（进程树清理验证），再转 awaiting_acceptance"
 taskGate:
-  status: not_evaluated
+  status: unable_to_evaluate
   gateItems: {}
 humanAcceptance:
   accepted: false
@@ -27,7 +36,7 @@ tasks:
   "2A": {status: completed, completedSteps: [1, 2, 3, 4, 5, 6], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: 871110ae346b27d8629769d5a3bb9f14a7373f73, report: docs/task-reports/task-02A.md}
   "3": {status: completed, completedSteps: [1, 2, 3, 4, 5, 6], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: 7ad89af4978faa5e49f8fac24f42b6c1115df460, report: docs/task-reports/task-03.md}
   "4": {status: completed, completedSteps: [1, 2, 3, 4, 5, 6], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: 3a737da675eb1f3f4752aaf150de75fbbda8bba1, report: docs/task-reports/task-04.md}
-  "5": {status: in_progress, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-05.md}
+  "5": {status: blocked, completedSteps: [1, 2, 3, 4, 5, 6], verificationStatus: unable_to_run, taskGateStatus: unable_to_evaluate, humanAccepted: false, checkpoint: bf6fd3e6ada5e1b2b97df61cb8eadafc3da9ef38, report: docs/task-reports/task-05.md}
   "6": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-06.md}
   "7": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-07.md}
   "8": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-08.md}
