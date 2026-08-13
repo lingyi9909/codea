@@ -2,6 +2,7 @@ package opencode
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 
@@ -37,16 +38,35 @@ func classifyError(op string, err error) error {
 	}
 	var httpErr *HTTPError
 	if errors.As(err, &httpErr) {
+		vd := httpErrorVendorDetails(httpErr)
 		switch {
 		case httpErr.StatusCode == http.StatusUnauthorized || httpErr.StatusCode == http.StatusForbidden:
-			return runtime.NewAuthError(op, httpErr.Error(), err)
+			rerr := runtime.NewAuthError(op, httpErr.Error(), err)
+			rerr.VendorDetails = vd
+			return rerr
 		case httpErr.StatusCode >= 500:
-			return runtime.NewTransportError(op, httpErr.Error(), err)
+			rerr := runtime.NewTransportError(op, httpErr.Error(), err)
+			rerr.VendorDetails = vd
+			return rerr
 		default:
-			return runtime.NewProtocolError(op, httpErr.Error(), err)
+			rerr := runtime.NewProtocolError(op, httpErr.Error(), err)
+			rerr.VendorDetails = vd
+			return rerr
 		}
 	}
 	return runtime.NewTransportError(op, err.Error(), err)
+}
+
+// httpErrorVendorDetails serializes the raw HTTP error metadata into
+// RuntimeError.VendorDetails so callers can inspect status/method/path/body.
+func httpErrorVendorDetails(e *HTTPError) json.RawMessage {
+	data, _ := json.Marshal(map[string]any{
+		"statusCode": e.StatusCode,
+		"method":     e.Method,
+		"path":       e.Path,
+		"body":       string(e.Body),
+	})
+	return data
 }
 
 func (a *OpenCodeAdapter) Health(ctx context.Context) (runtime.HealthInfo, error) {
@@ -108,6 +128,12 @@ func (a *OpenCodeAdapter) Subscribe(ctx context.Context) (<-chan runtime.Event, 
 
 			// Live event — map, record, forward.
 			ev, _ := MapEvent(raw.Data, raw.Sequence)
+			// Dedup boundary: a live event that raced into the reconnect buffer
+			// during recovery and duplicates a just-compensated message/part is
+			// suppressed so the Application sees it exactly once.
+			if a.tracker.ShouldSuppressLive(ev) {
+				continue
+			}
 			a.tracker.Record(ev)
 			if !sendRuntimeEvent(ctx, ch, ev) {
 				return

@@ -17,6 +17,12 @@ type SessionTracker struct {
 	mu       sync.Mutex
 	sessions map[string]*trackedSession
 	seq      int64
+	// recoveredMsgIDs / recoveredPartIDs are the message/part IDs compensated
+	// by the most recent Recover() pass. Live events that race into the
+	// reconnect buffer during recovery and match these IDs are duplicates of
+	// the compensation events and are suppressed once by ShouldSuppressLive.
+	recoveredMsgIDs  map[string]bool
+	recoveredPartIDs map[string]bool
 }
 
 type trackedSession struct {
@@ -27,7 +33,9 @@ type trackedSession struct {
 // NewSessionTracker creates a new tracker.
 func NewSessionTracker() *SessionTracker {
 	return &SessionTracker{
-		sessions: make(map[string]*trackedSession),
+		sessions:         make(map[string]*trackedSession),
+		recoveredMsgIDs:  make(map[string]bool),
+		recoveredPartIDs: make(map[string]bool),
 	}
 }
 
@@ -66,6 +74,29 @@ func (t *SessionTracker) LastSeq() int64 {
 	return t.seq
 }
 
+// ShouldSuppressLive reports whether a live event is a duplicate of a
+// message/part that was just compensated by the most recent Recover() pass.
+// The matching ID is consumed, so a subsequent genuine update for the same
+// ID is not suppressed.
+func (t *SessionTracker) ShouldSuppressLive(ev runtime.Event) bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	switch ev.Type {
+	case CodeaEventMessageUpdated:
+		if ev.MessageID != "" && t.recoveredMsgIDs[ev.MessageID] {
+			delete(t.recoveredMsgIDs, ev.MessageID)
+			return true
+		}
+	case CodeaEventPartUpdated:
+		if ev.PartID != "" && t.recoveredPartIDs[ev.PartID] {
+			delete(t.recoveredPartIDs, ev.PartID)
+			return true
+		}
+	}
+	return false
+}
+
 // Recover queries the OpenCode API for current session/message state and
 // returns compensation events for any sessions or messages that are new
 // since the last observation.
@@ -74,6 +105,11 @@ func (t *SessionTracker) Recover(ctx context.Context, client *HTTPClient) []runt
 	defer t.mu.Unlock()
 
 	var events []runtime.Event
+
+	// Reset the per-pass dedup sets; repopulated below for the messages/parts
+	// this pass compensates.
+	t.recoveredMsgIDs = make(map[string]bool)
+	t.recoveredPartIDs = make(map[string]bool)
 
 	sessions, err := client.GetSessionStatus(ctx)
 	if err != nil {
@@ -112,6 +148,7 @@ func (t *SessionTracker) Recover(ctx context.Context, client *HTTPClient) []runt
 			}
 			if !s.messages[msgID] {
 				s.messages[msgID] = true
+				t.recoveredMsgIDs[msgID] = true
 				events = append(events, messageRecoveryEvent(t.nextSeq(), info.ID, msgID, rawMsg))
 				// New message — record all parts without emitting individual events.
 				for _, pid := range partIDs {
@@ -124,6 +161,7 @@ func (t *SessionTracker) Recover(ctx context.Context, client *HTTPClient) []runt
 				for _, pid := range partIDs {
 					if !s.parts[pid] {
 						s.parts[pid] = true
+						t.recoveredPartIDs[pid] = true
 						events = append(events, partRecoveryEvent(t.nextSeq(), info.ID, msgID, pid, rawMsg))
 					}
 				}

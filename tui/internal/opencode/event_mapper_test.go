@@ -264,6 +264,50 @@ func TestEventMapperExtractsStructuredError(t *testing.T) {
 	}
 }
 
+func TestEventMapperErrorVendorDetails(t *testing.T) {
+	t.Run("structured session.error preserves raw vendor error", func(t *testing.T) {
+		raw := `{"directory":"/tmp","payload":{"type":"session.error","properties":{"sessionID":"s1","error":{"name":"UnknownError","data":{"message":"Error: No user message found"}}}}}`
+		event, err := MapEvent([]byte(raw), 1)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if event.Error == nil {
+			t.Fatal("expected Error to be non-nil")
+		}
+		if len(event.Error.VendorDetails) == 0 {
+			t.Fatal("VendorDetails must be auto-populated from the raw vendor error")
+		}
+		var vd map[string]any
+		if err := json.Unmarshal(event.Error.VendorDetails, &vd); err != nil {
+			t.Fatalf("VendorDetails is not valid JSON: %v", err)
+		}
+		if vd["name"] != "UnknownError" {
+			t.Errorf("VendorDetails.name = %v, want UnknownError", vd["name"])
+		}
+	})
+
+	t.Run("runtime_error preserves raw vendor error", func(t *testing.T) {
+		raw := `{"directory":"","payload":{"type":"runtime_error","properties":{"error":"scanner error: connection reset","code":"SCANNER_ERROR"}}}`
+		event, err := MapEvent([]byte(raw), 1)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if event.Error == nil {
+			t.Fatal("expected Error to be non-nil")
+		}
+		if len(event.Error.VendorDetails) == 0 {
+			t.Fatal("VendorDetails must be auto-populated from the raw vendor error")
+		}
+		var msg string
+		if err := json.Unmarshal(event.Error.VendorDetails, &msg); err != nil {
+			t.Fatalf("VendorDetails is not a JSON string: %v", err)
+		}
+		if msg != "scanner error: connection reset" {
+			t.Errorf("VendorDetails = %q, want the raw vendor message", msg)
+		}
+	})
+}
+
 func TestEventMapperToolEventOnlyWhenToolType(t *testing.T) {
 	// text part.updated should NOT have Tool set
 	raw := `{"directory":"/tmp","payload":{"type":"message.part.updated","properties":{"sessionID":"s1","part":{"id":"p1","messageID":"m1","sessionID":"s1","type":"text","text":"hello"}}}}`

@@ -412,3 +412,38 @@ loop:
 	}
 	t.Logf("events: %d, connects: %d, disconnects: %d", eventCount, connects.Load(), disconnectCount)
 }
+
+func TestShouldSuppressLiveDedup(t *testing.T) {
+	tr := NewSessionTracker()
+
+	// Simulate Recover() having compensated message M and part P.
+	tr.mu.Lock()
+	tr.recoveredMsgIDs["M"] = true
+	tr.recoveredPartIDs["P"] = true
+	tr.mu.Unlock()
+
+	// First live message.updated for M is the raced duplicate → suppressed.
+	if !tr.ShouldSuppressLive(runtime.Event{Type: CodeaEventMessageUpdated, MessageID: "M"}) {
+		t.Error("expected first live message.updated for M to be suppressed")
+	}
+	// Second occurrence is a genuine update → passes through.
+	if tr.ShouldSuppressLive(runtime.Event{Type: CodeaEventMessageUpdated, MessageID: "M"}) {
+		t.Error("expected second live message.updated for M to pass through")
+	}
+
+	// Same suppress-once semantics for parts.
+	if !tr.ShouldSuppressLive(runtime.Event{Type: CodeaEventPartUpdated, PartID: "P"}) {
+		t.Error("expected first live part.updated for P to be suppressed")
+	}
+	if tr.ShouldSuppressLive(runtime.Event{Type: CodeaEventPartUpdated, PartID: "P"}) {
+		t.Error("expected second live part.updated for P to pass through")
+	}
+
+	// Unrecovered IDs are never suppressed.
+	if tr.ShouldSuppressLive(runtime.Event{Type: CodeaEventMessageUpdated, MessageID: "N"}) {
+		t.Error("expected unrelated message N to pass through")
+	}
+	if tr.ShouldSuppressLive(runtime.Event{Type: CodeaEventPartUpdated, PartID: "Q"}) {
+		t.Error("expected unrelated part Q to pass through")
+	}
+}

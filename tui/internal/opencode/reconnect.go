@@ -98,14 +98,20 @@ func (r *ReconnectingSSEClient) Subscribe(ctx context.Context) (<-chan SSERawEve
 				}
 				status := extractHTTPStatus(err)
 				if !IsRetryableHTTP(status, err) {
-					// Emit Auth RuntimeError for 401/403 before closing.
+					// Emit a terminal runtime_error before closing so callers can
+					// distinguish a fatal error from a normal stream end. Auth for
+					// 401/403, Protocol for every other non-retryable status.
+					code := "PROTOCOL_ERROR"
 					if status == http.StatusUnauthorized || status == http.StatusForbidden {
-						seq++
-						ev := SSERawEvent{
-							Data:     newRuntimeErrorEvent(err.Error(), "AUTH_ERROR"),
-							Sequence: seq,
-						}
-						sendEvent(ctx, ch, ev)
+						code = "AUTH_ERROR"
+					}
+					seq++
+					ev := SSERawEvent{
+						Data:     newRuntimeErrorEvent(err.Error(), code),
+						Sequence: seq,
+					}
+					if !sendEvent(ctx, ch, ev) {
+						return
 					}
 					return
 				}

@@ -431,15 +431,22 @@ func TestSSE400NoRetry(t *testing.T) {
 		t.Fatalf("Subscribe: %v", err)
 	}
 
+	var sawProtocol bool
 	deadline := time.After(3 * time.Second)
 	for {
 		select {
-		case _, ok := <-ch:
+		case ev, ok := <-ch:
 			if !ok {
+				if !sawProtocol {
+					t.Error("expected PROTOCOL_ERROR event before channel close on 400")
+				}
 				if connects.Load() > 1 {
 					t.Errorf("expected exactly 1 connect for 400, got %d", connects.Load())
 				}
 				return
+			}
+			if strings.Contains(string(ev.Data), "PROTOCOL_ERROR") {
+				sawProtocol = true
 			}
 		case <-deadline:
 			t.Fatal("channel did not close within 3s for 400")
@@ -465,15 +472,22 @@ func TestSSE404NoRetry(t *testing.T) {
 		t.Fatalf("Subscribe: %v", err)
 	}
 
+	var sawProtocol bool
 	deadline := time.After(3 * time.Second)
 	for {
 		select {
-		case _, ok := <-ch:
+		case ev, ok := <-ch:
 			if !ok {
+				if !sawProtocol {
+					t.Error("expected PROTOCOL_ERROR event before channel close on 404")
+				}
 				if connects.Load() > 1 {
 					t.Errorf("expected exactly 1 connect for 404, got %d", connects.Load())
 				}
 				return
+			}
+			if strings.Contains(string(ev.Data), "PROTOCOL_ERROR") {
+				sawProtocol = true
 			}
 		case <-deadline:
 			t.Fatal("channel did not close within 3s for 404")
