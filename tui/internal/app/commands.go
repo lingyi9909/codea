@@ -45,3 +45,29 @@ func TickCmd() tea.Cmd {
 		return tickMsg{t: t}
 	})
 }
+
+// PromptCmd sends a prompt to an existing session and reports the result. It
+// never blocks the Bubble Tea event loop.
+func PromptCmd(client runtime.AgentRuntime, sessionID runtime.SessionID, req runtime.PromptRequest) tea.Cmd {
+	return func() tea.Msg {
+		err := client.Prompt(context.Background(), sessionID, req)
+		return promptResultMsg{sessionID: sessionID, err: err}
+	}
+}
+
+// CreateSessionAndPromptCmd creates a session (using title) and sends req to it
+// in one non-blocking command, returning the new session ID.
+func CreateSessionAndPromptCmd(client runtime.AgentRuntime, title string, req runtime.PromptRequest) tea.Cmd {
+	return func() tea.Msg {
+		ctx := context.Background()
+		session, err := client.CreateSession(ctx, runtime.CreateSessionRequest{Title: title})
+		if err != nil {
+			return promptResultMsg{err: err}
+		}
+		sid := runtime.SessionID(session.ID)
+		if err := client.Prompt(ctx, sid, req); err != nil {
+			return promptResultMsg{sessionID: sid, err: err}
+		}
+		return promptResultMsg{sessionID: sid}
+	}
+}

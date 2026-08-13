@@ -37,3 +37,11 @@ type tickMsg struct {
 type runtimeStatusMsg struct {
 	status runtime.RuntimeStatus
 }
+
+// promptResultMsg reports the outcome of a prompt submission. On success it
+// carries the session the prompt was sent to (created on first submit if none
+// existed yet); on failure err is set and streaming is aborted.
+type promptResultMsg struct {
+	sessionID runtime.SessionID
+	err       error
+}

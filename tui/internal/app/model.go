@@ -63,6 +63,7 @@ type Model struct {
 
 	isStreaming bool
 	sessionID   runtime.SessionID
+	msgCounter  int
 
 	proc              *reasoning.Processor
 	reasoningActive   bool
