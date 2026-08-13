@@ -88,6 +88,7 @@ func (r *ReconnectingSSEClient) Subscribe(ctx context.Context) (<-chan SSERawEve
 
 		attempt := 1
 		var seq int64
+		firstConnect := true
 
 		for {
 			rawCh, err := r.subscribe(ctx)
@@ -121,8 +122,10 @@ func (r *ReconnectingSSEClient) Subscribe(ctx context.Context) (<-chan SSERawEve
 				continue
 			}
 
-			// Call reconnect hook if set (recovery/compensation).
-			if r.reconnectHook != nil {
+			// Call reconnect hook if set (recovery/compensation). Skip the
+			// initial connect: the tracker has no prior state yet, so recovery
+			// would re-emit every historical session/message as new.
+			if r.reconnectHook != nil && !firstConnect {
 				hookEvents, hookErr := r.reconnectHook(ctx)
 				if hookErr != nil {
 					seq++
@@ -139,6 +142,8 @@ func (r *ReconnectingSSEClient) Subscribe(ctx context.Context) (<-chan SSERawEve
 					}
 				}
 			}
+
+			firstConnect = false
 
 			// Successfully connected — drain events and reset attempt counter.
 			// Only reset after a full successful connection that produced at

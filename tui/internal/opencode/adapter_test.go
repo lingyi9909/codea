@@ -177,10 +177,10 @@ func TestOpenCodeAdapterListAgents(t *testing.T) {
 func TestOpenCodeAdapterSubscribe(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Handle recovery API calls (triggered by ReconnectHook).
-		if r.URL.Path == "/session/status" {
+		if r.URL.Path == "/session" {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
-			json.NewEncoder(w).Encode(OpenCodeSessionsResponse{Data: []OpenCodeSessionV2Info{}})
+			json.NewEncoder(w).Encode([]OpenCodeSessionV2Info{})
 			return
 		}
 		if r.Method != http.MethodGet || r.URL.Path != "/global/event" {
@@ -248,10 +248,10 @@ func TestAdapterBackpressureBoundedChannel(t *testing.T) {
 
 	var sent atomic.Int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/session/status" {
+		if r.URL.Path == "/session" {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
-			json.NewEncoder(w).Encode(OpenCodeSessionsResponse{Data: []OpenCodeSessionV2Info{}})
+			json.NewEncoder(w).Encode([]OpenCodeSessionV2Info{})
 			return
 		}
 		flusher, ok := w.(http.Flusher)

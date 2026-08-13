@@ -75,7 +75,7 @@ func (t *SessionTracker) Recover(ctx context.Context, client *HTTPClient) []runt
 
 	var events []runtime.Event
 
-	sessionsResp, err := client.GetSessionStatus(ctx)
+	sessions, err := client.GetSessionStatus(ctx)
 	if err != nil {
 		events = append(events, recoveryErrorEvent(t.nextSeq(), "session status query failed", err))
 		return events
@@ -83,7 +83,7 @@ func (t *SessionTracker) Recover(ctx context.Context, client *HTTPClient) []runt
 
 	// Detect new sessions and query messages for known sessions.
 	seen := make(map[string]bool)
-	for _, info := range sessionsResp.Data {
+	for _, info := range sessions {
 		seen[info.ID] = true
 
 		s, known := t.sessions[info.ID]
@@ -105,7 +105,7 @@ func (t *SessionTracker) Recover(ctx context.Context, client *HTTPClient) []runt
 			continue
 		}
 
-		for _, rawMsg := range msgsResp.Data {
+		for _, rawMsg := range msgsResp {
 			msgID, partIDs := extractMessageIDs(rawMsg)
 			if msgID == "" {
 				continue
@@ -147,24 +147,40 @@ func (t *SessionTracker) nextSeq() int64 {
 }
 
 // extractMessageIDs extracts the message ID and part IDs from an OpenCode
-// session message (which is a tagged union). Returns empty string if ID
-// cannot be extracted.
+// session message. The real OpenCode API wraps each message as
+// {"info": {"id": ...}, "parts": [{"id": ...}]}. Returns empty string if the
+// message ID cannot be extracted.
 func extractMessageIDs(msg any) (messageID string, partIDs []string) {
 	data, err := json.Marshal(msg)
 	if err != nil {
 		return "", nil
 	}
+
+	// Real OpenCode API shape: {info: {id, ...}, parts: [{id, ...}]}.
+	var withInfo struct {
+		Info struct {
+			ID string `json:"id"`
+		} `json:"info"`
+		Parts []struct {
+			ID string `json:"id"`
+		} `json:"parts"`
+	}
+	if err := json.Unmarshal(data, &withInfo); err == nil && withInfo.Info.ID != "" {
+		for _, p := range withInfo.Parts {
+			if p.ID != "" {
+				partIDs = append(partIDs, p.ID)
+			}
+		}
+		return withInfo.Info.ID, partIDs
+	}
+
+	// Fallback: flat shape {id, content: [{id}]} used by some tests.
 	var raw struct {
 		ID   string `json:"id"`
 		Type string `json:"type"`
 	}
 	if err := json.Unmarshal(data, &raw); err != nil || raw.ID == "" {
 		return "", nil
-	}
-	// Extract part IDs from content array for assistant/tool messages.
-	var content []struct {
-		ID   string `json:"id"`
-		Type string `json:"type"`
 	}
 	var full struct {
 		Content []struct {
@@ -173,11 +189,10 @@ func extractMessageIDs(msg any) (messageID string, partIDs []string) {
 		} `json:"content"`
 	}
 	if err := json.Unmarshal(data, &full); err == nil {
-		content = full.Content
-	}
-	for _, c := range content {
-		if c.ID != "" {
-			partIDs = append(partIDs, c.ID)
+		for _, c := range full.Content {
+			if c.ID != "" {
+				partIDs = append(partIDs, c.ID)
+			}
 		}
 	}
 	return raw.ID, partIDs

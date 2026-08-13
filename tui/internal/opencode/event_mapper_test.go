@@ -372,6 +372,44 @@ func TestEventMapperExtractsMessagePartIDs(t *testing.T) {
 	}
 }
 
+func TestEventMapperExtractsNestedIDs(t *testing.T) {
+	t.Run("message.updated nests id under info", func(t *testing.T) {
+		raw := []byte(`{"directory":"/tmp","payload":{"type":"message.updated","properties":{"sessionID":"s1","info":{"id":"msg_nested","role":"assistant"}}}}`)
+		event, err := MapEvent(raw, 1)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if event.MessageID != "msg_nested" {
+			t.Fatalf("expected MessageID=msg_nested, got %q", event.MessageID)
+		}
+	})
+
+	t.Run("message.part.updated nests ids under part", func(t *testing.T) {
+		raw := []byte(`{"directory":"/tmp","payload":{"type":"message.part.updated","properties":{"sessionID":"s1","part":{"id":"prt_nested","messageID":"msg_nested","type":"text"}}}}`)
+		event, err := MapEvent(raw, 1)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if event.MessageID != "msg_nested" {
+			t.Fatalf("expected MessageID=msg_nested, got %q", event.MessageID)
+		}
+		if event.PartID != "prt_nested" {
+			t.Fatalf("expected PartID=prt_nested, got %q", event.PartID)
+		}
+	})
+
+	t.Run("session.updated info.id is not treated as message id", func(t *testing.T) {
+		raw := []byte(`{"directory":"/tmp","payload":{"type":"session.updated","properties":{"sessionID":"s1","info":{"id":"s1","projectID":"p1"}}}}`)
+		event, err := MapEvent(raw, 1)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if event.MessageID != "" {
+			t.Fatalf("expected empty MessageID for session.updated, got %q", event.MessageID)
+		}
+	})
+}
+
 func TestEventMapperExtractsContentFromDelta(t *testing.T) {
 	raw := []byte(`{"directory":"/tmp","payload":{"type":"message.part.delta","properties":{"sessionID":"s1","messageID":"m1","partID":"p1","field":"text","delta":"hello world"}}}`)
 	event, err := MapEvent(raw, 1)

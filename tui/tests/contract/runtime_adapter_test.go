@@ -30,18 +30,18 @@ func TestAgentRuntimeContract(t *testing.T) {
 		}
 
 		switch r.URL.Path {
-		case "/session/status":
-			w.WriteHeader(http.StatusOK)
-			json.NewEncoder(w).Encode(opencode.OpenCodeSessionsResponse{Data: []opencode.OpenCodeSessionV2Info{}})
-		case "/global/health":
-			w.WriteHeader(http.StatusOK)
-			json.NewEncoder(w).Encode(map[string]any{"healthy": true, "version": "1.18.11"})
-
 		case "/session":
 			if r.Method == http.MethodPost {
 				w.WriteHeader(http.StatusOK)
 				json.NewEncoder(w).Encode(map[string]string{"id": "ses_contract"})
+			} else {
+				// GET /session — recovery session list.
+				w.WriteHeader(http.StatusOK)
+				json.NewEncoder(w).Encode([]opencode.OpenCodeSessionV2Info{})
 			}
+		case "/global/health":
+			w.WriteHeader(http.StatusOK)
+			json.NewEncoder(w).Encode(map[string]any{"healthy": true, "version": "1.18.11"})
 
 		case "/session/ses_contract/prompt_async":
 			w.WriteHeader(http.StatusNoContent)
@@ -185,15 +185,13 @@ func TestAgentRuntimeRecoveryContract(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 
 		// Recovery: return a session NOT present in the live SSE stream.
-		if r.URL.Path == "/session/status" {
+		if r.URL.Path == "/session" {
 			w.WriteHeader(http.StatusOK)
-			json.NewEncoder(w).Encode(opencode.OpenCodeSessionsResponse{
-				Data: []opencode.OpenCodeSessionV2Info{
-					{
-						ID:    "recovered_session",
-						Title: "Recovered Session",
-						Time:  opencode.OpenCodeSessionV2InfoTime{Created: 1000},
-					},
+			json.NewEncoder(w).Encode([]opencode.OpenCodeSessionV2Info{
+				{
+					ID:    "recovered_session",
+					Title: "Recovered Session",
+					Time:  opencode.OpenCodeSessionV2InfoTime{Created: 1000},
 				},
 			})
 			return
@@ -202,14 +200,12 @@ func TestAgentRuntimeRecoveryContract(t *testing.T) {
 		// Recovery: return messages for the recovered session.
 		if strings.Contains(r.URL.Path, "/message") {
 			w.WriteHeader(http.StatusOK)
-			json.NewEncoder(w).Encode(opencode.OpenCodeSessionMessagesResponse{
-				Data: []opencode.OpenCodeSessionMessage{
-					map[string]any{
-						"id":   "recovered_msg",
-						"type": "assistant",
-						"content": []map[string]any{
-							{"id": "recovered_part", "type": "text"},
-						},
+			json.NewEncoder(w).Encode([]opencode.OpenCodeSessionMessage{
+				map[string]any{
+					"id":   "recovered_msg",
+					"type": "assistant",
+					"content": []map[string]any{
+						{"id": "recovered_part", "type": "text"},
 					},
 				},
 			})
@@ -229,6 +225,7 @@ func TestAgentRuntimeRecoveryContract(t *testing.T) {
 			flusher, _ := w.(http.Flusher)
 			w.Header().Set("Content-Type", "text/event-stream")
 			w.WriteHeader(http.StatusOK)
+			flusher.Flush()
 
 			if connNum == 1 {
 				// First connection: send live events including an approval

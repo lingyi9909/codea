@@ -104,25 +104,27 @@ func (client *HTTPClient) AbortSession(ctx context.Context, sessionID string) er
 }
 
 // GetSessionStatus returns all sessions. Used for recovery after SSE reconnect.
-func (client *HTTPClient) GetSessionStatus(ctx context.Context) (*OpenCodeSessionsResponse, error) {
-	var resp OpenCodeSessionsResponse
-	if err := client.doJSON(ctx, http.MethodGet, "/session/status", nil, &resp, http.StatusOK); err != nil {
+// Calls GET /session which returns a JSON array of session info objects.
+func (client *HTTPClient) GetSessionStatus(ctx context.Context) ([]OpenCodeSessionV2Info, error) {
+	var resp []OpenCodeSessionV2Info
+	if err := client.doJSON(ctx, http.MethodGet, "/session", nil, &resp, http.StatusOK); err != nil {
 		return nil, err
 	}
-	return &resp, nil
+	return resp, nil
 }
 
 // GetSessionMessages returns messages for a session. Used for recovery after SSE reconnect.
-func (client *HTTPClient) GetSessionMessages(ctx context.Context, sessionID string) (*OpenCodeSessionMessagesResponse, error) {
+// The OpenCode API returns a raw JSON array (not wrapped in {data: [...]}).
+func (client *HTTPClient) GetSessionMessages(ctx context.Context, sessionID string) ([]OpenCodeSessionMessage, error) {
 	sp, err := pathSegment("session ID", sessionID)
 	if err != nil {
 		return nil, err
 	}
-	var resp OpenCodeSessionMessagesResponse
+	var resp []OpenCodeSessionMessage
 	if err := client.doJSON(ctx, http.MethodGet, "/session/"+sp+"/message", nil, &resp, http.StatusOK); err != nil {
 		return nil, err
 	}
-	return &resp, nil
+	return resp, nil
 }
 
 // GetSession returns a single session by ID.

@@ -110,27 +110,42 @@ func TestExtractMessageIDsNoContent(t *testing.T) {
 	}
 }
 
+func TestExtractMessageIDsRealAPIShape(t *testing.T) {
+	// Real OpenCode /session/:id/message response wraps each message as
+	// {"info": {"id": ...}, "parts": [{"id": ...}]}.
+	msg := map[string]any{
+		"info": map[string]any{"id": "msg-real", "role": "assistant"},
+		"parts": []map[string]any{
+			{"id": "part-real-1", "type": "text"},
+			{"id": "part-real-2", "type": "tool"},
+		},
+	}
+	msgID, partIDs := extractMessageIDs(msg)
+	if msgID != "msg-real" {
+		t.Errorf("msgID = %q, want msg-real", msgID)
+	}
+	if len(partIDs) != 2 || partIDs[0] != "part-real-1" || partIDs[1] != "part-real-2" {
+		t.Errorf("partIDs = %v, want [part-real-1 part-real-2]", partIDs)
+	}
+}
+
 func TestRecoveryDetectsNewSession(t *testing.T) {
 	var statusCalls atomic.Int32
 	var msgCalls atomic.Int32
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		if strings.Contains(r.URL.Path, "/session/status") {
+		if r.URL.Path == "/session" {
 			statusCalls.Add(1)
-			json.NewEncoder(w).Encode(OpenCodeSessionsResponse{
-				Data: []OpenCodeSessionV2Info{
-					{ID: "s1", Title: "Test Session", Time: OpenCodeSessionV2InfoTime{Created: 1000}},
-				},
+			json.NewEncoder(w).Encode([]OpenCodeSessionV2Info{
+				{ID: "s1", Title: "Test Session", Time: OpenCodeSessionV2InfoTime{Created: 1000}},
 			})
 			return
 		}
 		if strings.Contains(r.URL.Path, "/message") {
 			msgCalls.Add(1)
-			json.NewEncoder(w).Encode(OpenCodeSessionMessagesResponse{
-				Data: []OpenCodeSessionMessage{
-					map[string]any{"id": "m1", "type": "assistant", "content": []any{}},
-				},
+			json.NewEncoder(w).Encode([]OpenCodeSessionMessage{
+				map[string]any{"id": "m1", "type": "assistant", "content": []any{}},
 			})
 			return
 		}
@@ -178,21 +193,17 @@ func TestRecoverySkipsKnownMessages(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		if strings.Contains(r.URL.Path, "/session/status") {
-			json.NewEncoder(w).Encode(OpenCodeSessionsResponse{
-				Data: []OpenCodeSessionV2Info{
-					{ID: "s1", Time: OpenCodeSessionV2InfoTime{Created: 1000}},
-				},
+		if r.URL.Path == "/session" {
+			json.NewEncoder(w).Encode([]OpenCodeSessionV2Info{
+				{ID: "s1", Time: OpenCodeSessionV2InfoTime{Created: 1000}},
 			})
 			return
 		}
 		if strings.Contains(r.URL.Path, "/message") {
 			msgCalls.Add(1)
-			json.NewEncoder(w).Encode(OpenCodeSessionMessagesResponse{
-				Data: []OpenCodeSessionMessage{
-					map[string]any{"id": "m1", "type": "assistant", "content": []any{}},
-					map[string]any{"id": "m2", "type": "assistant", "content": []any{}},
-				},
+			json.NewEncoder(w).Encode([]OpenCodeSessionMessage{
+				map[string]any{"id": "m1", "type": "assistant", "content": []any{}},
+				map[string]any{"id": "m2", "type": "assistant", "content": []any{}},
 			})
 			return
 		}
@@ -229,24 +240,20 @@ func TestRecoveryCompensatesMissingPart(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		if strings.Contains(r.URL.Path, "/session/status") {
-			json.NewEncoder(w).Encode(OpenCodeSessionsResponse{
-				Data: []OpenCodeSessionV2Info{
-					{ID: "s1", Time: OpenCodeSessionV2InfoTime{Created: 1000}},
-				},
+		if r.URL.Path == "/session" {
+			json.NewEncoder(w).Encode([]OpenCodeSessionV2Info{
+				{ID: "s1", Time: OpenCodeSessionV2InfoTime{Created: 1000}},
 			})
 			return
 		}
 		if strings.Contains(r.URL.Path, "/message") {
-			json.NewEncoder(w).Encode(OpenCodeSessionMessagesResponse{
-				Data: []OpenCodeSessionMessage{
-					map[string]any{
-						"id":   "m1",
-						"type": "assistant",
-						"content": []map[string]any{
-							{"id": "part-1", "type": "text"},
-							{"id": "part-2", "type": "text"},
-						},
+			json.NewEncoder(w).Encode([]OpenCodeSessionMessage{
+				map[string]any{
+					"id":   "m1",
+					"type": "assistant",
+					"content": []map[string]any{
+						{"id": "part-1", "type": "text"},
+						{"id": "part-2", "type": "text"},
 					},
 				},
 			})
@@ -295,23 +302,19 @@ func TestRecoveryDedupesKnownPart(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		if strings.Contains(r.URL.Path, "/session/status") {
-			json.NewEncoder(w).Encode(OpenCodeSessionsResponse{
-				Data: []OpenCodeSessionV2Info{
-					{ID: "s1", Time: OpenCodeSessionV2InfoTime{Created: 1000}},
-				},
+		if r.URL.Path == "/session" {
+			json.NewEncoder(w).Encode([]OpenCodeSessionV2Info{
+				{ID: "s1", Time: OpenCodeSessionV2InfoTime{Created: 1000}},
 			})
 			return
 		}
 		if strings.Contains(r.URL.Path, "/message") {
-			json.NewEncoder(w).Encode(OpenCodeSessionMessagesResponse{
-				Data: []OpenCodeSessionMessage{
-					map[string]any{
-						"id":   "m1",
-						"type": "assistant",
-						"content": []map[string]any{
-							{"id": "part-1", "type": "text"},
-						},
+			json.NewEncoder(w).Encode([]OpenCodeSessionMessage{
+				map[string]any{
+					"id":   "m1",
+					"type": "assistant",
+					"content": []map[string]any{
+						{"id": "part-1", "type": "text"},
 					},
 				},
 			})

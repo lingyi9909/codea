@@ -164,6 +164,15 @@ func MapEvent(raw []byte, sequence int64) (runtime.Event, error) {
 	if props.PartID != "" {
 		event.PartID = props.PartID
 	}
+	// message.part.updated nests the ids under `part`, not at the top level.
+	if props.Part != nil {
+		if event.MessageID == "" && props.Part.MessageID != "" {
+			event.MessageID = props.Part.MessageID
+		}
+		if event.PartID == "" && props.Part.ID != "" {
+			event.PartID = props.Part.ID
+		}
+	}
 	if props.Time > 0 {
 		event.CreatedAt = time.UnixMilli(int64(props.Time))
 	}
@@ -175,12 +184,16 @@ func MapEvent(raw []byte, sequence int64) (runtime.Event, error) {
 		event.Content = props.Part.Text
 	}
 
-	// ProjectID from session-level info
+	// ProjectID from session-level info; message id for message.updated
+	// (which nests the message id under `info`, not a top-level `messageID`).
 	if props.Info != nil {
 		var info sseSessionInfo
 		if err := json.Unmarshal(props.Info, &info); err == nil {
 			if info.ProjectID != "" {
 				event.ProjectID = info.ProjectID
+			}
+			if event.MessageID == "" && info.ID != "" && payload.Type == "message.updated" {
+				event.MessageID = info.ID
 			}
 		}
 	}
