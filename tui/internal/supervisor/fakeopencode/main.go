@@ -97,4 +97,7 @@ func spawnChild() {
 	if err := cmd.Start(); err != nil {
 		os.Exit(1)
 	}
+	if pf := os.Getenv("FAKE_OPENCODE_CHILD_PID_FILE"); pf != "" {
+		_ = os.WriteFile(pf, []byte(strconv.Itoa(cmd.Process.Pid)), 0o644)
+	}
 }
