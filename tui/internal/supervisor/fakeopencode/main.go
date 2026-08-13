@@ -5,20 +5,30 @@
 // Behaviour is selected via FAKE_OPENCODE_* env vars:
 //
 //	FAKE_OPENCODE_MODE            healthy (default) | unhealthy (500) | never-ready | exit-immediately
-//	FAKE_OPENCODE_REQUIRE_AUTH    1 -> /global/health requires Basic Auth
+//	FAKE_OPENCODE_REQUIRE_AUTH    1 -> all endpoints require Basic Auth
 //	FAKE_OPENCODE_IGNORE_SIGTERM  1 -> ignore SIGTERM (forces kill fallback)
 //	FAKE_OPENCODE_SPAWN_CHILD     1 -> spawn a child process in the same group
+//
+// Beyond readiness, it serves just enough of the OpenCode HTTP API for an
+// end-to-end TUI smoke: POST /session creates a session, POST
+// /session/{id}/prompt_async triggers a scripted SSE event sequence
+// (reasoning + answer + tool + step.finished), and GET /global/event streams
+// that sequence to subscribers. This keeps the smoke deterministic and offline.
 package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"net"
 	"net/http"
 	"os"
 	"os/exec"
 	"os/signal"
 	"strconv"
+	"strings"
+	"sync"
 	"syscall"
+	"time"
 )
 
 func main() {
@@ -48,16 +58,18 @@ func main() {
 	if err != nil {
 		os.Exit(1)
 	}
+	if pf := os.Getenv("FAKE_OPENCODE_PID_FILE"); pf != "" {
+		_ = os.WriteFile(pf, []byte(strconv.Itoa(os.Getpid())), 0o644)
+	}
 
+	hub := newEventHub()
 	mode := os.Getenv("FAKE_OPENCODE_MODE")
 	mux := http.NewServeMux()
+
 	mux.HandleFunc("/global/health", func(w http.ResponseWriter, r *http.Request) {
-		if os.Getenv("FAKE_OPENCODE_REQUIRE_AUTH") == "1" {
-			u, p, ok := r.BasicAuth()
-			if !ok || u != os.Getenv("OPENCODE_SERVER_USERNAME") || p != os.Getenv("OPENCODE_SERVER_PASSWORD") {
-				w.WriteHeader(http.StatusUnauthorized)
-				return
-			}
+		if !authorized(r) {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
 		}
 		w.Header().Set("Content-Type", "application/json")
 		if mode == "unhealthy" {
@@ -66,10 +78,6 @@ func main() {
 			return
 		}
 		if mode == "healthy-then-exit" {
-			// Deliver a complete (Content-Length) healthy response, then exit
-			// immediately — reproducing "health succeeded then process died".
-			// Content-Length avoids the truncated chunked-body problem when the
-			// process dies before the handler returns.
 			const body = `{"healthy":true,"version":"fake"}`
 			w.Header().Set("Content-Length", strconv.Itoa(len(body)))
 			w.WriteHeader(http.StatusOK)
@@ -83,7 +91,167 @@ func main() {
 		_ = json.NewEncoder(w).Encode(map[string]any{"healthy": true, "version": "fake"})
 	})
 
+	mux.HandleFunc("/session", func(w http.ResponseWriter, r *http.Request) {
+		if !authorized(r) {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		if r.Method == http.MethodPost {
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{"id": "sess-1"})
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode([]any{})
+	})
+
+	mux.HandleFunc("/session/", func(w http.ResponseWriter, r *http.Request) {
+		if !authorized(r) {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		if strings.HasSuffix(r.URL.Path, "/prompt_async") && r.Method == http.MethodPost {
+			w.WriteHeader(http.StatusNoContent)
+			go hub.emitScript()
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	})
+
+	mux.HandleFunc("/global/event", func(w http.ResponseWriter, r *http.Request) {
+		if !authorized(r) {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.Header().Set("Cache-Control", "no-cache")
+		w.Header().Set("Connection", "keep-alive")
+		flusher, ok := w.(http.Flusher)
+		if !ok {
+			return
+		}
+
+		ch := hub.subscribe()
+		defer hub.unsubscribe(ch)
+
+		// Announce connectivity so the TUI sees the runtime is alive.
+		_, _ = fmt.Fprintf(w, "data: %s\n\n", sseEnvelope("server.connected", map[string]any{}))
+		flusher.Flush()
+
+		for {
+			select {
+			case <-r.Context().Done():
+				return
+			case payload, ok := <-ch:
+				if !ok {
+					return
+				}
+				_, _ = fmt.Fprintf(w, "data: %s\n\n", payload)
+				flusher.Flush()
+			}
+		}
+	})
+
 	_ = http.Serve(ln, mux)
+}
+
+// authorized reports whether the request satisfies the (optional) Basic Auth
+// gate. When REQUIRE_AUTH is unset every request is allowed.
+func authorized(r *http.Request) bool {
+	if os.Getenv("FAKE_OPENCODE_REQUIRE_AUTH") != "1" {
+		return true
+	}
+	u, p, ok := r.BasicAuth()
+	return ok && u == os.Getenv("OPENCODE_SERVER_USERNAME") && p == os.Getenv("OPENCODE_SERVER_PASSWORD")
+}
+
+// eventHub fans out scripted SSE payloads to all active /global/event
+// subscribers. Each subscriber gets its own buffered channel.
+type eventHub struct {
+	mu   sync.Mutex
+	subs map[chan string]struct{}
+}
+
+func newEventHub() *eventHub {
+	return &eventHub{subs: make(map[chan string]struct{})}
+}
+
+func (h *eventHub) subscribe() chan string {
+	ch := make(chan string, 64)
+	h.mu.Lock()
+	h.subs[ch] = struct{}{}
+	h.mu.Unlock()
+	return ch
+}
+
+func (h *eventHub) unsubscribe(ch chan string) {
+	h.mu.Lock()
+	delete(h.subs, ch)
+	h.mu.Unlock()
+}
+
+func (h *eventHub) broadcast(payload string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	for ch := range h.subs {
+		select {
+		case ch <- payload:
+		default:
+		}
+	}
+}
+
+// emitScript emits the deterministic prompt lifecycle: step-start, reasoning
+// deltas, answer deltas, a tool call, then step-finished. Small inter-event
+// delays keep the stream observable (and exercise the TUI coalescing path).
+func (h *eventHub) emitScript() {
+	step := func(typ string, props map[string]any) {
+		h.broadcast(sseEnvelope(typ, props))
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	step("message.part.updated", map[string]any{
+		"part": map[string]any{"id": "part-step", "type": "step-start"},
+	})
+	step("message.part.delta", map[string]any{
+		"sessionID": "sess-1", "messageID": "msg-1", "partID": "part-reason",
+		"field": "reasoning", "delta": "Let me analyze the request.",
+	})
+	step("message.part.delta", map[string]any{
+		"sessionID": "sess-1", "messageID": "msg-1", "partID": "part-reason",
+		"field": "reasoning", "delta": " I should review the target file first.",
+	})
+	// Leave the reasoning block open long enough to register a non-zero
+	// duration before the answer begins.
+	time.Sleep(150 * time.Millisecond)
+	step("message.part.delta", map[string]any{
+		"sessionID": "sess-1", "messageID": "msg-1", "partID": "part-answer",
+		"field": "text", "delta": "Here is the review:",
+	})
+	step("message.part.delta", map[string]any{
+		"sessionID": "sess-1", "messageID": "msg-1", "partID": "part-answer",
+		"field": "text", "delta": " the code looks good.",
+	})
+	step("message.part.updated", map[string]any{
+		"part": map[string]any{"id": "part-tool", "type": "tool", "tool": "read", "callID": "c1"},
+	})
+	step("message.part.updated", map[string]any{
+		"part": map[string]any{"id": "part-finish", "type": "step-finish"},
+	})
+}
+
+// sseEnvelope wraps a vendor event type + properties in the OpenCode SSE
+// envelope shape that MapEvent expects.
+func sseEnvelope(typ string, props map[string]any) string {
+	env := map[string]any{
+		"directory": "",
+		"payload": map[string]any{
+			"type":       typ,
+			"properties": props,
+		},
+	}
+	data, _ := json.Marshal(env)
+	return string(data)
 }
 
 func parseArgs(args []string) (string, int) {

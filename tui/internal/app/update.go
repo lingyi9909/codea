@@ -23,10 +23,13 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case subscribedMsg:
 		m.eventCh = msg.ch
 		m.runtimeStatus = runtime.RuntimeHealthy
+		m.markDirty()
 		return m, waitForEvent(msg.ch)
 
 	case runtimeEventMsg:
-		m.processRuntimeEvent(msg.ev)
+		if m.processRuntimeEvent(msg.ev) {
+			m.markDirty()
+		}
 		if m.eventCh != nil {
 			return m, waitForEvent(m.eventCh)
 		}
@@ -35,6 +38,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case promptResultMsg:
 		if msg.err != nil {
 			m.finishStreaming()
+			m.markDirty()
 			return m, nil
 		}
 		if msg.sessionID != "" {
@@ -44,23 +48,30 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case subscribeErrMsg:
 		m.runtimeStatus = runtime.RuntimeCrashed
+		m.markDirty()
 		return m, nil
 
 	case eventStreamClosedMsg:
 		if m.runtimeStatus != runtime.RuntimeCrashed {
 			m.runtimeStatus = runtime.RuntimeStopped
+			m.markDirty()
 		}
 		return m, nil
 
 	case tickMsg:
+		if m.flushStreaming() {
+			m.markDirty()
+		}
 		return m, TickCmd()
 
 	case tea.KeyMsg:
+		m.markDirty()
 		return m, m.handleKey(msg)
 
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
+		m.markDirty()
 		return m, nil
 	}
 
@@ -118,6 +129,8 @@ func (m *Model) submit() tea.Cmd {
 	m.reasoningContent = ""
 	m.reasoningDuration = 0
 	m.reasoningExpanded = false
+	m.streamBuf.Reset()
+	m.reasoningBuf.Reset()
 	m.tools = make([]ToolActivity, 0)
 
 	raw := m.input
@@ -137,33 +150,63 @@ func (m *Model) submit() tea.Cmd {
 
 // processRuntimeEvent consumes one runtime event, updating streaming answer and
 // reasoning state via the reasoning processor and tracking stream completion.
-func (m *Model) processRuntimeEvent(ev runtime.Event) {
+// Answer and reasoning deltas are buffered (not committed to the visible
+// message/reasoning state) so a high-frequency token burst does not trigger a
+// render per token; the returned bool reports whether any visible state changed.
+func (m *Model) processRuntimeEvent(ev runtime.Event) bool {
+	dirty := false
 	switch ev.Type {
 	case eventTypeStepFinished, eventTypeSessionError, eventTypeRuntimeError:
 		m.finishStreaming()
+		dirty = true
 	case eventTypeToolCalled:
 		m.addTool(ev)
+		dirty = true
 	case eventTypeToolSuccess:
 		m.updateTool(ev, ToolSuccess)
+		dirty = true
 	case eventTypeToolFailed:
 		m.updateTool(ev, ToolFailed)
+		dirty = true
 	}
 
 	for _, pe := range m.proc.Process(ev) {
 		switch pe.Kind {
 		case reasoning.EventAnswerDelta:
-			m.appendAnswer(pe.Content)
+			m.streamBuf.WriteString(pe.Content)
 		case reasoning.EventReasoningStart:
 			m.reasoningActive = true
 			m.reasoningContent = ""
+			m.reasoningBuf.Reset()
+			dirty = true
 		case reasoning.EventReasoningDelta:
-			m.reasoningContent += pe.Content
+			m.reasoningBuf.WriteString(pe.Content)
 		case reasoning.EventReasoningEnd:
 			m.reasoningActive = false
 			m.reasoningDuration = pe.Duration
 			m.reasoningExpanded = false
+			dirty = true
 		}
 	}
+	return dirty
+}
+
+// flushStreaming commits buffered answer and reasoning deltas into the visible
+// state. It reports whether anything was flushed so callers only invalidate the
+// render cache when the view actually changed (idle ticks do not re-render).
+func (m *Model) flushStreaming() bool {
+	dirty := false
+	if m.streamBuf.Len() > 0 {
+		m.appendAnswer(m.streamBuf.String())
+		m.streamBuf.Reset()
+		dirty = true
+	}
+	if m.reasoningBuf.Len() > 0 {
+		m.reasoningContent += m.reasoningBuf.String()
+		m.reasoningBuf.Reset()
+		dirty = true
+	}
+	return dirty
 }
 
 // appendAnswer appends a streaming chunk to the single in-flight assistant
@@ -181,9 +224,10 @@ func (m *Model) appendAnswer(content string) {
 	m.messages = append(m.messages, ChatMessage{Role: RoleAssistant, Content: content})
 }
 
-// finishStreaming marks the in-flight assistant message finished and clears the
-// streaming flag.
+// finishStreaming flushes any buffered streaming content, then marks the
+// in-flight assistant message finished and clears the streaming flag.
 func (m *Model) finishStreaming() {
+	m.flushStreaming()
 	m.isStreaming = false
 	for i := len(m.messages) - 1; i >= 0; i-- {
 		if m.messages[i].Role == RoleAssistant && !m.messages[i].Finished {
@@ -231,4 +275,6 @@ func (m *Model) clearChat() {
 	m.reasoningContent = ""
 	m.reasoningExpanded = false
 	m.reasoningDuration = 0
+	m.streamBuf.Reset()
+	m.reasoningBuf.Reset()
 }

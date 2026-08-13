@@ -106,9 +106,11 @@ func TestRenderTools(t *testing.T) {
 
 func TestViewContainsMessages(t *testing.T) {
 	m := NewModel(fakeruntime.New())
+	m.width, m.height = 100, 30
 	m.input = "hi"
 	m.Update(enterKey())
 	m.Update(runtimeEventMsg{ev: runtime.Event{Type: "answer.delta", Content: "hello there"}})
+	m.Update(tickMsg{})
 
 	v := m.View()
 	if !strings.Contains(v, "hi") {
@@ -180,5 +182,52 @@ func TestSubscribeSetsHealthy(t *testing.T) {
 	m.Update(subscribedMsg{ch: ch})
 	if m.runtimeStatus != runtime.RuntimeHealthy {
 		t.Errorf("runtimeStatus = %q, want healthy", m.runtimeStatus)
+	}
+}
+
+func TestViewTerminalTooSmall(t *testing.T) {
+	cases := []struct {
+		w, h         int
+		wantTooSmall bool
+	}{
+		{69, 20, true},
+		{70, 19, true},
+		{70, 20, false},
+		{100, 30, false},
+	}
+	for _, c := range cases {
+		m := NewModel(fakeruntime.New())
+		m.width, m.height = c.w, c.h
+		v := m.View()
+		gotTooSmall := strings.Contains(v, "Terminal too small")
+		if gotTooSmall != c.wantTooSmall {
+			t.Errorf("%dx%d: tooSmall=%v, want %v", c.w, c.h, gotTooSmall, c.wantTooSmall)
+		}
+	}
+}
+
+func TestViewTerminalTooSmallShowsMinimum(t *testing.T) {
+	m := NewModel(fakeruntime.New())
+	m.width, m.height = 69, 20
+	v := m.View()
+	if !strings.Contains(v, "Terminal too small") {
+		t.Errorf("too-small view missing 'Terminal too small': %q", v)
+	}
+	if !strings.Contains(v, "70x20") {
+		t.Errorf("too-small view missing '70x20' minimum: %q", v)
+	}
+}
+
+func TestResizeTerminalTooSmallThenNormal(t *testing.T) {
+	m := NewModel(fakeruntime.New())
+
+	m.Update(tea.WindowSizeMsg{Width: 60, Height: 10})
+	if !strings.Contains(m.View(), "Terminal too small") {
+		t.Error("60x10 should render too-small")
+	}
+
+	m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+	if strings.Contains(m.View(), "Terminal too small") {
+		t.Error("100x30 should render normal UI")
 	}
 }

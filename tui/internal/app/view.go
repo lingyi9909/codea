@@ -11,14 +11,27 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-// View renders the three-region layout (header / chat / status+input). It is
-// re-invoked on every event and every ~50ms tick; the reasoning and tool
-// helpers keep the per-frame cost minimal.
+// View returns the cached render, rebuilding only when dirty. The ~50ms tick
+// flushes buffered streaming deltas and marks the model dirty; high-frequency
+// answer/reasoning deltas are buffered without marking dirty, so a token burst
+// does not trigger a full re-render per token.
 func (m *Model) View() string {
-	width := m.width
-	if width < 1 {
-		width = 70
+	if !m.dirty {
+		return m.rendered
 	}
+	m.dirty = false
+	if m.width < 70 || m.height < 20 {
+		m.rendered = renderTerminalTooSmall(m.width, m.height)
+		return m.rendered
+	}
+	m.rendered = m.renderView()
+	return m.rendered
+}
+
+// renderView assembles the full three-region layout (header / chat /
+// status+input). It is only invoked on a dirty render, not on every event.
+func (m *Model) renderView() string {
+	width := m.width
 
 	header := lipgloss.NewStyle().Foreground(theme.Primary).Bold(true).Render(m.renderHeader())
 	rule := lipgloss.NewStyle().Foreground(theme.Border).Render(strings.Repeat("─", width))
@@ -66,6 +79,12 @@ func (m *Model) renderMessage(msg ChatMessage) string {
 		return "User > " + msg.Content
 	}
 	return msg.Content
+}
+
+// renderTerminalTooSmall renders the minimum-size notice shown when the
+// terminal is below the 70x20 floor.
+func renderTerminalTooSmall(w, h int) string {
+	return fmt.Sprintf("Terminal too small\nMinimum: 70x20 (current: %dx%d)", w, h)
 }
 
 // renderHeader returns the one-line header: app name plus runtime status.

@@ -7,6 +7,7 @@
 package app
 
 import (
+	"strings"
 	"time"
 
 	"codea/tui/internal/reasoning"
@@ -74,7 +75,23 @@ type Model struct {
 	tools []ToolActivity
 
 	eventCh <-chan runtime.Event
+
+	// streamBuf and reasoningBuf coalesce high-frequency streaming deltas so a
+	// token burst does not trigger one full render per token. They are flushed
+	// into the visible state by flushStreaming on the ~50ms tick (or on
+	// finishStreaming), and rendered only when dirty.
+	streamBuf    strings.Builder
+	reasoningBuf strings.Builder
+
+	// rendered is the cached full View output; dirty marks it stale. Deltas
+	// buffered above do not set dirty, so View returns the cached frame during
+	// a token flood and re-renders only on a tick flush.
+	rendered string
+	dirty    bool
 }
+
+// markDirty invalidates the cached View output.
+func (m *Model) markDirty() { m.dirty = true }
 
 // NewModel constructs the Task 7 application model around the given Runtime.
 func NewModel(client runtime.AgentRuntime) *Model {
@@ -86,5 +103,6 @@ func NewModel(client runtime.AgentRuntime) *Model {
 		messages:      make([]ChatMessage, 0),
 		proc:          reasoning.NewProcessor(),
 		tools:         make([]ToolActivity, 0),
+		dirty:         true,
 	}
 }

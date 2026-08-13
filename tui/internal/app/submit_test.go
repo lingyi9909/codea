@@ -197,6 +197,9 @@ func TestAnswerDeltaAppendsToAssistant(t *testing.T) {
 	m.Update(runtimeEventMsg{ev: runtime.Event{Type: "answer.delta", Content: "Hello"}})
 	m.Update(runtimeEventMsg{ev: runtime.Event{Type: "answer.delta", Content: " world"}})
 
+	// Deltas are buffered and coalesced into the assistant message on tick.
+	m.Update(tickMsg{})
+
 	if len(m.messages) != 2 {
 		t.Fatalf("messages = %d, want 2", len(m.messages))
 	}
@@ -231,6 +234,9 @@ func TestReasoningDeltaPopulatesReasoningState(t *testing.T) {
 	if !m.reasoningActive {
 		t.Error("reasoningActive should be true")
 	}
+
+	// Reasoning deltas are buffered and flushed into reasoningContent on tick.
+	m.Update(tickMsg{})
 	if m.reasoningContent != "think1" {
 		t.Errorf("reasoningContent = %q, want think1", m.reasoningContent)
 	}
