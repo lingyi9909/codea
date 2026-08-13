@@ -140,3 +140,7 @@ Checkpoint: `df5c582aa803f55bb091dabaf3a3cf41e0f02f78`
 - verification：pass
 - Task Gate：pass
 - 进入 `awaiting_acceptance`，等待人工验收；验收前不启动 Task 7。
+
+## 人工验收
+
+Task 6（Reasoning 处理）已通过人工验收，正式标记为 `completed`。Reasoning Processor 作为 Task 7 的唯一推理入口，TUI 直接消费其输出（`EventReasoningStart/Delta/End/AnswerDelta`），不再自行解析 `<think>`。下一步启动 Task 7（TUI 基础 + SSE 事件流）。
