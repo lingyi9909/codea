@@ -2,11 +2,20 @@
 
 ## Overview
 
-Checkpoint: `876b20036cf99141f1f53e20bf7a870c0fd56f45`
+Checkpoint: `7a8f9c2d819c3e334d7b26d1e93c39d3b9a54219`
 
 建立 Bubble Tea 应用骨架：Tokyo Night 主题、Chat 页面、输入框、Runtime 状态、`AgentRuntime.Subscribe()` 非阻塞接入、Runtime Event→UI Message 转换、Reasoning Processor→UI 流式展示、streaming answer、reasoning 默认折叠 + duration、工具活动时间线、窗口 resize、快捷键、~50ms 合并刷新、`cmd/codea` TUI 启动。
 
 严格边界：App 只依赖 `runtime` + `reasoning` + `theme` + Bubble Tea；不 import opencode/supervisor（在 `cmd/codea` composition root 中接线）。`Subscribe()` 通过 tea.Cmd 包装，绝不阻塞 Bubble Tea Update。Reasoning 只消费 Task 6 Processor，不自行解析 `<think>`。streaming answer 追加到单条 assistant message。
+
+## Acceptance Review Fixes（Blocking 1-4）
+
+首轮人工验收结论为「暂不通过」，锁定 3 个代码/产品 Blocking + 1 个证据缺口，本轮修复（不扩审）：
+
+- **Blocking 1 — 接通 RuntimeSupervisor**：`cmd/codea/main.go` 由「仅读 `OPENCODE_URL` 直连 adapter」改为产品默认链 `main → Supervisor.Start() → Healthy → Supervisor.BaseURL()/Username()/Password() → NewOpenCodeAdapter → Bubble Tea → 退出 → Supervisor.Stop()`。`OPENCODE_URL` 仅保留为 dev/test override。新增 `main_test.go` 组合测试（Supervisor→Start→Healthy→Adapter→App→Stop，`FAKE_OPENCODE_REQUIRE_AUTH=1` 验证凭证接线）+ 启动失败测试（`FAKE_OPENCODE_MODE=exit-immediately` → `Start` 报错 → 不进入 Ready TUI）。
+- **Blocking 2 — 修复假 50ms 合并刷新**：`Model` 新增 `streamBuf`/`reasoningBuf` + `rendered`/`dirty` 缓存。高频 delta 写入 buffer（不置 dirty），`~50ms tick` 的 `flushStreaming()` 提交并置 dirty；`View()` 命中缓存直接返回。`coalescing_test.go` 证明 100 个 delta 仅 1 次 flush、token 洪峰期间 `View()` 不重渲染。
+- **Blocking 3 — 70×20 最小终端 Gate**：`View()` 在 `width < 70 || height < 20` 时渲染 `Terminal too small / Minimum: 70x20`。`view_test.go` 表驱动覆盖 69×20/70×19/70×20，及 resize 60×10→100×30。
+- **Blocking 4 — 真实 TUI smoke 证据**：扩展 `fakeopencode` 提供 `/session`、`/session/{id}/prompt_async`、`/global/event`（脚本化 reasoning/answer/tool/step.finished 事件流）+ `FAKE_OPENCODE_PID_FILE`。新增 `tui/tests/tui-smoke/smoke_test.go`（darwin PTY）真实启动 `codea` 二进制，驱动 启动→Healthy→Prompt→reasoning/answer 流式→tool 活动→resize→ctrl+t→ctrl+c→Runtime 停止 全链路；`scripts/tui-smoke.sh` 可复现。可读证据：`docs/task-reports/tui-smoke-transcript.txt`。
 
 ## Step 1 — Theme + Page + KeyMap
 
@@ -56,12 +65,12 @@ Checkpoint: `876b20036cf99141f1f53e20bf7a870c0fd56f45`
 
 ## Full Gate Verification
 
-针对 Final Implementation Commit `876b20036cf99141f1f53e20bf7a870c0fd56f45`：
+针对 Final Implementation Commit `7a8f9c2d819c3e334d7b26d1e93c39d3b9a54219`：
 
 | Gate | Result |
 |------|--------|
-| `GOTOOLCHAIN=local go test ./... -count=1` | PASS（19 packages，无失败） |
-| `GOTOOLCHAIN=local go test -race ./... -count=1` | PASS（19 packages，无竞态） |
+| `GOTOOLCHAIN=local go test ./... -count=1` | PASS（20 packages，无失败） |
+| `GOTOOLCHAIN=local go test -race ./... -count=1` | PASS（20 packages，无竞态） |
 | `GOTOOLCHAIN=local go vet ./...` | clean |
 | `GOTOOLCHAIN=local go build ./...` | clean |
 | `GOOS=windows GOARCH=amd64 GOTOOLCHAIN=local go build ./cmd/codea ./cmd/parity-runner` | PASS |
@@ -69,6 +78,7 @@ Checkpoint: `876b20036cf99141f1f53e20bf7a870c0fd56f45`
 | `./scripts/check-runtime-boundary.sh` | PASS（无 vendor DTO 泄漏） |
 | `./scripts/check-execution-state.sh` | valid |
 | `tests/execution-state/state_validator_test.sh` | valid |
+| `CODEA_TUI_SMOKE=1 ./scripts/tui-smoke.sh` | PASS（真实 PTY 启动 TUI，全链路） |
 
 ## Test Summary
 
@@ -103,6 +113,17 @@ Checkpoint: `876b20036cf99141f1f53e20bf7a870c0fd56f45`
 | `tui/internal/app/view.go` | Create |
 | `tui/internal/app/view_test.go` | Create |
 | `tui/cmd/codea/main.go` | Modify |
+| `tui/cmd/codea/main_test.go` | Create（supervisor 组合 + 启动失败） |
+| `tui/internal/app/model.go` | Modify（streamBuf/reasoningBuf + rendered/dirty） |
+| `tui/internal/app/update.go` | Modify（delta 缓冲 + flushStreaming） |
+| `tui/internal/app/view.go` | Modify（View cache + 70×20 gate） |
+| `tui/internal/app/coalescing_test.go` | Create（合并刷新） |
+| `tui/internal/app/submit_test.go` | Modify（tick flush） |
+| `tui/internal/app/view_test.go` | Modify（70×20 gate 表驱动） |
+| `tui/internal/supervisor/fakeopencode/main.go` | Modify（完整 /session /prompt_async /global/event + PID file） |
+| `tui/tests/tui-smoke/smoke_test.go` | Create（真实 TUI smoke，darwin） |
+| `scripts/tui-smoke.sh` | Create（可复现 smoke runner） |
+| `docs/task-reports/tui-smoke-transcript.txt` | Create（smoke 可读证据） |
 | `tui/go.mod` / `tui/go.sum` | Modify（新增 bubbletea/bubbles/lipgloss 依赖） |
 | `tui/tests/fixtures/fake-runtime/fake_runtime.go` | Modify（SubscribeError） |
 | `scripts/check-runtime-boundary.sh` | Modify（允许 cmd/ composition root） |
@@ -118,6 +139,7 @@ Checkpoint: `876b20036cf99141f1f53e20bf7a870c0fd56f45`
 | `516205c` | Step 5 — reasoning UI (toggle + summary + duration) |
 | `cedf98b` | Step 6 — tool/status/view + cmd/codea wiring |
 | `876b200` | 收口修复 — boundary check 允许 cmd/ composition root（Final Implementation Commit） |
+| `7a8f9c2` | 验收修复 — Blocking 1-4（supervisor 接线 / 真实合并刷新 / 70×20 gate / TUI smoke）（Final Implementation Commit） |
 
 ## 与计划偏差
 

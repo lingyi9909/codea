@@ -1,0 +1,83 @@
+Codea  ● Ready
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+Ready
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+> 
+enter submit · alt+enter newline · ctrl+t thinking · ctrl+l clear · ctrl+c quit
+
+User > review the code
+
+
+◌ Working
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+> 
+enter submit · alt+enter newline · ctrl+t thinking · ctrl+l clear · ctrl+c quit
+
+
+
+Let me analyze the request.
+
+◌ Working
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+> 
+enter submit · alt+enter newline · ctrl+t thinking · ctrl+l clear · ctrl+c quit
+
+
+
+Let me analyze the request. I should review the target file first.
+
+
+
+
+
+
+
+
+✓ Spent 0.2s thinking
+
+
+
+
+
+
+
+
+
+  ◌ read
+
+◌ Working
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+> 
+enter submit · alt+enter newline · ctrl+t thinking · ctrl+l clear · ctrl+c quit
+
+
+Here is the review: the code looks good.
+
+
+
+Ready
+
+
+Codea  ● Ready
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+User > review the code
+Here is the review: the code looks good.
+✓ Spent 0.2s thinking
+  ◌ read
+
+Ready
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+> 
+enter submit · alt+enter newline · ctrl+t thinking · ctrl+l clear · ctrl+c quit
+
+
+
+Let me analyze the request. I should review the target file first.
+
+
+
+
+
+
