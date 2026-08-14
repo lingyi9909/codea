@@ -94,15 +94,25 @@ type sseStatus struct {
 }
 
 type ssePart struct {
-	ID        string   `json:"id"`
-	MessageID string   `json:"messageID"`
-	SessionID string   `json:"sessionID"`
-	Type      string   `json:"type"`
-	Text      string   `json:"text"`
-	Reason    string   `json:"reason"`
-	Tool      string   `json:"tool"`
-	CallID    string   `json:"callID"`
-	Time      *sseTime `json:"time"`
+	ID        string        `json:"id"`
+	MessageID string        `json:"messageID"`
+	SessionID string        `json:"sessionID"`
+	Type      string        `json:"type"`
+	Text      string        `json:"text"`
+	Reason    string        `json:"reason"`
+	Tool      string        `json:"tool"`
+	CallID    string        `json:"callID"`
+	State     *ssePartState `json:"state"`
+	Time      *sseTime      `json:"time"`
+}
+
+// ssePartState captures the ToolState.status of a tool part. The locked
+// OpenCode spec defines exactly four statuses: pending, running, completed,
+// error. The /global/event stream carries the tool lifecycle as successive
+// message.part.updated events with the same callID transitioning across these
+// statuses (pending → running → completed | error).
+type ssePartState struct {
+	Status string `json:"status"`
 }
 
 type sseTime struct {
@@ -268,10 +278,26 @@ func extractTool(event *runtime.Event, props *sseCommonProps) {
 			event.Tool = &runtime.ToolEvent{Name: name, CallID: callID}
 		}
 	case CodeaEventToolSuccess, CodeaEventToolFailed:
-		// Success/failure carry only callID, used by the Application to
-		// correlate the lifecycle with the preceding tool.called event.
-		if props.CallID != "" {
-			event.Tool = &runtime.ToolEvent{CallID: props.CallID}
+		// Success/failure carry the callID (and, when present, the tool name)
+		// used by the Application to correlate the lifecycle with the preceding
+		// tool.called event. The session.next.tool.* path carries callID at the
+		// top level of properties; the real /global/event message.part.updated
+		// path nests it under `part`.
+		name := props.Tool
+		callID := props.CallID
+		if props.Part != nil {
+			if name == "" {
+				name = props.Part.Tool
+			}
+			if callID == "" {
+				callID = props.Part.CallID
+			}
+			if callID == "" {
+				callID = props.Part.ID
+			}
+		}
+		if name != "" || callID != "" {
+			event.Tool = &runtime.ToolEvent{Name: name, CallID: callID}
 		}
 	}
 }
@@ -387,6 +413,22 @@ func mapVendorType(vendorType string, props *sseCommonProps) runtime.EventType {
 		case "step-finish":
 			return CodeaEventStepFinished
 		case "tool":
+			// The real /global/event tool lifecycle is a sequence of
+			// message.part.updated events sharing one callID whose state.status
+			// transitions pending → running → completed | error. The terminal
+			// statuses map to tool.success / tool.failed so the Application can
+			// close the lifecycle; pending/running (and any statusless legacy
+			// sample) map to tool.called.
+			if props.Part.State != nil {
+				switch props.Part.State.Status {
+				case "completed":
+					return CodeaEventToolSuccess
+				case "error":
+					return CodeaEventToolFailed
+				case "pending", "running":
+					return CodeaEventToolCalled
+				}
+			}
 			return CodeaEventToolCalled
 		}
 		return CodeaEventPartUpdated

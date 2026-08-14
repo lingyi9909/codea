@@ -544,6 +544,80 @@ func TestEventMapperPreservesRawJSON(t *testing.T) {
 	}
 }
 
+func TestEventMapperRealToolLifecycleViaPartUpdated(t *testing.T) {
+	// The real locked OpenCode (v1.18.11) /global/event stream carries the tool
+	// lifecycle as message.part.updated events with part.type=tool whose
+	// state.status transitions pending → running → completed | error, all
+	// sharing one callID. The terminal statuses must surface as tool.success /
+	// tool.failed so the Application can close the lifecycle; without this the
+	// "tool.called exists but tool.success is lost" gap re-opens on the real
+	// runtime path (session.next.tool.* is a different/future channel).
+	tests := []struct {
+		name       string
+		status     string
+		wantType   runtime.EventType
+		wantName   string
+		wantCallID string
+	}{
+		{"pending → tool.called", "pending", CodeaEventToolCalled, "read", "call_read"},
+		{"running → tool.called", "running", CodeaEventToolCalled, "read", "call_read"},
+		{"completed → tool.success", "completed", CodeaEventToolSuccess, "read", "call_read"},
+		{"error → tool.failed", "error", CodeaEventToolFailed, "read", "call_read"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			raw := `{"directory":"/tmp","payload":{"type":"message.part.updated","properties":{"sessionID":"s1","part":{"id":"prt_1","messageID":"m1","sessionID":"s1","type":"tool","tool":"read","callID":"call_read","state":{"status":"` + tt.status + `"}}}}}`
+			event, err := MapEvent([]byte(raw), 1)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if event.Type != tt.wantType {
+				t.Fatalf("expected Type=%q, got %q", tt.wantType, event.Type)
+			}
+			if event.Tool == nil {
+				t.Fatal("expected Tool to be non-nil")
+			}
+			if event.Tool.CallID != tt.wantCallID {
+				t.Fatalf("expected Tool.CallID=%q, got %q", tt.wantCallID, event.Tool.CallID)
+			}
+			if tt.wantName != "" && event.Tool.Name != tt.wantName {
+				t.Fatalf("expected Tool.Name=%q, got %q", tt.wantName, event.Tool.Name)
+			}
+		})
+	}
+}
+
+func TestEventMapperRealToolLifecycleCallIDCorrelation(t *testing.T) {
+	// A single tool invocation observed on the real runtime must correlate its
+	// called (running) and success (completed) events by callID.
+	rawEvents := []string{
+		`{"directory":"/tmp","payload":{"type":"message.part.updated","properties":{"sessionID":"s1","part":{"id":"prt_1","messageID":"m1","sessionID":"s1","type":"tool","tool":"bash","callID":"call_bash","state":{"status":"running"}}}}}`,
+		`{"directory":"/tmp","payload":{"type":"message.part.updated","properties":{"sessionID":"s1","part":{"id":"prt_1","messageID":"m1","sessionID":"s1","type":"tool","tool":"bash","callID":"call_bash","state":{"status":"completed"}}}}}`,
+	}
+	var calledCallID, successCallID string
+	for i, raw := range rawEvents {
+		ev, err := MapEvent([]byte(raw), int64(i+1))
+		if err != nil {
+			t.Fatalf("map event %d: %v", i, err)
+		}
+		if ev.Tool == nil {
+			t.Fatalf("event %d has nil Tool", i)
+		}
+		switch ev.Type {
+		case CodeaEventToolCalled:
+			calledCallID = ev.Tool.CallID
+		case CodeaEventToolSuccess:
+			successCallID = ev.Tool.CallID
+		}
+	}
+	if calledCallID == "" || successCallID == "" {
+		t.Fatalf("incomplete real tool lifecycle: called=%q success=%q", calledCallID, successCallID)
+	}
+	if calledCallID != successCallID {
+		t.Fatalf("real-path CallID not correlated: called=%q success=%q", calledCallID, successCallID)
+	}
+}
+
 func TestEventMapperSessionNextToolLifecycle(t *testing.T) {
 	tests := []struct {
 		name       string

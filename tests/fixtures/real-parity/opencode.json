@@ -1,0 +1,25 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "codea-parity/fake-parity",
+  "small_model": "codea-parity/fake-parity",
+  "enabled_providers": ["codea-parity"],
+  "permission": {
+    "bash": "ask"
+  },
+  "provider": {
+    "codea-parity": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "Codea Parity Local Fake Provider",
+      "options": {
+        "baseURL": "http://127.0.0.1:49220/v1",
+        "apiKey": "{env:CODEA_PARITY_API_KEY}"
+      },
+      "models": {
+        "fake-parity": {
+          "name": "Codea Parity Fake Model",
+          "limit": {"context": 32768, "output": 4096}
+        }
+      }
+    }
+  }
+}

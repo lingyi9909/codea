@@ -1,20 +1,70 @@
 {
-  "timestamp": "2026-08-12T11:06:45Z",
-  "endpoint": "http://127.0.0.1:4141",
-  "available": false,
-  "error": "[transport] Health: Get \"http://127.0.0.1:4141/global/health\": dial tcp 127.0.0.1:4141: connect: connection refused: Get \"http://127.0.0.1:4141/global/health\": dial tcp 127.0.0.1:4141: connect: connection refused",
+  "timestamp": "2026-08-14T14:47:16Z",
+  "endpoint": "http://127.0.0.1:49321",
+  "available": true,
+  "version": "1.18.11",
   "health": {
-    "passed": false,
-    "error": "[transport] Health: Get \"http://127.0.0.1:4141/global/health\": dial tcp 127.0.0.1:4141: connect: connection refused: Get \"http://127.0.0.1:4141/global/health\": dial tcp 127.0.0.1:4141: connect: connection refused"
+    "passed": true,
+    "detail": "version=1.18.11"
   },
-  "createSession": null,
-  "prompt": null,
-  "sse": null,
-  "cancel": null,
-  "agentSelection": null,
-  "approval": null,
-  "totalChecks": 0,
-  "passedChecks": 0,
+  "createSession": {
+    "passed": true,
+    "detail": "ses_fff422906ffelE8jwch7tDCImF"
+  },
+  "sse": {
+    "passed": true,
+    "detail": "global event stream"
+  },
+  "agentSelection": {
+    "passed": true,
+    "detail": "agents=[build compaction explore general plan summary title]"
+  },
+  "capabilities": {
+    "passed": true,
+    "detail": "required capabilities present"
+  },
+  "read": {
+    "passed": true,
+    "detail": "read tool executed and agent continued"
+  },
+  "write": {
+    "passed": true,
+    "detail": "write tool executed and write-out.txt verified"
+  },
+  "edit": {
+    "passed": true,
+    "detail": "edit tool executed and edit-me.txt verified"
+  },
+  "bashApprovalOnce": {
+    "passed": true,
+    "detail": "permission.asked → once → bash executed → agent continued"
+  },
+  "bashApprovalReject": {
+    "passed": true,
+    "detail": "permission.asked → reject → bash did not execute"
+  },
+  "subagent": {
+    "passed": true,
+    "detail": "task tool delegated to subagent and completed"
+  },
+  "skill": {
+    "passed": true,
+    "detail": "skill tool loaded smoke-skill and completed"
+  },
+  "plugin": {
+    "passed": true,
+    "detail": "45 plugin.added events observed"
+  },
+  "sessionResume": {
+    "passed": true,
+    "detail": "A(resume)x2 + B isolated, 94 sessions listed"
+  },
+  "cancel": {
+    "passed": true,
+    "detail": "cancel aborted a session mid-approval"
+  },
+  "totalChecks": 15,
+  "passedChecks": 15,
   "failedChecks": 0,
   "skippedChecks": 0
 }
