@@ -150,10 +150,10 @@ func TestEventMapperSemanticTypes(t *testing.T) {
 
 func TestEventMapperExtractsApprovalRequest(t *testing.T) {
 	tests := []struct {
-		name       string
-		raw        string
-		wantID     string
-		wantPerm   string
+		name     string
+		raw      string
+		wantID   string
+		wantPerm string
 	}{
 		{
 			name:     "permission.asked with id and permission",
@@ -541,5 +541,61 @@ func TestEventMapperPreservesRawJSON(t *testing.T) {
 	var rawJSON map[string]any
 	if err := json.Unmarshal(event.Raw, &rawJSON); err != nil {
 		t.Fatalf("Raw is not valid JSON: %v", err)
+	}
+}
+
+func TestEventMapperSessionNextToolLifecycle(t *testing.T) {
+	tests := []struct {
+		name       string
+		raw        string
+		wantType   runtime.EventType
+		wantTool   bool
+		wantName   string
+		wantCallID string
+	}{
+		{
+			name:       "session.next.tool.called → tool.called",
+			raw:        `{"directory":"/tmp","payload":{"type":"session.next.tool.called","properties":{"sessionID":"s1","callID":"call_1","tool":"read"}}}`,
+			wantType:   CodeaEventToolCalled,
+			wantTool:   true,
+			wantName:   "read",
+			wantCallID: "call_1",
+		},
+		{
+			name:       "session.next.tool.success → tool.success",
+			raw:        `{"directory":"/tmp","payload":{"type":"session.next.tool.success","properties":{"sessionID":"s1","callID":"call_1"}}}`,
+			wantType:   CodeaEventToolSuccess,
+			wantTool:   true,
+			wantCallID: "call_1",
+		},
+		{
+			name:       "session.next.tool.failed → tool.failed",
+			raw:        `{"directory":"/tmp","payload":{"type":"session.next.tool.failed","properties":{"sessionID":"s1","callID":"call_1"}}}`,
+			wantType:   CodeaEventToolFailed,
+			wantTool:   true,
+			wantCallID: "call_1",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			event, err := MapEvent([]byte(tt.raw), 1)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if event.Type != tt.wantType {
+				t.Fatalf("expected Type=%q, got %q", tt.wantType, event.Type)
+			}
+			if tt.wantTool != (event.Tool != nil) {
+				t.Fatalf("expected Tool non-nil=%v, got %v", tt.wantTool, event.Tool)
+			}
+			if tt.wantTool && event.Tool != nil {
+				if event.Tool.CallID != tt.wantCallID {
+					t.Fatalf("expected Tool.CallID=%q, got %q", tt.wantCallID, event.Tool.CallID)
+				}
+				if tt.wantName != "" && event.Tool.Name != tt.wantName {
+					t.Fatalf("expected Tool.Name=%q, got %q", tt.wantName, event.Tool.Name)
+				}
+			}
+		})
 	}
 }

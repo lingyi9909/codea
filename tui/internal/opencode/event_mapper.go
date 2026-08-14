@@ -72,15 +72,17 @@ type ssePayload struct {
 
 // sseCommonProps captures fields found across many event properties.
 type sseCommonProps struct {
-	SessionID string          `json:"sessionID"`
-	MessageID string          `json:"messageID"`
-	PartID    string          `json:"partID"`
-	Field     string          `json:"field"`
-	Delta     string          `json:"delta"`
-	Time      float64         `json:"time"`
-	Status    *sseStatus      `json:"status"`
-	Info      json.RawMessage `json:"info"`
-	Part      *ssePart        `json:"part"`
+	SessionID    string          `json:"sessionID"`
+	MessageID    string          `json:"messageID"`
+	PartID       string          `json:"partID"`
+	Field        string          `json:"field"`
+	Delta        string          `json:"delta"`
+	Time         float64         `json:"time"`
+	Status       *sseStatus      `json:"status"`
+	Info         json.RawMessage `json:"info"`
+	Part         *ssePart        `json:"part"`
+	CallID       string          `json:"callID"`
+	Tool         string          `json:"tool"`
 	Error        json.RawMessage `json:"error"`
 	Code         string          `json:"code"`
 	Partial      string          `json:"partial"`
@@ -245,18 +247,31 @@ func permissionCommand(perm ssePermissionProps) string {
 }
 
 func extractTool(event *runtime.Event, props *sseCommonProps) {
-	if event.Type != CodeaEventToolCalled || props.Part == nil {
-		return
-	}
-	name := props.Part.Tool
-	callID := props.Part.CallID
-	if callID == "" {
-		callID = props.Part.ID
-	}
-	if name != "" || callID != "" {
-		event.Tool = &runtime.ToolEvent{
-			Name:   name,
-			CallID: callID,
+	switch event.Type {
+	case CodeaEventToolCalled:
+		name := props.Tool
+		callID := props.CallID
+		// message.part.updated nests the tool name and callID under `part`;
+		// session.next.tool.called carries them at the top level.
+		if props.Part != nil {
+			if name == "" {
+				name = props.Part.Tool
+			}
+			if callID == "" {
+				callID = props.Part.CallID
+			}
+			if callID == "" {
+				callID = props.Part.ID
+			}
+		}
+		if name != "" || callID != "" {
+			event.Tool = &runtime.ToolEvent{Name: name, CallID: callID}
+		}
+	case CodeaEventToolSuccess, CodeaEventToolFailed:
+		// Success/failure carry only callID, used by the Application to
+		// correlate the lifecycle with the preceding tool.called event.
+		if props.CallID != "" {
+			event.Tool = &runtime.ToolEvent{CallID: props.CallID}
 		}
 	}
 }
@@ -383,6 +398,19 @@ func mapVendorType(vendorType string, props *sseCommonProps) runtime.EventType {
 	}
 	if vendorType == "permission.v2.replied" {
 		return CodeaEventApprovalResolved
+	}
+
+	// session.next.tool.* events carry the modern tool lifecycle. callID/tool
+	// live at the top level of properties (not under `part`) — see the generated
+	// OpenCodeEventSessionNextTool* DTOs.
+	if vendorType == "session.next.tool.called" {
+		return CodeaEventToolCalled
+	}
+	if vendorType == "session.next.tool.success" {
+		return CodeaEventToolSuccess
+	}
+	if vendorType == "session.next.tool.failed" {
+		return CodeaEventToolFailed
 	}
 
 	if ct, ok := vendorToCodea[vendorType]; ok {
