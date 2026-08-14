@@ -218,6 +218,52 @@ func TestRealTUISmoke(t *testing.T) {
 		return contains("Spent") && contains("thinking")
 	})
 
+	// 3b. Approval flow: a second prompt triggers permission.asked, the approval
+	// modal renders tool + command + danger warning, and Y replies so the agent
+	// continues and completes the step.
+	writeKeys(t, pty.master, "delete the build")
+	writeKeys(t, pty.master, "\r")
+
+	waitFor(t, 20*time.Second, "approval modal", func() bool {
+		return contains("Tool approval required")
+	})
+	waitFor(t, 20*time.Second, "approval tool + command", func() bool {
+		return contains("bash") && contains("rm -rf ./build")
+	})
+	waitFor(t, 20*time.Second, "danger warning", func() bool {
+		return contains("Potentially dangerous command")
+	})
+
+	writeKeys(t, pty.master, "y")
+
+	waitFor(t, 20*time.Second, "approval continuation", func() bool {
+		return contains("Deleted build directory.")
+	})
+
+	// 3c. Session panel: ctrl+s opens the list, arrows move the cursor, Enter
+	// resumes another session, and Esc closes the panel.
+	writeKeys(t, pty.master, "\x13") // ctrl+s
+	waitFor(t, 15*time.Second, "session panel", func() bool {
+		return contains("Sessions")
+	})
+	waitFor(t, 15*time.Second, "session titles", func() bool {
+		return contains("Alpha Task") && contains("Beta Task")
+	})
+
+	writeKeys(t, pty.master, "\x1b[B") // down
+	time.Sleep(100 * time.Millisecond)
+	writeKeys(t, pty.master, "\x1b[A") // up
+	time.Sleep(100 * time.Millisecond)
+	writeKeys(t, pty.master, "\x1b[B") // down
+	time.Sleep(100 * time.Millisecond)
+	writeKeys(t, pty.master, "\r") // resume (Beta Task -> sess-2)
+	time.Sleep(200 * time.Millisecond)
+
+	writeKeys(t, pty.master, "\x13") // ctrl+s reopen
+	time.Sleep(200 * time.Millisecond)
+	writeKeys(t, pty.master, "\x1b") // esc close
+	time.Sleep(200 * time.Millisecond)
+
 	// 4. Resize the terminal.
 	if err := pty.setSize(50, 130); err != nil {
 		t.Fatalf("resize: %v", err)

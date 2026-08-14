@@ -75,6 +75,13 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case approvalResultMsg:
+		// A result only applies to the approval currently shown. A stale result
+		// (from a reply issued against a request that has since been superseded
+		// by a new permission.asked) must not close or corrupt the current modal.
+		if m.permission.Request == nil || runtime.ApprovalID(m.permission.Request.ID) != msg.approvalID {
+			return m, nil
+		}
+		m.approvalPending = false
 		if msg.err != nil {
 			m.approvalErr = msg.err.Error()
 			m.markDirty()
@@ -152,7 +159,12 @@ func (m *Model) handleKey(msg tea.KeyMsg) tea.Cmd {
 
 // handleApprovalKey routes keys while the approval modal is open. Only
 // Allow-once / Always / Reject are consumed; every other key is swallowed.
+// While a reply is already in flight, all keys are swallowed so the same
+// approval cannot be replied to twice.
 func (m *Model) handleApprovalKey(msg tea.KeyMsg) tea.Cmd {
+	if m.approvalPending {
+		return nil
+	}
 	switch {
 	case key.Matches(msg, m.keys.AllowOnce):
 		return m.replyApproval(runtime.ApprovalOnce)
@@ -171,6 +183,7 @@ func (m *Model) replyApproval(decision runtime.ApprovalDecision) tea.Cmd {
 	if m.permission.Request == nil {
 		return nil
 	}
+	m.approvalPending = true
 	return ReplyApprovalCmd(m.runtimeClient, runtime.ApprovalID(m.permission.Request.ID), runtime.ApprovalReply{Decision: decision})
 }
 
@@ -345,6 +358,7 @@ func (m *Model) processRuntimeEvent(ev runtime.Event) bool {
 		if ev.Approval != nil {
 			m.permission = components.NewPermissionModel(ev.Approval)
 			m.approvalErr = ""
+			m.approvalPending = false
 			dirty = true
 		}
 	default:

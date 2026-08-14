@@ -95,6 +95,12 @@ type Model struct {
 	// modal; the user can retry, reject, or close.
 	approvalErr string
 
+	// approvalPending is true while a ReplyApproval for the currently shown
+	// request is in flight. While pending, further allow/reject keys are
+	// swallowed so a single approval is never replied to twice (or with
+	// conflicting decisions).
+	approvalPending bool
+
 	eventCh <-chan runtime.Event
 
 	// streamBuf and reasoningBuf coalesce high-frequency streaming deltas so a

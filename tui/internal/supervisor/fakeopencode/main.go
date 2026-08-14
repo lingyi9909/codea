@@ -66,6 +66,11 @@ func main() {
 	mode := os.Getenv("FAKE_OPENCODE_MODE")
 	mux := http.NewServeMux()
 
+	// promptCount distinguishes the first prompt (review flow) from the second
+	// (approval flow) so the smoke can drive both scripted sequences.
+	var promptMu sync.Mutex
+	promptCount := 0
+
 	mux.HandleFunc("/global/health", func(w http.ResponseWriter, r *http.Request) {
 		if !authorized(r) {
 			w.WriteHeader(http.StatusUnauthorized)
@@ -102,7 +107,18 @@ func main() {
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode([]any{})
+		_ = json.NewEncoder(w).Encode([]any{
+			map[string]any{
+				"id":    "sess-1",
+				"title": "Alpha Task",
+				"time":  map[string]any{"created": 1000, "updated": 2000},
+			},
+			map[string]any{
+				"id":    "sess-2",
+				"title": "Beta Task",
+				"time":  map[string]any{"created": 1000, "updated": 1500},
+			},
+		})
 	})
 
 	mux.HandleFunc("/session/", func(w http.ResponseWriter, r *http.Request) {
@@ -112,7 +128,29 @@ func main() {
 		}
 		if strings.HasSuffix(r.URL.Path, "/prompt_async") && r.Method == http.MethodPost {
 			w.WriteHeader(http.StatusNoContent)
-			go hub.emitScript()
+			promptMu.Lock()
+			n := promptCount
+			promptCount++
+			promptMu.Unlock()
+			if n == 0 {
+				go hub.emitScript()
+			} else {
+				go hub.emitApprovalScript()
+			}
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	})
+
+	mux.HandleFunc("/permission/", func(w http.ResponseWriter, r *http.Request) {
+		if !authorized(r) {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		if strings.HasSuffix(r.URL.Path, "/reply") && r.Method == http.MethodPost {
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(true)
+			go hub.emitApprovalContinuation()
 			return
 		}
 		w.WriteHeader(http.StatusNotFound)
@@ -234,6 +272,42 @@ func (h *eventHub) emitScript() {
 	})
 	step("message.part.updated", map[string]any{
 		"part": map[string]any{"id": "part-tool", "type": "tool", "tool": "read", "callID": "c1"},
+	})
+	step("message.part.updated", map[string]any{
+		"part": map[string]any{"id": "part-finish", "type": "step-finish"},
+	})
+}
+
+// emitApprovalScript emits a permission.asked flow: the agent starts a step and
+// immediately requests approval for a dangerous shell command. It blocks there;
+// the continuation is emitted by emitApprovalContinuation once the TUI replies.
+func (h *eventHub) emitApprovalScript() {
+	step := func(typ string, props map[string]any) {
+		h.broadcast(sseEnvelope(typ, props))
+		time.Sleep(10 * time.Millisecond)
+	}
+	step("message.part.updated", map[string]any{
+		"part": map[string]any{"id": "part-step", "type": "step-start"},
+	})
+	step("permission.asked", map[string]any{
+		"id":         "per_1",
+		"permission": "bash",
+		"sessionID":  "sess-1",
+		"patterns":   []string{"rm", "-rf", "./build"},
+		"metadata":   map[string]any{"command": "rm -rf ./build"},
+	})
+}
+
+// emitApprovalContinuation is broadcast after the TUI replies to the approval,
+// simulating the agent resuming and completing the step.
+func (h *eventHub) emitApprovalContinuation() {
+	step := func(typ string, props map[string]any) {
+		h.broadcast(sseEnvelope(typ, props))
+		time.Sleep(10 * time.Millisecond)
+	}
+	step("message.part.delta", map[string]any{
+		"sessionID": "sess-1", "messageID": "msg-2", "partID": "part-answer",
+		"field": "text", "delta": "Deleted build directory.",
 	})
 	step("message.part.updated", map[string]any{
 		"part": map[string]any{"id": "part-finish", "type": "step-finish"},

@@ -17,21 +17,12 @@ enter submit · alt+enter newline · ctrl+t thinking · ctrl+s sessions · ctrl+
 
 
 
-Let me analyze the request.
+Let me analyze the request. I should review the target file first.
 
 ◌ Working
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 > 
 enter submit · alt+enter newline · ctrl+t thinking · ctrl+s sessions · ctrl+l clear · ctrl+c quit
-
-
-
-Let me analyze the request. I should review the target file first.
-
-
-
-
-
 
 
 
@@ -60,24 +51,104 @@ Here is the review: the code looks good.
 Ready
 
 
-Codea  ● Ready
-──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+
+
+User > delete the build
+
+
+◌ Working
+
+
+
+
+┌─────────────────────────────────┐
+│ Tool approval required          │
+│                                 │
+│ Tool: bash                      │
+│                                 │
+│ rm -rf ./build                  │
+│                                 │
+│ ⚠ Potentially dangerous command │
+│                                 │
+│ [Y] Allow once                  │
+│ [A] Always allow                │
+│ [N] Reject                      │
+└─────────────────────────────────┘
+
 User > review the code
 Here is the review: the code looks good.
-✓ Spent 0.2s thinking
-  ◌ read
+User > delete the build
 
-Ready
-──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+◌ Working
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 > 
 enter submit · alt+enter newline · ctrl+t thinking · ctrl+s sessions · ctrl+l clear · ctrl+c quit
 
 
 
-Let me analyze the request. I should review the target file first.
+
+Deleted build directory.
+
+Ready
+
+
+
+
+Sessions
+
+> Alpha Task (active)
+  Beta Task
+
+↑↓ Select   Enter Resume   Esc Close
+
+
+
+  Alpha Task (active)
+> Beta Task
 
 
 
 
 
-
+> Alpha Task (active)
+  Beta Task
+
+
+
+
+
+  Alpha Task (active)
+> Beta Task
+
+
+
+
+
+Ready
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+> 
+enter submit · alt+enter newline · ctrl+t thinking · ctrl+s sessions · ctrl+l clear · ctrl+c quit
+
+Sessions
+
+> Alpha Task
+  Beta Task (active)
+
+↑↓ Select   Enter Resume   Esc Close
+
+
+
+Ready
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+> 
+enter submit · alt+enter newline · ctrl+t thinking · ctrl+s sessions · ctrl+l clear · ctrl+c quitCodea  ● Ready
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+Ready
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+> 
+enter submit · alt+enter newline · ctrl+t thinking · ctrl+s sessions · ctrl+l clear · ctrl+c quit

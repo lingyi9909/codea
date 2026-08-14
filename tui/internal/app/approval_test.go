@@ -6,13 +6,19 @@ import (
 
 	"codea/tui/internal/runtime"
 	fakeruntime "codea/tui/tests/fixtures/fake-runtime"
+
+	tea "github.com/charmbracelet/bubbletea"
 )
 
 func approvalEvent(session string) runtime.Event {
+	return approvalEventID(session, "per_1")
+}
+
+func approvalEventID(session, id string) runtime.Event {
 	return runtime.Event{
 		Type:      eventTypeApprovalRequested,
 		SessionID: session,
-		Approval:  &runtime.ApprovalRequest{ID: "per_1", Permission: "shell", Command: "rm -rf ./build"},
+		Approval:  &runtime.ApprovalRequest{ID: id, Permission: "shell", Command: "rm -rf ./build"},
 	}
 }
 
@@ -204,5 +210,100 @@ func TestApprovalViewRendersDangerWarning(t *testing.T) {
 		if !strings.Contains(out, want) {
 			t.Errorf("approval view missing %q", want)
 		}
+	}
+}
+
+func TestApprovalStaleSuccessDoesNotCloseNewRequest(t *testing.T) {
+	client := fakeruntime.New()
+	m := NewModel(client)
+	m.sessionID = runtime.SessionID("s1")
+
+	m.Update(runtimeEventMsg{ev: approvalEventID("s1", "per_1")})
+	_, cmd := m.Update(yKey())
+	if cmd == nil {
+		t.Fatal("expected ReplyApprovalCmd for A")
+	}
+
+	// B arrives while A's reply is still in flight.
+	m.Update(runtimeEventMsg{ev: approvalEventID("s1", "per_2")})
+	if m.permission.Request == nil || m.permission.Request.ID != "per_2" {
+		t.Fatalf("modal should show B after it arrives, got %+v", m.permission.Request)
+	}
+
+	// A's result returns (success). It must not close B.
+	ar, ok := cmd().(approvalResultMsg)
+	if !ok {
+		t.Fatalf("cmd returned %T, want approvalResultMsg", cmd())
+	}
+	if ar.err != nil {
+		t.Fatalf("A reply error: %v", ar.err)
+	}
+	m.Update(ar)
+
+	if !m.permission.Visible() {
+		t.Error("B must remain visible after A's stale success result")
+	}
+	if m.permission.Request.ID != "per_2" {
+		t.Errorf("modal = %q, want B (per_2)", m.permission.Request.ID)
+	}
+}
+
+func TestApprovalStaleErrorDoesNotPolluteNewRequest(t *testing.T) {
+	client := fakeruntime.New()
+	client.ReplyApprovalError = fakeruntime.ErrSimulated
+	m := NewModel(client)
+	m.sessionID = runtime.SessionID("s1")
+
+	m.Update(runtimeEventMsg{ev: approvalEventID("s1", "per_1")})
+	_, cmd := m.Update(yKey())
+
+	m.Update(runtimeEventMsg{ev: approvalEventID("s1", "per_2")})
+
+	ar, ok := cmd().(approvalResultMsg)
+	if !ok {
+		t.Fatalf("cmd returned %T, want approvalResultMsg", cmd())
+	}
+	if ar.err == nil {
+		t.Fatal("expected A reply error")
+	}
+	m.Update(ar)
+
+	if !m.permission.Visible() {
+		t.Error("B must remain visible after A's stale error result")
+	}
+	if m.permission.Request.ID != "per_2" {
+		t.Errorf("modal = %q, want B (per_2)", m.permission.Request.ID)
+	}
+	if m.approvalErr != "" {
+		t.Errorf("approvalErr = %q, want empty (A's error must not pollute B)", m.approvalErr)
+	}
+}
+
+func TestApprovalDuplicateKeyIgnoredWhilePending(t *testing.T) {
+	client := fakeruntime.New()
+	m := NewModel(client)
+	m.sessionID = runtime.SessionID("s1")
+
+	m.Update(runtimeEventMsg{ev: approvalEvent("s1")})
+	_, cmd := m.Update(yKey())
+	if cmd == nil {
+		t.Fatal("expected first ReplyApprovalCmd")
+	}
+
+	// While the reply is in flight, further decisions must be swallowed.
+	for _, k := range []tea.KeyMsg{aKey(), nKey(), yKey(), escKey()} {
+		if _, c := m.Update(k); c != nil {
+			t.Errorf("%v while pending must not issue a second ReplyApprovalCmd", k)
+		}
+	}
+
+	ar, ok := cmd().(approvalResultMsg)
+	if !ok {
+		t.Fatalf("cmd returned %T, want approvalResultMsg", cmd())
+	}
+	m.Update(ar)
+
+	if got := len(client.Approvals()); got != 1 {
+		t.Errorf("approvals = %d, want exactly 1 (duplicate keys must be swallowed)", got)
 	}
 }
