@@ -126,6 +126,22 @@ func main() {
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
+		if strings.HasSuffix(r.URL.Path, "/message") && r.Method == http.MethodGet {
+			// Session history, so resume rehydrates the chat view. A fixed
+			// two-turn history with recognizable text lets the smoke assert it.
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode([]any{
+				map[string]any{
+					"info":  map[string]any{"id": "hmsg-1", "role": "user"},
+					"parts": []any{map[string]any{"type": "text", "text": "Earlier question"}},
+				},
+				map[string]any{
+					"info":  map[string]any{"id": "hmsg-2", "role": "assistant"},
+					"parts": []any{map[string]any{"type": "text", "text": "Earlier answer"}},
+				},
+			})
+			return
+		}
 		if strings.HasSuffix(r.URL.Path, "/prompt_async") && r.Method == http.MethodPost {
 			w.WriteHeader(http.StatusNoContent)
 			promptMu.Lock()

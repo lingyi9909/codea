@@ -86,3 +86,12 @@ func ReplyApprovalCmd(client runtime.AgentRuntime, approvalID runtime.ApprovalID
 		return approvalResultMsg{approvalID: approvalID, err: err}
 	}
 }
+
+// LoadSessionHistoryCmd fetches a session's message history for resume. It never
+// blocks the Bubble Tea event loop; the result is delivered as loadHistoryResultMsg.
+func LoadSessionHistoryCmd(client runtime.AgentRuntime, sessionID runtime.SessionID) tea.Cmd {
+	return func() tea.Msg {
+		messages, err := client.GetSessionMessages(context.Background(), sessionID)
+		return loadHistoryResultMsg{sessionID: sessionID, messages: messages, err: err}
+	}
+}

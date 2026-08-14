@@ -72,6 +72,11 @@ type Model struct {
 	// effect before any of that session's events arrive.
 	pendingPrompt *runtime.PromptRequest
 
+	// pendingResumeID is the session whose history is being loaded during a
+	// resume. It guards against a stale load result (e.g. the user closed the
+	// panel or started a different resume) applying to the wrong session.
+	pendingResumeID runtime.SessionID
+
 	proc              *reasoning.Processor
 	reasoningActive   bool
 	reasoningContent  string

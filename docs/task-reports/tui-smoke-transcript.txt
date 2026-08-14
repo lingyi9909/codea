@@ -80,22 +80,12 @@ User > delete the build
 User > review the code
 Here is the review: the code looks good.
 User > delete the build
-
-
-◌ Working
-────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-> 
-enter submit · alt+enter newline · ctrl+t thinking · ctrl+s sessions · ctrl+l clear · ctrl+c quit
-
-
-
-
 Deleted build directory.
 
 Ready
-
-
-
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+> 
+enter submit · alt+enter newline · ctrl+t thinking · ctrl+s sessions · ctrl+l clear · ctrl+c quit
 
 Sessions
 
@@ -125,7 +115,8 @@ Sessions
 
 
 
-
+User > Earlier question
+Earlier answer
 
 Ready
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -139,14 +130,16 @@ Sessions
 
 ↑↓ Select   Enter Resume   Esc Close
 
-
+User > Earlier question
+Earlier answer
 
 Ready
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 > 
 enter submit · alt+enter newline · ctrl+t thinking · ctrl+s sessions · ctrl+l clear · ctrl+c quitCodea  ● Ready
 ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-
+User > Earlier question
+Earlier answer
 
 Ready
 ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────

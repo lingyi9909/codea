@@ -74,6 +74,25 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.markDirty()
 		return m, nil
 
+	case loadHistoryResultMsg:
+		// A result only applies to the resume currently in flight. A stale result
+		// (the panel was closed or a different resume started) is ignored.
+		if m.pendingResumeID == "" || msg.sessionID != m.pendingResumeID {
+			return m, nil
+		}
+		m.pendingResumeID = ""
+		if msg.err != nil {
+			// Failure does not switch sessions; the panel stays open with a notice
+			// so the user can retry or pick another session.
+			m.sessionNotice = "Failed to load session history: " + msg.err.Error()
+			m.markDirty()
+			return m, nil
+		}
+		m.resumeSession(msg.sessionID, msg.messages)
+		m.sessionPanel.Close()
+		m.markDirty()
+		return m, nil
+
 	case approvalResultMsg:
 		// A result only applies to the approval currently shown. A stale result
 		// (from a reply issued against a request that has since been superseded
@@ -223,7 +242,9 @@ func (m *Model) toggleSessions() tea.Cmd {
 }
 
 // resumeSelectedSession resumes the session under the cursor. It is blocked
-// while a response is still streaming.
+// while a response is still streaming. On selection it kicks off an async
+// history load (LoadSessionHistoryCmd); the actual switch happens in the
+// loadHistoryResultMsg handler once history arrives.
 func (m *Model) resumeSelectedSession() tea.Cmd {
 	item, ok := m.sessionPanel.Selected()
 	if !ok || item.Active {
@@ -235,17 +256,16 @@ func (m *Model) resumeSelectedSession() tea.Cmd {
 		m.sessionNotice = "Finish or cancel the current response before switching sessions."
 		return nil
 	}
-	m.resumeSession(item.ID)
-	m.sessionPanel.Close()
-	return nil
+	m.pendingResumeID = item.ID
+	m.sessionNotice = ""
+	return LoadSessionHistoryCmd(m.runtimeClient, item.ID)
 }
 
-// resumeSession switches the current session and resets all transient UI state
-// so the previous session's in-flight streaming, reasoning, tools, and pending
-// prompt cannot leak into the resumed session. Message-history rehydration is
-// deferred to Task 9 (it requires message-part mapping), so the chat view
-// starts clean for the resumed session.
-func (m *Model) resumeSession(id runtime.SessionID) {
+// resumeSession switches the current session, resets all transient UI state so
+// the previous session's in-flight streaming, reasoning, tools, and pending
+// prompt cannot leak into the resumed session, and rehydrates the chat view
+// from the loaded history.
+func (m *Model) resumeSession(id runtime.SessionID, history []runtime.Message) {
 	m.sessionID = id
 	m.isStreaming = false
 	m.pendingPrompt = nil
@@ -257,8 +277,35 @@ func (m *Model) resumeSession(id runtime.SessionID) {
 	m.reasoningExpanded = false
 	m.tools = make([]ToolActivity, 0)
 	m.proc.Reset()
-	m.messages = make([]ChatMessage, 0)
+	m.messages = historyToChatMessages(history)
 	m.sessionNotice = ""
+}
+
+// historyToChatMessages maps Codea-domain session messages into chat messages
+// for rehydration. Historical turns are complete, so every message is marked
+// finished; an unknown role falls back to informational display.
+func historyToChatMessages(history []runtime.Message) []ChatMessage {
+	out := make([]ChatMessage, 0, len(history))
+	for _, msg := range history {
+		out = append(out, ChatMessage{
+			Role:     messageRole(msg.Role),
+			Content:  msg.Content,
+			Finished: true,
+		})
+	}
+	return out
+}
+
+// messageRole maps a message role string to a Codea Role.
+func messageRole(role string) Role {
+	switch role {
+	case "user":
+		return RoleUser
+	case "assistant":
+		return RoleAssistant
+	default:
+		return RoleInfo
+	}
 }
 
 // sessionItems converts Codea-domain sessions into session list items.

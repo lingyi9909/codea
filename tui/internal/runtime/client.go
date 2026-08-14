@@ -14,5 +14,6 @@ type AgentRuntime interface {
 	Cancel(ctx context.Context, sessionID SessionID) error
 	ListAgents(ctx context.Context) ([]Agent, error)
 	ListSessions(ctx context.Context) ([]Session, error)
+	GetSessionMessages(ctx context.Context, sessionID SessionID) ([]Message, error)
 	Capabilities() RuntimeCapabilities
 }

@@ -49,7 +49,19 @@ func openPanelAndResume(t *testing.T, m *Model, target string) {
 	for i := range m.sessionPanel.Items {
 		if m.sessionPanel.Items[i].ID == runtime.SessionID(target) {
 			m.sessionPanel.Cursor = i
-			m.Update(enterKey())
+			_, cmd := m.Update(enterKey())
+			if cmd == nil {
+				return // resume blocked (e.g. streaming); caller asserts the block
+			}
+			msg := cmd()
+			hr, ok := msg.(loadHistoryResultMsg)
+			if !ok {
+				t.Fatalf("cmd returned %T, want loadHistoryResultMsg", msg)
+			}
+			if hr.err != nil {
+				t.Fatalf("load history error: %v", hr.err)
+			}
+			m.Update(hr)
 			return
 		}
 	}
@@ -85,7 +97,7 @@ func TestResumeSessionResetsTransientState(t *testing.T) {
 	m.tools = []ToolActivity{{Name: "read", CallID: "c1", Status: ToolRunning}}
 	m.messages = []ChatMessage{{Role: RoleUser, Content: "hi", Finished: true}}
 
-	m.resumeSession(runtime.SessionID("s2"))
+	m.resumeSession(runtime.SessionID("s2"), nil)
 
 	if m.isStreaming {
 		t.Error("isStreaming should be false after resume")
@@ -246,5 +258,151 @@ func TestSessionPanelEscCloses(t *testing.T) {
 	m.Update(escKey())
 	if m.sessionPanel.Visible {
 		t.Error("esc should close the session panel")
+	}
+}
+
+func TestResumeLoadsMessageHistory(t *testing.T) {
+	client := fakeruntime.New()
+	client.Sessions = twoSessions()
+	client.SessionMessages = map[runtime.SessionID][]runtime.Message{
+		"s2": {
+			{ID: "m1", Role: "user", Content: "hello"},
+			{ID: "m2", Role: "assistant", Content: "hi there"},
+		},
+	}
+	m := NewModel(client)
+	m.sessionID = runtime.SessionID("s1")
+
+	openPanelAndResume(t, m, "s2")
+
+	if m.sessionID != runtime.SessionID("s2") {
+		t.Errorf("sessionID = %q, want s2", m.sessionID)
+	}
+	if len(m.messages) != 2 {
+		t.Fatalf("messages = %d, want 2 rehydrated from history", len(m.messages))
+	}
+	if m.messages[0].Role != RoleUser || m.messages[0].Content != "hello" {
+		t.Errorf("messages[0] = {%q, %q}, want {user, hello}", m.messages[0].Role, m.messages[0].Content)
+	}
+	if m.messages[1].Role != RoleAssistant || m.messages[1].Content != "hi there" {
+		t.Errorf("messages[1] = {%q, %q}, want {assistant, hi there}", m.messages[1].Role, m.messages[1].Content)
+	}
+	if !m.messages[0].Finished || !m.messages[1].Finished {
+		t.Error("rehydrated history messages should be marked finished")
+	}
+}
+
+func TestResumeHistoryUserAssistantOrderPreserved(t *testing.T) {
+	client := fakeruntime.New()
+	client.Sessions = twoSessions()
+	client.SessionMessages = map[runtime.SessionID][]runtime.Message{
+		"s2": {
+			{ID: "m1", Role: "user", Content: "one"},
+			{ID: "m2", Role: "assistant", Content: "two"},
+			{ID: "m3", Role: "user", Content: "three"},
+			{ID: "m4", Role: "assistant", Content: "four"},
+		},
+	}
+	m := NewModel(client)
+	m.sessionID = runtime.SessionID("s1")
+
+	openPanelAndResume(t, m, "s2")
+
+	want := []ChatMessage{
+		{Role: RoleUser, Content: "one", Finished: true},
+		{Role: RoleAssistant, Content: "two", Finished: true},
+		{Role: RoleUser, Content: "three", Finished: true},
+		{Role: RoleAssistant, Content: "four", Finished: true},
+	}
+	if len(m.messages) != len(want) {
+		t.Fatalf("messages = %d, want %d", len(m.messages), len(want))
+	}
+	for i := range want {
+		if m.messages[i] != want[i] {
+			t.Errorf("messages[%d] = %+v, want %+v (order not preserved)", i, m.messages[i], want[i])
+		}
+	}
+}
+
+func TestResumeHistoryLoadFailureDoesNotSilentlySucceed(t *testing.T) {
+	client := fakeruntime.New()
+	client.Sessions = twoSessions()
+	client.GetSessionMessagesError = fakeruntime.ErrSimulated
+	m := NewModel(client)
+	m.sessionID = runtime.SessionID("s1")
+
+	_, cmd := m.Update(ctrlSKey())
+	lr := cmd().(listSessionsResultMsg)
+	m.Update(lr)
+	for i := range m.sessionPanel.Items {
+		if m.sessionPanel.Items[i].ID == runtime.SessionID("s2") {
+			m.sessionPanel.Cursor = i
+		}
+	}
+	_, cmd = m.Update(enterKey())
+	if cmd == nil {
+		t.Fatal("enter should issue LoadSessionHistoryCmd even when the load will fail")
+	}
+	msg := cmd()
+	hr, ok := msg.(loadHistoryResultMsg)
+	if !ok {
+		t.Fatalf("cmd returned %T, want loadHistoryResultMsg", msg)
+	}
+	if hr.err == nil {
+		t.Fatal("expected history load error, got nil")
+	}
+	m.Update(hr)
+
+	if m.sessionID != runtime.SessionID("s1") {
+		t.Errorf("sessionID = %q, want s1 (must not switch on load failure)", m.sessionID)
+	}
+	if !m.sessionPanel.Visible {
+		t.Error("session panel should stay open on load failure")
+	}
+	if m.sessionNotice == "" {
+		t.Error("load failure should surface a session notice")
+	}
+}
+
+func TestResumeThenNewPromptContinuesSameSession(t *testing.T) {
+	client := fakeruntime.New()
+	client.Sessions = twoSessions()
+	client.SessionMessages = map[runtime.SessionID][]runtime.Message{
+		"s2": {
+			{ID: "m1", Role: "user", Content: "prior"},
+			{ID: "m2", Role: "assistant", Content: "prior answer"},
+		},
+	}
+	m := NewModel(client)
+	m.sessionID = runtime.SessionID("s1")
+
+	openPanelAndResume(t, m, "s2")
+
+	m.input = "new question"
+	_, cmd := m.Update(enterKey())
+	if cmd == nil {
+		t.Fatal("submit should issue a prompt command")
+	}
+	cmd() // run the async prompt; the fake records it
+
+	// The new prompt must go to the resumed session, and history must remain.
+	prompts := client.Prompts()
+	if len(prompts) != 1 {
+		t.Fatalf("prompts = %d, want 1", len(prompts))
+	}
+	if prompts[0].SessionID != runtime.SessionID("s2") {
+		t.Errorf("new prompt session = %q, want s2", prompts[0].SessionID)
+	}
+	if len(m.messages) != 4 {
+		t.Fatalf("messages = %d, want 4 (2 history + user + assistant)", len(m.messages))
+	}
+	if m.messages[0].Content != "prior" || m.messages[1].Content != "prior answer" {
+		t.Error("history should be preserved before the new turn")
+	}
+	if m.messages[2].Role != RoleUser || m.messages[2].Content != "new question" {
+		t.Errorf("messages[2] = {%q, %q}, want {user, new question}", m.messages[2].Role, m.messages[2].Content)
+	}
+	if m.messages[3].Role != RoleAssistant {
+		t.Errorf("messages[3].Role = %q, want assistant", m.messages[3].Role)
 	}
 }

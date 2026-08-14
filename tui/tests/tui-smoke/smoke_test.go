@@ -257,7 +257,9 @@ func TestRealTUISmoke(t *testing.T) {
 	writeKeys(t, pty.master, "\x1b[B") // down
 	time.Sleep(100 * time.Millisecond)
 	writeKeys(t, pty.master, "\r") // resume (Beta Task -> sess-2)
-	time.Sleep(200 * time.Millisecond)
+	waitFor(t, 15*time.Second, "rehydrated history", func() bool {
+		return contains("Earlier answer")
+	})
 
 	writeKeys(t, pty.master, "\x13") // ctrl+s reopen
 	time.Sleep(200 * time.Millisecond)

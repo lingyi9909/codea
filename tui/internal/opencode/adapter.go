@@ -203,6 +203,18 @@ func (a *OpenCodeAdapter) ListSessions(ctx context.Context) ([]runtime.Session, 
 	return result, nil
 }
 
+func (a *OpenCodeAdapter) GetSessionMessages(ctx context.Context, sessionID runtime.SessionID) ([]runtime.Message, error) {
+	raw, err := a.httpClient.GetSessionMessages(ctx, string(sessionID))
+	if err != nil {
+		return nil, classifyError("GetSessionMessages", err)
+	}
+	result := make([]runtime.Message, len(raw))
+	for i, m := range raw {
+		result[i] = MapSessionMessage(m)
+	}
+	return result, nil
+}
+
 func (a *OpenCodeAdapter) Capabilities() runtime.RuntimeCapabilities {
 	return OpenCodeCapabilities()
 }

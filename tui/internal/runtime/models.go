@@ -27,6 +27,15 @@ type Session struct {
 	UpdatedAt time.Time
 }
 
+// Message is a Codea-owned conversation message, used for session-history
+// rehydration. It carries only role + text content; vendor part DTOs are
+// flattened by the adapter and never cross into the Application.
+type Message struct {
+	ID      string
+	Role    string // "user" | "assistant"
+	Content string
+}
+
 // CreateSessionRequest is the input for creating a session.
 type CreateSessionRequest struct {
 	Title string

@@ -69,3 +69,12 @@ type approvalResultMsg struct {
 	approvalID runtime.ApprovalID
 	err        error
 }
+
+// loadHistoryResultMsg reports the outcome of a session-history fetch during
+// resume. On success it carries Codea-domain Messages (never vendor DTOs); on
+// failure err is set and resume is aborted without switching sessions.
+type loadHistoryResultMsg struct {
+	sessionID runtime.SessionID
+	messages  []runtime.Message
+	err       error
+}

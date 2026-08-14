@@ -41,6 +41,11 @@ type FakeRuntime struct {
 	// deterministic tests; otherwise ListSessions derives from created sessions.
 	Sessions []runtime.Session
 
+	// SessionMessages, if non-nil, is returned by GetSessionMessages for the
+	// matching session ID. GetSessionMessagesError, if set, forces an error.
+	SessionMessages         map[runtime.SessionID][]runtime.Message
+	GetSessionMessagesError error
+
 	// Events are sent to subscribers when Prompt is called.
 	Events []runtime.Event
 
@@ -227,6 +232,18 @@ func (f *FakeRuntime) ListSessions(ctx context.Context) ([]runtime.Session, erro
 		out = append(out, *s)
 	}
 	return out, nil
+}
+
+func (f *FakeRuntime) GetSessionMessages(ctx context.Context, sessionID runtime.SessionID) ([]runtime.Message, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.GetSessionMessagesError != nil {
+		return nil, f.GetSessionMessagesError
+	}
+	if f.SessionMessages != nil {
+		return f.SessionMessages[sessionID], nil
+	}
+	return nil, nil
 }
 
 func (f *FakeRuntime) Capabilities() runtime.RuntimeCapabilities {
