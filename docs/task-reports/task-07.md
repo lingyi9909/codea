@@ -2,7 +2,7 @@
 
 ## Overview
 
-Checkpoint: `7a8f9c2d819c3e334d7b26d1e93c39d3b9a54219`
+Checkpoint: `0e523e8d70cb5c3357b9e8beb7a1dae6b2480e46`
 
 建立 Bubble Tea 应用骨架：Tokyo Night 主题、Chat 页面、输入框、Runtime 状态、`AgentRuntime.Subscribe()` 非阻塞接入、Runtime Event→UI Message 转换、Reasoning Processor→UI 流式展示、streaming answer、reasoning 默认折叠 + duration、工具活动时间线、窗口 resize、快捷键、~50ms 合并刷新、`cmd/codea` TUI 启动。
 
@@ -16,6 +16,14 @@ Checkpoint: `7a8f9c2d819c3e334d7b26d1e93c39d3b9a54219`
 - **Blocking 2 — 修复假 50ms 合并刷新**：`Model` 新增 `streamBuf`/`reasoningBuf` + `rendered`/`dirty` 缓存。高频 delta 写入 buffer（不置 dirty），`~50ms tick` 的 `flushStreaming()` 提交并置 dirty；`View()` 命中缓存直接返回。`coalescing_test.go` 证明 100 个 delta 仅 1 次 flush、token 洪峰期间 `View()` 不重渲染。
 - **Blocking 3 — 70×20 最小终端 Gate**：`View()` 在 `width < 70 || height < 20` 时渲染 `Terminal too small / Minimum: 70x20`。`view_test.go` 表驱动覆盖 69×20/70×19/70×20，及 resize 60×10→100×30。
 - **Blocking 4 — 真实 TUI smoke 证据**：扩展 `fakeopencode` 提供 `/session`、`/session/{id}/prompt_async`、`/global/event`（脚本化 reasoning/answer/tool/step.finished 事件流）+ `FAKE_OPENCODE_PID_FILE`。新增 `tui/tests/tui-smoke/smoke_test.go`（darwin PTY）真实启动 `codea` 二进制，驱动 启动→Healthy→Prompt→reasoning/answer 流式→tool 活动→resize→ctrl+t→ctrl+c→Runtime 停止 全链路；`scripts/tui-smoke.sh` 可复现。可读证据：`docs/task-reports/tui-smoke-transcript.txt`。
+
+## Acceptance Review Fixes（Round 2 — Blocking 1-3）
+
+第二轮独立验收结论为「有条件通过」，锁定 3 个影响运行正确性的 Blocking，本轮一次性修复（不扩审）：
+
+- **Blocking 1 — `/global/event` 按当前 Session 过滤**：新增 `Model.acceptsEvent(ev)` 统一入口——`SessionID` 为空（真正 global/runtime 事件）恒接受；非空则必须等于当前 session 才进入 chat/reasoning/tool 流程。同时把「CreateSession → 通知 Model sessionID → Prompt」生命周期拆开（`sessionCreatedMsg` + `CreateSessionCmd` + `Model.pendingPrompt`），保证 session 隔离在首个 Prompt 的事件到达前就已生效，消除首 Prompt 竞态。测试：`TestForeignSessionAnswerIgnored` / `TestForeignSessionReasoningIgnored` / `TestForeignSessionToolIgnored` / `TestForeignSessionStepFinishedIgnored` / `TestCurrentSessionEventsAccepted`。
+- **Blocking 2 — Streaming 中禁止二次 Submit**：`submit()` 顶部新增 `if m.isStreaming { return nil }`，避免并行提交导致两个 Prompt 流互相污染（answer 串行、reasoning/tool 被二次清空、step.finished 相互干扰）。测试：`TestSubmitIgnoredWhileStreaming`。
+- **Blocking 3 — `step.finished` 真正终结 Reasoning**：抽出 `Model.applyReasoningEvents(events)` 统一 apply 逻辑；`step.finished` 走 `m.proc.Flush()`（finalize 无 answer delta 时仍关闭 active reasoning 并产出 `ReasoningEnd` + duration），`session.error`/`runtime.error` 仍走 `m.proc.Process(ev)`（保留 `Interrupted=true` 语义）。测试：`TestStepFinishedFinalizesReasoningWithoutAnswer` / `TestSessionErrorKeepsInterruptedSemantics`。
 
 ## Step 1 — Theme + Page + KeyMap
 
@@ -65,7 +73,7 @@ Checkpoint: `7a8f9c2d819c3e334d7b26d1e93c39d3b9a54219`
 
 ## Full Gate Verification
 
-针对 Final Implementation Commit `7a8f9c2d819c3e334d7b26d1e93c39d3b9a54219`：
+针对 Final Implementation Commit `0e523e8d70cb5c3357b9e8beb7a1dae6b2480e46`（Round 2 验收修复后）：
 
 | Gate | Result |
 |------|--------|
@@ -127,6 +135,13 @@ Checkpoint: `7a8f9c2d819c3e334d7b26d1e93c39d3b9a54219`
 | `tui/go.mod` / `tui/go.sum` | Modify（新增 bubbletea/bubbles/lipgloss 依赖） |
 | `tui/tests/fixtures/fake-runtime/fake_runtime.go` | Modify（SubscribeError） |
 | `scripts/check-runtime-boundary.sh` | Modify（允许 cmd/ composition root） |
+| `tui/internal/app/messages.go` | Modify（新增 sessionCreatedMsg） |
+| `tui/internal/app/commands.go` | Modify（CreateSessionCmd 替代 CreateSessionAndPromptCmd） |
+| `tui/internal/app/model.go` | Modify（新增 pendingPrompt 字段） |
+| `tui/internal/app/update.go` | Modify（acceptsEvent + applyReasoningEvents + submit 流控） |
+| `tui/internal/app/session_isolation_test.go` | Create（会话隔离 4+1 测试） |
+| `tui/internal/app/reasoning_finalize_test.go` | Create（step.finished 终结 reasoning + interrupted 语义） |
+| `tui/internal/app/submit_test.go` | Modify（TestSubmitIgnoredWhileStreaming + 两阶段会话） |
 
 ## 提交记录
 
@@ -140,6 +155,7 @@ Checkpoint: `7a8f9c2d819c3e334d7b26d1e93c39d3b9a54219`
 | `cedf98b` | Step 6 — tool/status/view + cmd/codea wiring |
 | `876b200` | 收口修复 — boundary check 允许 cmd/ composition root（Final Implementation Commit） |
 | `7a8f9c2` | 验收修复 — Blocking 1-4（supervisor 接线 / 真实合并刷新 / 70×20 gate / TUI smoke）（Final Implementation Commit） |
+| `0e523e8` | Round 2 验收修复 — 会话隔离 / streaming 禁止二次 submit / step.finished 终结 reasoning（Final Implementation Commit） |
 
 ## 与计划偏差
 
@@ -156,4 +172,4 @@ Checkpoint: `7a8f9c2d819c3e334d7b26d1e93c39d3b9a54219`
 
 ## 人工验收
 
-待人工按 23 项 Gate 验收。验收通过后标记 `completed` 并启动 Task 8（Session/Resume/Tool Approval）。
+Round 2 已修复 3 项 Blocking（会话隔离 / streaming 禁止二次 submit / step.finished 终结 reasoning）并重跑全 Gate + TUI smoke。待人工仅针对这 3 点 + 回归 Gate 做最后复核；通过后标记 `completed` 并启动 Task 8（Session/Resume/Tool Approval）。
