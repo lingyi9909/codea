@@ -1,5 +1,7 @@
 package runtime
 
+import "time"
+
 // SessionID identifies a Codea session.
 type SessionID string
 
@@ -20,7 +22,9 @@ type HealthInfo struct {
 
 // Session represents an active Runtime session.
 type Session struct {
-	ID string
+	ID        string
+	Title     string
+	UpdatedAt time.Time
 }
 
 // CreateSessionRequest is the input for creating a session.

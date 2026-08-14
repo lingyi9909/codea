@@ -41,6 +41,7 @@ type ToolEvent struct {
 type ApprovalRequest struct {
 	ID         string
 	Permission string
+	Command    string
 }
 
 // RuntimeErrorKind classifies a RuntimeError for application-level handling.

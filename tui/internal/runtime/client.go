@@ -13,5 +13,6 @@ type AgentRuntime interface {
 	ReplyApproval(ctx context.Context, approvalID ApprovalID, reply ApprovalReply) error
 	Cancel(ctx context.Context, sessionID SessionID) error
 	ListAgents(ctx context.Context) ([]Agent, error)
+	ListSessions(ctx context.Context) ([]Session, error)
 	Capabilities() RuntimeCapabilities
 }

@@ -53,3 +53,19 @@ type sessionCreatedMsg struct {
 	sessionID runtime.SessionID
 	err       error
 }
+
+// listSessionsResultMsg reports the result of a session list fetch for the
+// session panel. On success it carries Codea-domain sessions (never vendor
+// DTOs); on failure err is set and the panel shows a notice.
+type listSessionsResultMsg struct {
+	sessions []runtime.Session
+	err      error
+}
+
+// approvalResultMsg reports the outcome of a ReplyApproval call. On success the
+// approval modal is closed; on failure err is set and the modal stays open so
+// the user can retry, reject, or close without a silent failure.
+type approvalResultMsg struct {
+	approvalID runtime.ApprovalID
+	err        error
+}

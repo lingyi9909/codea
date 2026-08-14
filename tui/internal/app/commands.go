@@ -68,3 +68,21 @@ func CreateSessionCmd(client runtime.AgentRuntime, title string) tea.Cmd {
 		return sessionCreatedMsg{sessionID: runtime.SessionID(session.ID)}
 	}
 }
+
+// ListSessionsCmd fetches the session list for the session panel. It never
+// blocks the Bubble Tea event loop.
+func ListSessionsCmd(client runtime.AgentRuntime) tea.Cmd {
+	return func() tea.Msg {
+		sessions, err := client.ListSessions(context.Background())
+		return listSessionsResultMsg{sessions: sessions, err: err}
+	}
+}
+
+// ReplyApprovalCmd sends an approval decision to the Runtime. It never blocks
+// the Bubble Tea event loop; the result is delivered as approvalResultMsg.
+func ReplyApprovalCmd(client runtime.AgentRuntime, approvalID runtime.ApprovalID, reply runtime.ApprovalReply) tea.Cmd {
+	return func() tea.Msg {
+		err := client.ReplyApproval(context.Background(), approvalID, reply)
+		return approvalResultMsg{approvalID: approvalID, err: err}
+	}
+}

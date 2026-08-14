@@ -2,6 +2,7 @@ package opencode
 
 import (
 	"encoding/json"
+	"strings"
 	"time"
 
 	"codea/tui/internal/runtime"
@@ -115,10 +116,12 @@ type sseSessionInfo struct {
 
 // ssePermissionProps extracts permission request data from permission.asked events.
 type ssePermissionProps struct {
-	ID         string `json:"id"`
-	Permission string `json:"permission"`
-	Action     string `json:"action"`
-	SessionID  string `json:"sessionID"`
+	ID         string         `json:"id"`
+	Permission string         `json:"permission"`
+	Action     string         `json:"action"`
+	SessionID  string         `json:"sessionID"`
+	Patterns   []string       `json:"patterns"`
+	Metadata   map[string]any `json:"metadata"`
 }
 
 // MapEvent maps a raw OpenCode SSE event to a Codea runtime.Event.
@@ -220,12 +223,25 @@ func extractApproval(event *runtime.Event, payload *ssePayload, props *sseCommon
 	} else if perm.Action != "" {
 		approval.Permission = perm.Action
 	}
+	approval.Command = permissionCommand(perm)
 	if approval.ID != "" || approval.Permission != "" {
 		event.Approval = approval
 	}
 	if perm.SessionID != "" && event.SessionID == "" {
 		event.SessionID = perm.SessionID
 	}
+}
+
+// permissionCommand returns the command text for an approval, preferring the
+// explicit metadata.command and falling back to the joined patterns.
+func permissionCommand(perm ssePermissionProps) string {
+	if cmd, ok := perm.Metadata["command"].(string); ok && cmd != "" {
+		return cmd
+	}
+	if len(perm.Patterns) > 0 {
+		return strings.Join(perm.Patterns, " ")
+	}
+	return ""
 }
 
 func extractTool(event *runtime.Event, props *sseCommonProps) {

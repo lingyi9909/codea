@@ -37,6 +37,10 @@ type FakeRuntime struct {
 	AgentsErr  error
 	SessionErr error
 
+	// Sessions, if non-nil, is returned verbatim by ListSessions for
+	// deterministic tests; otherwise ListSessions derives from created sessions.
+	Sessions []runtime.Session
+
 	// Events are sent to subscribers when Prompt is called.
 	Events []runtime.Event
 
@@ -207,6 +211,22 @@ func (f *FakeRuntime) ListAgents(ctx context.Context) ([]runtime.Agent, error) {
 		return nil, f.AgentsErr
 	}
 	return f.Agents, nil
+}
+
+func (f *FakeRuntime) ListSessions(ctx context.Context) ([]runtime.Session, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.SessionErr != nil {
+		return nil, f.SessionErr
+	}
+	if f.Sessions != nil {
+		return f.Sessions, nil
+	}
+	out := make([]runtime.Session, 0, len(f.sessions))
+	for _, s := range f.sessions {
+		out = append(out, *s)
+	}
+	return out, nil
 }
 
 func (f *FakeRuntime) Capabilities() runtime.RuntimeCapabilities {

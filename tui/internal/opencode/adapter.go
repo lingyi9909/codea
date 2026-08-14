@@ -191,6 +191,18 @@ func (a *OpenCodeAdapter) ListAgents(ctx context.Context) ([]runtime.Agent, erro
 	return result, nil
 }
 
+func (a *OpenCodeAdapter) ListSessions(ctx context.Context) ([]runtime.Session, error) {
+	infos, err := a.httpClient.GetSessionStatus(ctx)
+	if err != nil {
+		return nil, classifyError("ListSessions", err)
+	}
+	result := make([]runtime.Session, len(infos))
+	for i, info := range infos {
+		result[i] = MapSession(info)
+	}
+	return result, nil
+}
+
 func (a *OpenCodeAdapter) Capabilities() runtime.RuntimeCapabilities {
 	return OpenCodeCapabilities()
 }

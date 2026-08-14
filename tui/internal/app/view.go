@@ -30,20 +30,42 @@ func (m *Model) View() string {
 
 // renderView assembles the full three-region layout (header / chat /
 // status+input). It is only invoked on a dirty render, not on every event.
+// When the approval modal or session panel is visible, it replaces the chat
+// body.
 func (m *Model) renderView() string {
 	width := m.width
 
 	header := lipgloss.NewStyle().Foreground(theme.Primary).Bold(true).Render(m.renderHeader())
 	rule := lipgloss.NewStyle().Foreground(theme.Border).Render(strings.Repeat("─", width))
-	status := theme.MutedStyle().Render(m.renderStatusLine())
-	input := theme.AccentStyle().Render(m.renderInput())
-	footer := theme.MutedStyle().Render(m.renderFooter())
 
 	var b strings.Builder
 	b.WriteString(header)
 	b.WriteString("\n")
 	b.WriteString(rule)
 	b.WriteString("\n")
+
+	if m.permission.Visible() {
+		b.WriteString(m.permission.View())
+		if m.approvalErr != "" {
+			b.WriteString("\n\n")
+			b.WriteString(theme.ErrorStyle().Render("Approval error: " + m.approvalErr))
+		}
+		return b.String()
+	}
+
+	if m.sessionPanel.Visible {
+		b.WriteString(m.sessionPanel.View())
+		if m.sessionNotice != "" {
+			b.WriteString("\n")
+			b.WriteString(theme.MutedStyle().Render(m.sessionNotice))
+		}
+		return b.String()
+	}
+
+	status := theme.MutedStyle().Render(m.renderStatusLine())
+	input := theme.AccentStyle().Render(m.renderInput())
+	footer := theme.MutedStyle().Render(m.renderFooter())
+
 	b.WriteString(m.renderBody())
 	b.WriteString("\n\n")
 	b.WriteString(status)
@@ -120,7 +142,7 @@ func (m *Model) renderInput() string {
 
 // renderFooter returns the one-line shortcut hint.
 func (m *Model) renderFooter() string {
-	return "enter submit · alt+enter newline · ctrl+t thinking · ctrl+l clear · ctrl+c quit"
+	return "enter submit · alt+enter newline · ctrl+t thinking · ctrl+s sessions · ctrl+l clear · ctrl+c quit"
 }
 
 // formatDuration renders a duration compactly for the reasoning summary.

@@ -13,4 +13,6 @@ const (
 	eventTypeToolCalled  runtime.EventType = "tool.called"
 	eventTypeToolSuccess runtime.EventType = "tool.success"
 	eventTypeToolFailed  runtime.EventType = "tool.failed"
+
+	eventTypeApprovalRequested runtime.EventType = "approval.requested"
 )

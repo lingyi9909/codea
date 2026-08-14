@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"codea/tui/internal/components"
 	"codea/tui/internal/reasoning"
 	"codea/tui/internal/runtime"
 )
@@ -78,6 +79,21 @@ type Model struct {
 	reasoningExpanded bool
 
 	tools []ToolActivity
+
+	// sessionPanel is the session list/resume overlay. It owns cursor and
+	// visibility; the Application feeds it Codea-domain session items.
+	sessionPanel components.SessionModel
+
+	// sessionNotice is a transient panel message (e.g. streaming blocks resume).
+	sessionNotice string
+
+	// permission is the tool-approval modal. It consumes only the Codea-domain
+	// runtime.ApprovalRequest, never vendor permission DTOs.
+	permission components.PermissionModel
+
+	// approvalErr surfaces a failed ReplyApproval without silently closing the
+	// modal; the user can retry, reject, or close.
+	approvalErr string
 
 	eventCh <-chan runtime.Event
 

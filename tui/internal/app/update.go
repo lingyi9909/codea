@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"codea/tui/internal/components"
 	"codea/tui/internal/reasoning"
 	"codea/tui/internal/runtime"
 
@@ -61,6 +62,29 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, PromptCmd(m.runtimeClient, m.sessionID, *req)
 
+	case listSessionsResultMsg:
+		if msg.err != nil {
+			m.sessionNotice = "Failed to load sessions: " + msg.err.Error()
+			m.markDirty()
+			return m, nil
+		}
+		m.sessionPanel.Open(sessionItems(msg.sessions))
+		m.sessionPanel.SetActive(m.sessionID)
+		m.sessionNotice = ""
+		m.markDirty()
+		return m, nil
+
+	case approvalResultMsg:
+		if msg.err != nil {
+			m.approvalErr = msg.err.Error()
+			m.markDirty()
+			return m, nil
+		}
+		m.permission = components.PermissionModel{}
+		m.approvalErr = ""
+		m.markDirty()
+		return m, nil
+
 	case subscribeErrMsg:
 		m.runtimeStatus = runtime.RuntimeCrashed
 		m.markDirty()
@@ -93,16 +117,27 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// handleKey routes keypresses to input handling or submission.
+// handleKey routes keypresses. Quit always works; otherwise the approval modal
+// and session panel take priority over chat keys so typing/Enter/shortcuts
+// cannot leak through an open modal.
 func (m *Model) handleKey(msg tea.KeyMsg) tea.Cmd {
+	if key.Matches(msg, m.keys.Quit) {
+		return tea.Quit
+	}
+	if m.permission.Visible() {
+		return m.handleApprovalKey(msg)
+	}
+	if m.sessionPanel.Visible {
+		return m.handleSessionKey(msg)
+	}
 	switch {
 	case key.Matches(msg, m.keys.Submit):
 		return m.submit()
 	case key.Matches(msg, m.keys.Newline):
 		m.input += "\n"
 		return nil
-	case key.Matches(msg, m.keys.Quit):
-		return tea.Quit
+	case key.Matches(msg, m.keys.Sessions):
+		return m.toggleSessions()
 	case key.Matches(msg, m.keys.ClearScreen):
 		m.clearChat()
 		return nil
@@ -113,6 +148,117 @@ func (m *Model) handleKey(msg tea.KeyMsg) tea.Cmd {
 		m.handleTyping(msg)
 		return nil
 	}
+}
+
+// handleApprovalKey routes keys while the approval modal is open. Only
+// Allow-once / Always / Reject are consumed; every other key is swallowed.
+func (m *Model) handleApprovalKey(msg tea.KeyMsg) tea.Cmd {
+	switch {
+	case key.Matches(msg, m.keys.AllowOnce):
+		return m.replyApproval(runtime.ApprovalOnce)
+	case key.Matches(msg, m.keys.AllowAlways):
+		return m.replyApproval(runtime.ApprovalAlways)
+	case key.Matches(msg, m.keys.Reject), key.Matches(msg, m.keys.Esc):
+		return m.replyApproval(runtime.ApprovalReject)
+	}
+	return nil
+}
+
+// replyApproval maps a decision to a Codea ApprovalReply and issues the async
+// ReplyApproval command. The UI never fabricates a vendor "remember" flag;
+// once/always/reject are the only decisions exposed here.
+func (m *Model) replyApproval(decision runtime.ApprovalDecision) tea.Cmd {
+	if m.permission.Request == nil {
+		return nil
+	}
+	return ReplyApprovalCmd(m.runtimeClient, runtime.ApprovalID(m.permission.Request.ID), runtime.ApprovalReply{Decision: decision})
+}
+
+// handleSessionKey routes keys while the session panel is open.
+func (m *Model) handleSessionKey(msg tea.KeyMsg) tea.Cmd {
+	switch {
+	case key.Matches(msg, m.keys.Up):
+		m.sessionPanel.MoveUp()
+		m.sessionNotice = ""
+		return nil
+	case key.Matches(msg, m.keys.Down):
+		m.sessionPanel.MoveDown()
+		m.sessionNotice = ""
+		return nil
+	case key.Matches(msg, m.keys.Submit):
+		return m.resumeSelectedSession()
+	case key.Matches(msg, m.keys.Esc), key.Matches(msg, m.keys.Sessions):
+		m.sessionPanel.Close()
+		m.sessionNotice = ""
+		return nil
+	}
+	return nil
+}
+
+// toggleSessions opens the session panel (fetching sessions) or closes it.
+func (m *Model) toggleSessions() tea.Cmd {
+	if m.sessionPanel.Visible {
+		m.sessionPanel.Close()
+		m.sessionNotice = ""
+		return nil
+	}
+	m.sessionPanel.Visible = true
+	m.sessionPanel.Items = nil
+	m.sessionPanel.Cursor = 0
+	m.sessionNotice = ""
+	return ListSessionsCmd(m.runtimeClient)
+}
+
+// resumeSelectedSession resumes the session under the cursor. It is blocked
+// while a response is still streaming.
+func (m *Model) resumeSelectedSession() tea.Cmd {
+	item, ok := m.sessionPanel.Selected()
+	if !ok || item.Active {
+		m.sessionPanel.Close()
+		m.sessionNotice = ""
+		return nil
+	}
+	if m.isStreaming {
+		m.sessionNotice = "Finish or cancel the current response before switching sessions."
+		return nil
+	}
+	m.resumeSession(item.ID)
+	m.sessionPanel.Close()
+	return nil
+}
+
+// resumeSession switches the current session and resets all transient UI state
+// so the previous session's in-flight streaming, reasoning, tools, and pending
+// prompt cannot leak into the resumed session. Message-history rehydration is
+// deferred to Task 9 (it requires message-part mapping), so the chat view
+// starts clean for the resumed session.
+func (m *Model) resumeSession(id runtime.SessionID) {
+	m.sessionID = id
+	m.isStreaming = false
+	m.pendingPrompt = nil
+	m.streamBuf.Reset()
+	m.reasoningBuf.Reset()
+	m.reasoningActive = false
+	m.reasoningContent = ""
+	m.reasoningDuration = 0
+	m.reasoningExpanded = false
+	m.tools = make([]ToolActivity, 0)
+	m.proc.Reset()
+	m.messages = make([]ChatMessage, 0)
+	m.sessionNotice = ""
+}
+
+// sessionItems converts Codea-domain sessions into session list items.
+func sessionItems(sessions []runtime.Session) []components.SessionItem {
+	items := make([]components.SessionItem, len(sessions))
+	for i, s := range sessions {
+		items[i] = components.SessionItem{
+			ID:        runtime.SessionID(s.ID),
+			Title:     s.Title,
+			UpdatedAt: s.UpdatedAt,
+		}
+	}
+	return items
 }
 
 // handleTyping appends printable runes and handles backspace.
@@ -195,6 +341,12 @@ func (m *Model) processRuntimeEvent(ev runtime.Event) bool {
 	case eventTypeToolFailed:
 		m.updateTool(ev, ToolFailed)
 		dirty = true
+	case eventTypeApprovalRequested:
+		if ev.Approval != nil {
+			m.permission = components.NewPermissionModel(ev.Approval)
+			m.approvalErr = ""
+			dirty = true
+		}
 	default:
 		dirty = m.applyReasoningEvents(m.proc.Process(ev)) || dirty
 	}

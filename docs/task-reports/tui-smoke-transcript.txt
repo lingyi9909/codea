@@ -5,7 +5,7 @@
 Ready
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 > 
-enter submit · alt+enter newline · ctrl+t thinking · ctrl+l clear · ctrl+c quit
+enter submit · alt+enter newline · ctrl+t thinking · ctrl+s sessions · ctrl+l clear · ctrl+c quit
 
 User > review the code
 
@@ -13,16 +13,25 @@ User > review the code
 ◌ Working
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 > 
-enter submit · alt+enter newline · ctrl+t thinking · ctrl+l clear · ctrl+c quit
+enter submit · alt+enter newline · ctrl+t thinking · ctrl+s sessions · ctrl+l clear · ctrl+c quit
+
+
+
+Let me analyze the request.
+
+◌ Working
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+> 
+enter submit · alt+enter newline · ctrl+t thinking · ctrl+s sessions · ctrl+l clear · ctrl+c quit
 
 
 
 Let me analyze the request. I should review the target file first.
 
-◌ Working
-────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-> 
-enter submit · alt+enter newline · ctrl+t thinking · ctrl+l clear · ctrl+c quit
+
+
+
+
 
 
 
@@ -41,7 +50,7 @@ enter submit · alt+enter newline · ctrl+t thinking · ctrl+l clear · ctrl+c q
 ◌ Working
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 > 
-enter submit · alt+enter newline · ctrl+t thinking · ctrl+l clear · ctrl+c quit
+enter submit · alt+enter newline · ctrl+t thinking · ctrl+s sessions · ctrl+l clear · ctrl+c quit
 
 
 Here is the review: the code looks good.
@@ -61,7 +70,7 @@ Here is the review: the code looks good.
 Ready
 ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 > 
-enter submit · alt+enter newline · ctrl+t thinking · ctrl+l clear · ctrl+c quit
+enter submit · alt+enter newline · ctrl+t thinking · ctrl+s sessions · ctrl+l clear · ctrl+c quit
 
 
 

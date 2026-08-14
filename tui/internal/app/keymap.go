@@ -2,9 +2,8 @@ package app
 
 import "github.com/charmbracelet/bubbles/key"
 
-// KeyMap holds the key bindings for the Task 7 TUI. Shift+Enter is not a
-// distinct key in the bubbletea key model, so newline is bound to Alt+Enter
-// and Ctrl+J.
+// KeyMap holds the key bindings for the TUI. Shift+Enter is not a distinct key
+// in the bubbletea key model, so newline is bound to Alt+Enter and Ctrl+J.
 type KeyMap struct {
 	Submit      key.Binding
 	Newline     key.Binding
@@ -12,6 +11,14 @@ type KeyMap struct {
 	ToggleThink key.Binding
 	ClearScreen key.Binding
 	Help        key.Binding
+
+	Sessions    key.Binding
+	Up          key.Binding
+	Down        key.Binding
+	Esc         key.Binding
+	AllowOnce   key.Binding
+	AllowAlways key.Binding
+	Reject      key.Binding
 }
 
 // DefaultKeyMap returns the default bindings.
@@ -40,6 +47,34 @@ func DefaultKeyMap() KeyMap {
 		Help: key.NewBinding(
 			key.WithKeys("?"),
 			key.WithHelp("?", "help"),
+		),
+		Sessions: key.NewBinding(
+			key.WithKeys("ctrl+s"),
+			key.WithHelp("ctrl+s", "sessions"),
+		),
+		Up: key.NewBinding(
+			key.WithKeys("up"),
+			key.WithHelp("↑", "select"),
+		),
+		Down: key.NewBinding(
+			key.WithKeys("down"),
+			key.WithHelp("↓", "select"),
+		),
+		Esc: key.NewBinding(
+			key.WithKeys("esc"),
+			key.WithHelp("esc", "close"),
+		),
+		AllowOnce: key.NewBinding(
+			key.WithKeys("y"),
+			key.WithHelp("y", "allow once"),
+		),
+		AllowAlways: key.NewBinding(
+			key.WithKeys("a", "r"),
+			key.WithHelp("a", "always allow"),
+		),
+		Reject: key.NewBinding(
+			key.WithKeys("n"),
+			key.WithHelp("n", "reject"),
 		),
 	}
 }

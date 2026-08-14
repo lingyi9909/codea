@@ -190,6 +190,36 @@ func TestEventMapperExtractsApprovalRequest(t *testing.T) {
 	}
 }
 
+func TestEventMapperExtractsApprovalCommand(t *testing.T) {
+	tests := []struct {
+		name        string
+		raw         string
+		wantCommand string
+	}{
+		{
+			name:        "metadata.command preferred",
+			raw:         `{"directory":"/tmp","payload":{"type":"permission.asked","properties":{"id":"per_1","sessionID":"s1","permission":"bash","patterns":["rm -rf /"],"metadata":{"command":"rm -rf /build"}}}}`,
+			wantCommand: "rm -rf /build",
+		},
+		{
+			name:        "patterns fallback",
+			raw:         `{"directory":"/tmp","payload":{"type":"permission.asked","properties":{"id":"per_2","sessionID":"s1","permission":"bash","patterns":["git","status"]}}}`,
+			wantCommand: "git status",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			event, err := MapEvent([]byte(tt.raw), 1)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if event.Approval == nil || event.Approval.Command != tt.wantCommand {
+				t.Fatalf("Approval.Command = %q, want %q", event.Approval.Command, tt.wantCommand)
+			}
+		})
+	}
+}
+
 func TestEventMapperExtractsToolEvent(t *testing.T) {
 	raw := `{"directory":"/tmp","payload":{"type":"message.part.updated","properties":{"sessionID":"s1","part":{"id":"prt_001","messageID":"m1","sessionID":"s1","type":"tool","tool":"read","callID":"call_abc"}}}}`
 	event, err := MapEvent([]byte(raw), 1)
