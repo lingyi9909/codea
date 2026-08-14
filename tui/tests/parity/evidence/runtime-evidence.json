@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-08-14T14:47:16Z",
+  "timestamp": "2026-08-14T15:11:25Z",
   "endpoint": "http://127.0.0.1:49321",
   "available": true,
   "version": "1.18.11",
@@ -9,7 +9,7 @@
   },
   "createSession": {
     "passed": true,
-    "detail": "ses_fff422906ffelE8jwch7tDCImF"
+    "detail": "ses_fff2c0e3cffegWGlZCttpXMwYp"
   },
   "sse": {
     "passed": true,
@@ -39,6 +39,10 @@
     "passed": true,
     "detail": "permission.asked → once → bash executed → agent continued"
   },
+  "bashApprovalAlways": {
+    "passed": true,
+    "detail": "permission.asked → always → bash executed → agent continued"
+  },
   "bashApprovalReject": {
     "passed": true,
     "detail": "permission.asked → reject → bash did not execute"
@@ -57,14 +61,14 @@
   },
   "sessionResume": {
     "passed": true,
-    "detail": "A(resume)x2 + B isolated, 94 sessions listed"
+    "detail": "A(resume)x2 + B isolated, 100 sessions listed"
   },
   "cancel": {
     "passed": true,
-    "detail": "cancel aborted a session mid-approval"
+    "detail": "cancel terminated session mid-approval; bash did not succeed; fresh session completed normally"
   },
-  "totalChecks": 15,
-  "passedChecks": 15,
+  "totalChecks": 16,
+  "passedChecks": 16,
   "failedChecks": 0,
   "skippedChecks": 0
 }

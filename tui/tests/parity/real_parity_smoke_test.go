@@ -42,6 +42,7 @@ type runtimeEvidence struct {
 	Write          *gateResult `json:"write"`
 	Edit           *gateResult `json:"edit"`
 	BashOnce       *gateResult `json:"bashApprovalOnce"`
+	BashAlways     *gateResult `json:"bashApprovalAlways"`
 	BashReject     *gateResult `json:"bashApprovalReject"`
 	Subagent       *gateResult `json:"subagent"`
 	Skill          *gateResult `json:"skill"`
@@ -395,6 +396,20 @@ func TestRealRuntimeEvidence(t *testing.T) {
 	ev.Cancel = runCancel(t, adapter, ch, state)
 	ev.record(ev.Cancel)
 
+	// Bash approval always: permission.asked → always → bash completes → agent
+	// continues. Run LAST because an "always" reply persists a bash permission
+	// rule for the project, which would auto-approve subsequent bash calls and
+	// starve the reject/cancel scenarios of their permission.asked.
+	var alwaysApprovals int
+	bashAlwaysObs := runScenario(t, adapter, ch, state, "BASH please", func(id string) error {
+		alwaysApprovals++
+		return adapter.ReplyApproval(ctx, runtime.ApprovalID(id), runtime.ApprovalReply{Decision: runtime.ApprovalAlways})
+	})
+	ev.BashAlways = ev.gate(
+		len(bashAlwaysObs.approvals) == 1 && alwaysApprovals == 1 &&
+			bashAlwaysObs.calledOnce("bash") && bashAlwaysObs.succeededOnce("bash") && bashAlwaysObs.answered(),
+		"permission.asked → always → bash executed → agent continued", nil)
+
 	writeEvidence(t, evidenceDir, ev)
 
 	t.Logf("real runtime evidence: %d/%d checks passed (artifact: %s)",
@@ -459,8 +474,11 @@ func runSessionResume(t *testing.T, adapter *opencode.OpenCodeAdapter, ch <-chan
 	return &gateResult{Passed: true, Detail: fmt.Sprintf("A(resume)x2 + B isolated, %d sessions listed", len(sessions))}
 }
 
-// runCancel aborts a session mid-stream while it is waiting for approval,
-// proving the real Cancel/Abort path works on a live streaming session.
+// runCancel aborts a session mid-stream while it is waiting for approval, then
+// proves the cancel actually took effect: the cancelled bash tool never
+// succeeds, the cancelled session terminates (session.idle), and a subsequent
+// fresh session still completes a full tool lifecycle (global SSE + runtime +
+// adapter all survived).
 func runCancel(t *testing.T, adapter *opencode.OpenCodeAdapter, ch <-chan runtime.Event, state *smokeState) *gateResult {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
@@ -479,14 +497,17 @@ func runCancel(t *testing.T, adapter *opencode.OpenCodeAdapter, ch <-chan runtim
 		return &gateResult{Passed: false, Error: err.Error()}
 	}
 
-	// Wait for the session to enter the approval-pending (busy) state.
-	timeout := time.After(20 * time.Second)
-	sawApproval := false
-	for !sawApproval {
+	// Drain the cancelled session until it idles. When the approval arrives,
+	// cancel mid-stream; then keep consuming to observe the terminal state and
+	// prove the cancelled tool never succeeds and no normal answer is emitted.
+	obs := newToolObservation()
+	cancelled := false
+	deadline := time.After(25 * time.Second)
+	for !obs.idled {
 		select {
 		case ev, ok := <-ch:
 			if !ok {
-				return &gateResult{Passed: false, Error: "event channel closed before approval"}
+				return &gateResult{Passed: false, Error: "event channel closed before cancelled session terminated"}
 			}
 			if ev.RawType == "plugin.added" {
 				state.pluginAdded++
@@ -494,21 +515,53 @@ func runCancel(t *testing.T, adapter *opencode.OpenCodeAdapter, ch <-chan runtim
 			if ev.SessionID != sid {
 				continue
 			}
-			if ev.Type == runtime.EventType("approval.requested") {
-				sawApproval = true
+			obs.collect(ev)
+			if !cancelled && ev.Type == runtime.EventType("approval.requested") {
+				if err := adapter.Cancel(ctx, runtime.SessionID(sid)); err != nil {
+					return &gateResult{Passed: false, Error: fmt.Sprintf("Cancel: %v", err)}
+				}
+				cancelled = true
 			}
-		case <-timeout:
-			return &gateResult{Passed: false, Error: "timed out waiting for approval before cancel"}
+		case <-deadline:
+			return &gateResult{Passed: false, Error: "timed out waiting for cancelled session to terminate"}
 		case <-ctx.Done():
 			return &gateResult{Passed: false, Error: ctx.Err().Error()}
 		}
 	}
 
-	// Cancel mid-stream (session is blocked on approval).
-	if err := adapter.Cancel(ctx, runtime.SessionID(sid)); err != nil {
-		return &gateResult{Passed: false, Error: fmt.Sprintf("Cancel: %v", err)}
+	if !cancelled {
+		return &gateResult{Passed: false, Error: "cancel was never triggered (no approval observed before idle)"}
 	}
-	return &gateResult{Passed: true, Detail: "cancel aborted a session mid-approval"}
+	if obs.succeededOnce("bash") {
+		return &gateResult{Passed: false, Error: "cancelled bash tool still reported success after cancel"}
+	}
+	if obs.answered() {
+		return &gateResult{Passed: false, Error: "cancelled session emitted a normal answer after cancel"}
+	}
+
+	// Prove the runtime + global SSE survived cancel: a fresh session still
+	// completes a full read tool lifecycle (called → success → answer → idle).
+	fresh, err := adapter.CreateSession(ctx, runtime.CreateSessionRequest{Title: "cancel-smoke-after"})
+	if err != nil {
+		return &gateResult{Passed: false, Error: fmt.Sprintf("post-cancel CreateSession: %v", err)}
+	}
+	if err := adapter.Prompt(ctx, runtime.SessionID(fresh.ID), runtime.PromptRequest{
+		Agent: "build",
+		Parts: []runtime.PromptPart{runtime.TextPart{Text: "READ the file please"}},
+	}); err != nil {
+		return &gateResult{Passed: false, Error: fmt.Sprintf("post-cancel Prompt: %v", err)}
+	}
+	freshObs, err := drainUntilIdle(ctx, ch, state, fresh.ID, "cancel-smoke-after", 30*time.Second)
+	if err != nil {
+		return &gateResult{Passed: false, Error: fmt.Sprintf("post-cancel session did not terminate cleanly: %v", err)}
+	}
+	if !freshObs.calledOnce("read") || !freshObs.succeededOnce("read") || !freshObs.answered() {
+		return &gateResult{Passed: false, Error: fmt.Sprintf(
+			"post-cancel session did not complete normally: called=%v success=%v answered=%v",
+			freshObs.called, freshObs.success, freshObs.answered())}
+	}
+
+	return &gateResult{Passed: true, Detail: "cancel terminated session mid-approval; bash did not succeed; fresh session completed normally"}
 }
 
 // drainSession collects events for a single session until it idles.
@@ -534,4 +587,33 @@ func drainSession(t *testing.T, ch <-chan runtime.Event, state *smokeState, sid,
 		}
 	}
 	return obs
+}
+
+// drainUntilIdle is the error-returning variant of drainSession: it drains the
+// shared global stream for session sid until it idles, returning the
+// observation and an error instead of failing the test, so gate helpers can
+// fold the failure into their gateResult.
+func drainUntilIdle(ctx context.Context, ch <-chan runtime.Event, state *smokeState, sid, label string, timeout time.Duration) (*toolObservation, error) {
+	obs := newToolObservation()
+	deadline := time.After(timeout)
+	for !obs.idled {
+		select {
+		case ev, ok := <-ch:
+			if !ok {
+				return obs, fmt.Errorf("event channel closed before idle (%s)", label)
+			}
+			if ev.RawType == "plugin.added" {
+				state.pluginAdded++
+			}
+			if ev.SessionID != sid {
+				continue
+			}
+			obs.collect(ev)
+		case <-deadline:
+			return obs, fmt.Errorf("timed out waiting for idle (%s); called=%v success=%v", label, obs.called, obs.success)
+		case <-ctx.Done():
+			return obs, fmt.Errorf("context done waiting for idle (%s): %w", label, ctx.Err())
+		}
+	}
+	return obs, nil
 }
