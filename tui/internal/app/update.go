@@ -507,10 +507,23 @@ func deleteLastRune(s string) string {
 	return string(r[:len(r)-1])
 }
 
-// addTool records a newly started tool invocation.
+// addTool records a newly started tool invocation. The real OpenCode tool
+// lifecycle emits multiple tool.called events for one call (pending → running,
+// sharing one callID), so this upserts by callID to keep a single ToolActivity
+// per invocation; appending a duplicate would leave a second entry stuck in
+// running when the terminal event updates only the first match.
 func (m *Model) addTool(ev runtime.Event) {
 	if ev.Tool == nil {
 		return
+	}
+	for i := range m.tools {
+		if m.tools[i].CallID == ev.Tool.CallID {
+			if ev.Tool.Name != "" {
+				m.tools[i].Name = ev.Tool.Name
+			}
+			m.tools[i].Status = ToolRunning
+			return
+		}
 	}
 	m.tools = append(m.tools, ToolActivity{Name: ev.Tool.Name, CallID: ev.Tool.CallID, Status: ToolRunning})
 }
