@@ -46,6 +46,21 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case sessionCreatedMsg:
+		if msg.err != nil {
+			m.pendingPrompt = nil
+			m.finishStreaming()
+			m.markDirty()
+			return m, nil
+		}
+		m.sessionID = msg.sessionID
+		req := m.pendingPrompt
+		m.pendingPrompt = nil
+		if req == nil {
+			return m, nil
+		}
+		return m, PromptCmd(m.runtimeClient, m.sessionID, *req)
+
 	case subscribeErrMsg:
 		m.runtimeStatus = runtime.RuntimeCrashed
 		m.markDirty()
@@ -116,6 +131,9 @@ func (m *Model) handleTyping(msg tea.KeyMsg) {
 // is ignored. A new session is created on the first submit; subsequent submits
 // reuse it.
 func (m *Model) submit() tea.Cmd {
+	if m.isStreaming {
+		return nil
+	}
 	if strings.TrimSpace(m.input) == "" {
 		return nil
 	}
@@ -143,7 +161,8 @@ func (m *Model) submit() tea.Cmd {
 	m.input = ""
 
 	if m.sessionID == "" {
-		return CreateSessionAndPromptCmd(m.runtimeClient, strings.TrimSpace(raw), req)
+		m.pendingPrompt = &req
+		return CreateSessionCmd(m.runtimeClient, strings.TrimSpace(raw))
 	}
 	return PromptCmd(m.runtimeClient, m.sessionID, req)
 }
@@ -154,9 +173,17 @@ func (m *Model) submit() tea.Cmd {
 // message/reasoning state) so a high-frequency token burst does not trigger a
 // render per token; the returned bool reports whether any visible state changed.
 func (m *Model) processRuntimeEvent(ev runtime.Event) bool {
+	if !m.acceptsEvent(ev) {
+		return false
+	}
 	dirty := false
 	switch ev.Type {
-	case eventTypeStepFinished, eventTypeSessionError, eventTypeRuntimeError:
+	case eventTypeStepFinished:
+		dirty = m.applyReasoningEvents(m.proc.Flush()) || dirty
+		m.finishStreaming()
+		dirty = true
+	case eventTypeSessionError, eventTypeRuntimeError:
+		dirty = m.applyReasoningEvents(m.proc.Process(ev)) || dirty
 		m.finishStreaming()
 		dirty = true
 	case eventTypeToolCalled:
@@ -168,9 +195,30 @@ func (m *Model) processRuntimeEvent(ev runtime.Event) bool {
 	case eventTypeToolFailed:
 		m.updateTool(ev, ToolFailed)
 		dirty = true
+	default:
+		dirty = m.applyReasoningEvents(m.proc.Process(ev)) || dirty
 	}
+	return dirty
+}
 
-	for _, pe := range m.proc.Process(ev) {
+// acceptsEvent reports whether a runtime event should be consumed. Session-scoped
+// events (non-empty SessionID) are consumed only when they belong to the current
+// session; events with an empty SessionID are genuine global/runtime events and
+// are always accepted.
+func (m *Model) acceptsEvent(ev runtime.Event) bool {
+	if ev.SessionID == "" {
+		return true
+	}
+	return ev.SessionID == string(m.sessionID)
+}
+
+// applyReasoningEvents folds processor output into the visible answer/reasoning
+// state. Answer and reasoning deltas are buffered (not committed) so a token
+// burst does not trigger one render per token; it returns whether any visible
+// state changed.
+func (m *Model) applyReasoningEvents(events []reasoning.Event) bool {
+	dirty := false
+	for _, pe := range events {
 		switch pe.Kind {
 		case reasoning.EventAnswerDelta:
 			m.streamBuf.WriteString(pe.Content)

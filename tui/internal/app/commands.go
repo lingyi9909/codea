@@ -55,19 +55,16 @@ func PromptCmd(client runtime.AgentRuntime, sessionID runtime.SessionID, req run
 	}
 }
 
-// CreateSessionAndPromptCmd creates a session (using title) and sends req to it
-// in one non-blocking command, returning the new session ID.
-func CreateSessionAndPromptCmd(client runtime.AgentRuntime, title string, req runtime.PromptRequest) tea.Cmd {
+// CreateSessionCmd creates a session and returns its ID as a sessionCreatedMsg,
+// before the first prompt is sent. Splitting creation from the prompt lets the
+// model establish its current session ID before any of that session's events
+// arrive, which session isolation (acceptsEvent) depends on.
+func CreateSessionCmd(client runtime.AgentRuntime, title string) tea.Cmd {
 	return func() tea.Msg {
-		ctx := context.Background()
-		session, err := client.CreateSession(ctx, runtime.CreateSessionRequest{Title: title})
+		session, err := client.CreateSession(context.Background(), runtime.CreateSessionRequest{Title: title})
 		if err != nil {
-			return promptResultMsg{err: err}
+			return sessionCreatedMsg{err: err}
 		}
-		sid := runtime.SessionID(session.ID)
-		if err := client.Prompt(ctx, sid, req); err != nil {
-			return promptResultMsg{sessionID: sid, err: err}
-		}
-		return promptResultMsg{sessionID: sid}
+		return sessionCreatedMsg{sessionID: runtime.SessionID(session.ID)}
 	}
 }

@@ -64,6 +64,29 @@ func TestSubmitAppendsUserAndAssistantMessages(t *testing.T) {
 	}
 }
 
+func TestSubmitIgnoredWhileStreaming(t *testing.T) {
+	m := NewModel(fakeruntime.New())
+	m.input = "first"
+	m.Update(enterKey())
+	if !m.isStreaming {
+		t.Fatal("precondition: isStreaming should be true after first submit")
+	}
+	before := len(m.messages)
+
+	m.input = "second"
+	_, cmd := m.Update(enterKey())
+
+	if cmd != nil {
+		t.Error("submit while streaming should return nil cmd")
+	}
+	if len(m.messages) != before {
+		t.Errorf("messages grew from %d to %d while streaming", before, len(m.messages))
+	}
+	if m.input != "second" {
+		t.Errorf("input = %q, want preserved %q while streaming", m.input, "second")
+	}
+}
+
 func TestSubmitWithSessionSendsPrompt(t *testing.T) {
 	client := fakeruntime.New()
 	m := NewModel(client)
@@ -113,33 +136,43 @@ func TestSubmitWithoutSessionCreatesSession(t *testing.T) {
 	m := NewModel(client)
 	m.input = "hello"
 
-	_, cmd := m.Update(enterKey())
-	if cmd == nil {
-		t.Fatal("submit should issue a cmd")
+	_, createCmd := m.Update(enterKey())
+	if createCmd == nil {
+		t.Fatal("submit should issue a create-session cmd")
 	}
-	msg := cmd()
-	pr, ok := msg.(promptResultMsg)
+	created, ok := createCmd().(sessionCreatedMsg)
 	if !ok {
-		t.Fatalf("cmd returned %T, want promptResultMsg", msg)
+		t.Fatalf("cmd returned %T, want sessionCreatedMsg", createCmd())
+	}
+	if created.err != nil {
+		t.Fatalf("create session error: %v", created.err)
+	}
+	if created.sessionID == "" {
+		t.Fatal("sessionID should be set after create")
+	}
+
+	// The model must not prompt until it has established its session.
+	_, promptCmd := m.Update(created)
+	if promptCmd == nil {
+		t.Fatal("sessionCreatedMsg should issue a prompt cmd")
+	}
+	pr, ok := promptCmd().(promptResultMsg)
+	if !ok {
+		t.Fatalf("prompt cmd returned %T, want promptResultMsg", promptCmd())
 	}
 	if pr.err != nil {
 		t.Fatalf("prompt error: %v", pr.err)
 	}
-	if pr.sessionID == "" {
-		t.Error("sessionID should be set after create")
+	if m.sessionID != created.sessionID {
+		t.Errorf("sessionID = %q, want %q after sessionCreatedMsg", m.sessionID, created.sessionID)
 	}
 
 	prompts := client.Prompts()
 	if len(prompts) != 1 {
 		t.Fatalf("prompts = %d, want 1", len(prompts))
 	}
-	if prompts[0].SessionID != pr.sessionID {
-		t.Errorf("prompt session = %q, want %q", prompts[0].SessionID, pr.sessionID)
-	}
-
-	m.Update(pr)
-	if m.sessionID != pr.sessionID {
-		t.Errorf("sessionID not stored on promptResultMsg: got %q, want %q", m.sessionID, pr.sessionID)
+	if prompts[0].SessionID != created.sessionID {
+		t.Errorf("prompt session = %q, want %q", prompts[0].SessionID, created.sessionID)
 	}
 }
 

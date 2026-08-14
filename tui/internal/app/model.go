@@ -66,6 +66,11 @@ type Model struct {
 	sessionID   runtime.SessionID
 	msgCounter  int
 
+	// pendingPrompt is the first prompt awaiting a session to be created; it is
+	// sent once the session is established so the current-session filter is in
+	// effect before any of that session's events arrive.
+	pendingPrompt *runtime.PromptRequest
+
 	proc              *reasoning.Processor
 	reasoningActive   bool
 	reasoningContent  string

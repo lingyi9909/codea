@@ -45,3 +45,11 @@ type promptResultMsg struct {
 	sessionID runtime.SessionID
 	err       error
 }
+
+// sessionCreatedMsg reports a newly created session, delivered before the first
+// prompt is sent so the model establishes its current session ID before any of
+// that session's events can arrive (session isolation depends on knowing it).
+type sessionCreatedMsg struct {
+	sessionID runtime.SessionID
+	err       error
+}
