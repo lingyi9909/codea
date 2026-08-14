@@ -4,14 +4,14 @@ plan: docs/superpowers/plans/2026-07-30-codea-v1-plan.md
 taskOrder: ["0", "1", "2", "2A", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21"]
 current:
   task: "8"
-  step: 1
-  status: pending
-  nextAction: 阅读 Task 8（Session/Resume/Tool Approval）计划内容并开始执行
+  step: 10
+  status: awaiting_acceptance
+  nextAction: 等待人工验收 Task 8（Session/Resume/Tool Approval）；验收前不启动 Task 9
 checkpoint:
-  commit: 0e523e8d70cb5c3357b9e8beb7a1dae6b2480e46
-  updatedAt: "2026-08-14T02:14:55Z"
+  commit: bfac6654ed650526b4ac5401ec76729c14c35bb6
+  updatedAt: "2026-08-14T04:11:52Z"
 verification:
-  status: not_run
+  status: pass
   commands:
     - "GOTOOLCHAIN=local go test ./... -count=1"
     - "GOTOOLCHAIN=local go test -race ./... -count=1"
@@ -25,7 +25,7 @@ verification:
   errorSummary: ""
   recoveryAdvice: ""
 taskGate:
-  status: not_evaluated
+  status: pass
   gateItems: {}
 humanAcceptance:
   accepted: false
@@ -39,7 +39,7 @@ tasks:
   "5": {status: completed, completedSteps: [1, 2, 3, 4, 5, 6], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: cbe692aaff6700c257d3e0806801dcf8d3396870, report: docs/task-reports/task-05.md}
   "6": {status: completed, completedSteps: [1, 2, 3, 4, 5], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: df5c582aa803f55bb091dabaf3a3cf41e0f02f78, report: docs/task-reports/task-06.md}
   "7": {status: completed, completedSteps: [1, 2, 3, 4, 5, 6], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: 0e523e8d70cb5c3357b9e8beb7a1dae6b2480e46, report: docs/task-reports/task-07.md}
-  "8": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-08.md}
+  "8": {status: awaiting_acceptance, completedSteps: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], verificationStatus: pass, taskGateStatus: pass, humanAccepted: false, checkpoint: bfac6654ed650526b4ac5401ec76729c14c35bb6, report: docs/task-reports/task-08.md}
   "9": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-09.md}
   "10": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-10.md}
   "11": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-11.md}
