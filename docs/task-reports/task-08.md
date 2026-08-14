@@ -2,9 +2,19 @@
 
 ## Overview
 
-Checkpoint: `abf73ca1ebe7bb4e01355c0cf3f402b1773dc2cf`
+Checkpoint: `716b8c1e87ebd865d2c8fae47e3aa36c8c0c4865`
 
 实现 Session 列表/恢复、Tool 权限确认弹窗、危险命令检测。核心边界：TUI/Application 层绝不接触 OpenCode Vendor DTO/Permission 类型，全部消费 Codea domain（`runtime.ApprovalRequest` / `runtime.ApprovalReply` / `runtime.ApprovalDecision` / `AgentRuntime.ReplyApproval`）；UI 不伪造 vendor "remember" 标志，once/always/reject 三种决策直接映射到 Contract，由 Adapter 负责映射到 Vendor。网络请求全部走 `tea.Cmd`，绝不阻塞 Bubble Tea Update。
+
+## Acceptance Review Fixes（Round 3 — Session History Rehydration）
+
+第二轮结论为「有条件通过」，锁定 1 个产品级 Blocking：**Resume 只切换 sessionID、未恢复历史消息**（`resumeSession()` 直接 `m.messages = make([]ChatMessage, 0)`，历史清空）。本轮仅补这一缺口，不重构已通过部分：
+
+- **Codea-owned 历史读取能力**：`runtime.AgentRuntime` 新增 `GetSessionMessages(ctx, sessionID) ([]Message, error)`；`runtime.Message{ID, Role, Content}` 只承载 role + 文本，vendor message/part DTO 在 Adapter 层展平，绝不进入 Application。
+- **Vendor Message 映射**：新建 `tui/internal/opencode/message_mapper.go`——`MapSessionMessage(raw any) runtime.Message` 从 OpenCode message endpoint 形状（`{"info":{"id","role"},"parts":[{"type","text","text"}]}`）提取 role + 拼接 text parts，忽略 tool/reasoning/其他 part。`OpenCodeAdapter.GetSessionMessages` 复用既有 `httpClient.GetSessionMessages`（`GET /session/{id}/message`）逐条映射，错误走 `classifyError("GetSessionMessages", err)`。新增 `message_mapper_test.go`（拼接 text parts / 忽略非 text parts / 非对象输入返回零值）。
+- **异步 Resume 流程**：`resumeSelectedSession()` 置 `pendingResumeID` 并返回 `LoadSessionHistoryCmd`（面板保持打开，网络绝不阻塞 Update）；`Update()` 新增 `loadHistoryResultMsg` 分支——先校验 `msg.sessionID == m.pendingResumeID`（stale guard，面板已关闭或换选时忽略），失败 → 置 `sessionNotice` 且**不切换 session、面板保持打开**；成功 → `resumeSession(id, history)` 切换 sessionID + 重置全部瞬态状态 + `historyToChatMessages` 映射为 `ChatMessage`（全部 `Finished=true`）并显示历史 + 关闭面板。`messageRole` 将 `"user"→RoleUser`、`"assistant"→RoleAssistant`、其他→`RoleInfo`。
+- **测试**：新增 4 项 `TestResumeLoadsMessageHistory` / `TestResumeHistoryUserAssistantOrderPreserved` / `TestResumeHistoryLoadFailureDoesNotSilentlySucceed` / `TestResumeThenNewPromptContinuesSameSession`；`openPanelAndResume` 驱动异步 load（捕获 `LoadSessionHistoryCmd` → `cmd()` → `loadHistoryResultMsg` → `Update`）；既有隔离测试保留（`resumeSession` 改两参）。fake-runtime 新增 `SessionMessages` / `GetSessionMessagesError` / `GetSessionMessages`。
+- **smoke 覆盖**：fakeopencode 新增 `GET /session/{id}/message` 返回双轮历史（`"Earlier question"` / `"Earlier answer"`）；smoke 在 resume 后断言 `contains("Earlier answer")`，验证真实 PTY 链路下历史被 rehydrate。
 
 ## Acceptance Review Fixes（Round 2 — Blocking 1 + 验收缺口 2）
 
@@ -84,7 +94,7 @@ Checkpoint: `abf73ca1ebe7bb4e01355c0cf3f402b1773dc2cf`
 
 ## Full Gate Verification
 
-针对 Final Implementation Commit `abf73ca1ebe7bb4e01355c0cf3f402b1773dc2cf`（Round 2 验收修复后）：
+针对 Final Implementation Commit `716b8c1e87ebd865d2c8fae47e3aa36c8c0c4865`（Round 3 验收修复后）：
 
 | Gate | Result |
 |------|--------|
@@ -105,10 +115,10 @@ Checkpoint: `abf73ca1ebe7bb4e01355c0cf3f402b1773dc2cf`
 |---------|-------|
 | internal/components | session_test（7）/ permission_test（4）/ tool_test（5） |
 | internal/app | approval_test（9）/ session_resume_test（9）+ 既有会话隔离/推理终结/submit 回归 |
-| internal/opencode | event_mapper_test（approval command 提取） |
-| tests/fixtures/fake-runtime | ListSessions 路径 |
+| internal/opencode | event_mapper_test（approval command 提取）/ message_mapper_test（历史 message 展平） |
+| tests/fixtures/fake-runtime | ListSessions 路径 / GetSessionMessages 路径 |
 
-覆盖清单：Session 列表光标/选中/激活标记/视图、权限模态可见性/危险警告/安全无警告/空视图、危险命令 Unix+Windows+大小写+空白、Approval once/always/reject/Esc 映射、外来 session 忽略、resume 后新 session、审批错误保持模态、模态吞掉聊天键、resume 切换 session + 瞬态重置 + 旧 session 四类事件隔离 + 新 session 事件接受 + streaming 阻塞 + Esc 关闭面板、ListSessions 契约、approval command 从 `metadata.command`/`patterns` 提取。
+覆盖清单：Session 列表光标/选中/激活标记/视图、权限模态可见性/危险警告/安全无警告/空视图、危险命令 Unix+Windows+大小写+空白、Approval once/always/reject/Esc 映射、外来 session 忽略、resume 后新 session、审批错误保持模态、模态吞掉聊天键、resume 切换 session + 瞬态重置 + 旧 session 四类事件隔离 + 新 session 事件接受 + streaming 阻塞 + Esc 关闭面板、ListSessions 契约、approval command 从 `metadata.command`/`patterns` 提取、resume 历史 rehydrate（加载/顺序保留/失败不静默成功/续接同一 session）、message 展平（拼接 text parts / 忽略非 text parts）。
 
 ## Files Changed
 
@@ -123,28 +133,33 @@ Checkpoint: `abf73ca1ebe7bb4e01355c0cf3f402b1773dc2cf`
 | `tui/internal/opencode/session_mapper.go` | Create |
 | `tui/internal/app/approval_test.go` | Create |
 | `tui/internal/app/session_resume_test.go` | Create |
-| `tui/internal/runtime/client.go` | Modify（AgentRuntime.ListSessions） |
-| `tui/internal/runtime/models.go` | Modify（Session Title/UpdatedAt） |
+| `tui/internal/runtime/client.go` | Modify（AgentRuntime.ListSessions / GetSessionMessages） |
+| `tui/internal/runtime/models.go` | Modify（Session Title/UpdatedAt / Message） |
 | `tui/internal/runtime/events.go` | Modify（ApprovalRequest.Command） |
-| `tui/internal/opencode/adapter.go` | Modify（ListSessions 实现） |
+| `tui/internal/opencode/adapter.go` | Modify（ListSessions / GetSessionMessages 实现） |
+| `tui/internal/opencode/message_mapper.go` | Create（MapSessionMessage） |
+| `tui/internal/opencode/message_mapper_test.go` | Create（message 展平测试） |
 | `tui/internal/opencode/event_mapper.go` | Modify（permission command 提取） |
 | `tui/internal/opencode/event_mapper_test.go` | Modify（command 提取测试） |
-| `tui/internal/app/commands.go` | Modify（ListSessionsCmd/ReplyApprovalCmd） |
+| `tui/internal/app/commands.go` | Modify（ListSessionsCmd/ReplyApprovalCmd/LoadSessionHistoryCmd） |
 | `tui/internal/app/events.go` | Modify（eventTypeApprovalRequested） |
 | `tui/internal/app/keymap.go` | Modify（Sessions/Up/Down/Esc/Allow*/Reject 绑定） |
-| `tui/internal/app/messages.go` | Modify（listSessionsResultMsg/approvalResultMsg） |
-| `tui/internal/app/model.go` | Modify（sessionPanel/sessionNotice/permission/approvalErr） |
-| `tui/internal/app/update.go` | Modify（handleKey 分层 / approval / session / resume / 事件分支） |
+| `tui/internal/app/messages.go` | Modify（listSessionsResultMsg/approvalResultMsg/loadHistoryResultMsg） |
+| `tui/internal/app/model.go` | Modify（sessionPanel/sessionNotice/permission/approvalErr/pendingResumeID） |
+| `tui/internal/app/update.go` | Modify（handleKey 分层 / approval / session / resume / 历史 rehydrate / 事件分支） |
 | `tui/internal/app/view.go` | Modify（模态/面板 overlay + footer ctrl+s） |
-| `tui/tests/fixtures/fake-runtime/fake_runtime.go` | Modify（Sessions + ListSessions） |
-| `docs/task-reports/tui-smoke-transcript.txt` | Modify（footer 新增 ctrl+s sessions） |
+| `tui/tests/fixtures/fake-runtime/fake_runtime.go` | Modify（Sessions + ListSessions + SessionMessages/GetSessionMessages） |
+| `tui/internal/supervisor/fakeopencode/main.go` | Modify（GET /session/{id}/message 历史） |
+| `tui/tests/tui-smoke/smoke_test.go` | Modify（resume 后断言历史 rehydrate） |
+| `docs/task-reports/tui-smoke-transcript.txt` | Modify（footer ctrl+s + 历史 rehydrate 证据） |
 
 ## 提交记录
 
 | Commit | Step |
 |--------|------|
 | `bfac665` | 全部 Step 1-10 一次性实现（Session 列表/恢复、Tool Approval 弹窗、危险命令检测、隔离测试） |
-| `abf73ca` | Round 2 验收修复 — approval 结果按 ID 关联 + 防重复提交 + smoke 覆盖 Session/Approval UI（Final Implementation Commit） |
+| `abf73ca` | Round 2 验收修复 — approval 结果按 ID 关联 + 防重复提交 + smoke 覆盖 Session/Approval UI |
+| `716b8c1` | Round 3 验收修复 — resume 历史 rehydrate（GetSessionMessages 契约 + message 映射 + 异步 LoadSessionHistoryCmd + 4 测试 + smoke 历史断言）（Final Implementation Commit） |
 
 ## 与计划偏差
 
@@ -156,4 +171,4 @@ Checkpoint: `abf73ca1ebe7bb4e01355c0cf3f402b1773dc2cf`
 
 - verification：pass
 - Task Gate：pass
-- 进入 `awaiting_acceptance`，等待人工验收；验收前不启动 Task 9。
+- 进入 `awaiting_acceptance`，等待人工验收（本轮仅补 Session history rehydration）；验收前不启动 Task 9。

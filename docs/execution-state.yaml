@@ -8,8 +8,8 @@ current:
   status: awaiting_acceptance
   nextAction: 等待人工验收 Task 8（Session/Resume/Tool Approval）；验收前不启动 Task 9
 checkpoint:
-  commit: abf73ca1ebe7bb4e01355c0cf3f402b1773dc2cf
-  updatedAt: "2026-08-14T04:59:17Z"
+  commit: 716b8c1e87ebd865d2c8fae47e3aa36c8c0c4865
+  updatedAt: "2026-08-14T05:34:20Z"
 verification:
   status: pass
   commands:
@@ -39,7 +39,7 @@ tasks:
   "5": {status: completed, completedSteps: [1, 2, 3, 4, 5, 6], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: cbe692aaff6700c257d3e0806801dcf8d3396870, report: docs/task-reports/task-05.md}
   "6": {status: completed, completedSteps: [1, 2, 3, 4, 5], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: df5c582aa803f55bb091dabaf3a3cf41e0f02f78, report: docs/task-reports/task-06.md}
   "7": {status: completed, completedSteps: [1, 2, 3, 4, 5, 6], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: 0e523e8d70cb5c3357b9e8beb7a1dae6b2480e46, report: docs/task-reports/task-07.md}
-  "8": {status: awaiting_acceptance, completedSteps: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], verificationStatus: pass, taskGateStatus: pass, humanAccepted: false, checkpoint: abf73ca1ebe7bb4e01355c0cf3f402b1773dc2cf, report: docs/task-reports/task-08.md}
+  "8": {status: awaiting_acceptance, completedSteps: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], verificationStatus: pass, taskGateStatus: pass, humanAccepted: false, checkpoint: 716b8c1e87ebd865d2c8fae47e3aa36c8c0c4865, report: docs/task-reports/task-08.md}
   "9": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-09.md}
   "10": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-10.md}
   "11": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-11.md}
