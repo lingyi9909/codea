@@ -172,4 +172,4 @@ Checkpoint: `0e523e8d70cb5c3357b9e8beb7a1dae6b2480e46`
 
 ## 人工验收
 
-Round 2 已修复 3 项 Blocking（会话隔离 / streaming 禁止二次 submit / step.finished 终结 reasoning）并重跑全 Gate + TUI smoke。待人工仅针对这 3 点 + 回归 Gate 做最后复核；通过后标记 `completed` 并启动 Task 8（Session/Resume/Tool Approval）。
+Task 7（TUI 基础 + SSE 事件流）已通过人工验收，正式标记为 `completed`。会话隔离（`acceptsEvent` 按当前 Session 过滤）、streaming 中禁止二次 submit、`step.finished` 终结 reasoning 三项 Round 2 Blocking 修复经复核通过，全 Gate + TUI smoke 回归通过。下一步启动 Task 8（Session/Resume/Tool Approval）。
