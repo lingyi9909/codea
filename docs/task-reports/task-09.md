@@ -2,7 +2,7 @@
 
 ## Overview
 
-Checkpoint: `5785b015943d325dd29b366e7afcf96aa7bc0530`
+Checkpoint: `5093f2d91da3fd772a2a1dc1825563f3843efd75`
 
 确保 General Agent 的 Shell、Edit、Subagent、Plugin 能力完整透传，事件零静默丢失。核心边界：Codea 的 AgentRuntime/Adapter/EventMapper/TUI 层不得削弱、阻断或静默丢弃 OpenCode General Agent 原生能力；Subagent 调度、Agent Loop 仍完全属于 OpenCode Runtime，Go TUI/Application 绝不重新实现；Shell 安全引擎属 Task 12，本 Task 不扩范围。
 
@@ -57,7 +57,7 @@ Checkpoint: `5785b015943d325dd29b366e7afcf96aa7bc0530`
 
 `tests/fixtures/real-parity/fake_model.py` 是一个 OpenAI-compatible 流式 stub，按最后一条 user 消息脚本化一个固定 tool-call 生命周期（READ→read / WRITE→write / EDIT→edit / BASH→bash / SUBAGENT→task(explore) / SKILL→skill / 否则纯文本）。`scripts/run-real-parity-smoke.sh` 启动 fake model（port 49220）+ 真实 `opencode serve`（port 49321），经 Codea `OpenCodeAdapter` 跑 `TestRealRuntimeEvidence`，逐 gate 落盘 fresh evidence 到 `tui/tests/parity/evidence/runtime-evidence.json`，并断言 `available=true && failedChecks=0`。
 
-### 15 个 gate 全绿
+### 16 个 gate 全绿
 
 | Gate | 结果 |
 |------|------|
@@ -70,14 +70,15 @@ Checkpoint: `5785b015943d325dd29b366e7afcf96aa7bc0530`
 | write（真实 write tool 执行） | PASS |
 | edit（真实 edit tool 执行） | PASS |
 | bashApprovalOnce（`permission.asked` → once → tool 执行 → agent 继续） | PASS |
+| bashApprovalAlways（`permission.asked` → always → tool 执行 → agent 继续） | PASS |
 | bashApprovalReject（`permission.asked` → reject → tool 不执行） | PASS |
 | subagent（`task` 委派 explore subagent 端到端） | PASS |
 | skill（skill 发现 + 调用） | PASS |
 | plugin（`plugin.added` ×45 启动事件） | PASS |
 | sessionResume（session 恢复 + 历史 rehydration） | PASS |
-| cancel（真实 streaming session 中 cancel/abort） | PASS |
+| cancel（真实 streaming session 中 cancel/abort + 后续新 session 正常） | PASS |
 
-`totalChecks=15 passedChecks=15 failedChecks=0 available=true version=1.18.11`。
+`totalChecks=16 passedChecks=16 failedChecks=0 available=true version=1.18.11`。
 
 ### smoke 暴露并修复的真实 Bug（非重新实现能力，仅修 Adapter/Harness）
 
@@ -87,9 +88,15 @@ Checkpoint: `5785b015943d325dd29b366e7afcf96aa7bc0530`
 4. **证据静默丢失（real_parity_smoke_test.go）**：`isIdle()` 被定义却从未调用，session 永不判 idle；`sessionResume`/`cancel` 结果直接赋值绕过 `record()`，失败不进 `failedChecks`。修复：`collect()` 增加 idle 判定，`sessionResume`/`cancel` 走 `record()`；`isIdle` 只认 `session.idle`（去掉 `session.status idle` 分支，避免 status 事件提前 drain 导致下个 scenario 误终止）。
 5. **`go test ./...` 覆盖已提交证据（real_parity_smoke_test.go，本轮 Gate 复跑暴露）**：smoke 测试在 runtime 不可达（无 `OPENCODE_ENDPOINT`）时仍 `writeEvidence` 写 `available=false`，导致全量 `go test ./...` 把 harness 刚写入的 green evidence 覆盖成 connection-refused 快照。修复：仅当 `OPENCODE_ENDPOINT`/`OPENCODE_SERVER_URL` 显式设置（即 harness 驱动）时才落盘 skip 证据；普通 `go test` 静默 skip、不触碰已提交证据。已验证：`go test ./tests/parity/ -run TestRealRuntimeEvidence`（无 endpoint）skip 后 evidence 仍 `available=true`。
 
+### 本轮补强（Blocking 1/2 闭环）
+
+1. **ApprovalAlways 真实 Runtime 验证（real_parity_smoke_test.go）**：新增 `bashApprovalAlways` gate，真实走 `permission.asked → ReplyApproval(ApprovalAlways) → /permission/{id}/reply(reply="always") → bash 执行 → agent 继续 → session.idle`，不再只依赖 FakeRuntime/UI 单测。once / always / reject 三种 Domain decision 全部真实闭环。
+2. **Cancel 加强（real_parity_smoke_test.go）**：原 `runCancel` 只验证 `Cancel()` API 返回成功即 PASS；现验证「approval pending → Cancel → 该 session 真正 idle → 被取消的 bash 未报 success → 未产出正常 answer → 再新建 session 完整走 read tool 生命周期」。证明 Cancel 生效、全局 SSE 未坏、Runtime 未坏、Adapter 后续仍可工作。
+3. **`always` 持久化语义的测试排序（关键发现）**：真实 OpenCode 的 `always` 决策会在 project 级持久化一条 bash 权限规则，导致后续任何 session 的 bash 都自动放行、不再发 `permission.asked`。因此 `bashApprovalAlways` 必须放在 reject/cancel **之后**（作为最后一个 approval scenario），否则会饿死 reject/cancel 的 `permission.asked`。这是真实 runtime 行为，非 stub 假设。
+
 ## Full Gate Verification
 
-针对 Final Implementation Commit `5785b015943d325dd29b366e7afcf96aa7bc0530`：
+针对 Final Implementation Commit `5093f2d91da3fd772a2a1dc1825563f3843efd75`：
 
 | Gate | Result |
 |------|--------|
@@ -100,7 +107,7 @@ Checkpoint: `5785b015943d325dd29b366e7afcf96aa7bc0530`
 | `GOOS=windows GOARCH=amd64 GOTOOLCHAIN=local go build ./cmd/codea ./cmd/parity-runner` | PASS |
 | `GOOS=darwin GOARCH=amd64 GOTOOLCHAIN=local go build ./cmd/codea ./cmd/parity-runner` | PASS |
 | `./scripts/check-runtime-boundary.sh` | PASS（no vendor DTO leakage） |
-| `OPENCODE_BIN=<v1.18.11> ./scripts/run-real-parity-smoke.sh` | PASS（15/15 gates，failedChecks=0） |
+| `OPENCODE_BIN=<v1.18.11> ./scripts/run-real-parity-smoke.sh` | PASS（16/16 gates，failedChecks=0） |
 | `./scripts/check-execution-state.sh` | valid（Task 9 Step 5 awaiting_acceptance） |
 | `tests/execution-state/state_validator_test.sh` | valid |
 
@@ -128,20 +135,20 @@ Checkpoint: `5785b015943d325dd29b366e7afcf96aa7bc0530`
 | `tui/tests/parity/native_tools_test.go` | Create |
 | `tui/tests/parity/session_resume_test.go` | Create |
 | `tui/tests/parity/subagent_test.go` | Create |
-| `tui/tests/parity/real_parity_smoke_test.go` | Create（本轮：真实 runtime 15-gate smoke） |
-| `tui/tests/parity/parity_runner_test.go` | Modify（本轮：real-runtime evidence 结构迁至 real_parity_smoke_test.go） |
-| `scripts/run-real-parity-smoke.sh` | Create（本轮：真实 OpenCode smoke harness） |
-| `tests/fixtures/real-parity/fake_model.py` | Create（本轮：确定性流式模型 stub） |
-| `tests/fixtures/real-parity/opencode.json` | Create（本轮：fake provider 配置，permission.bash=ask） |
-| `tests/fixtures/real-parity/skills/smoke-skill/SKILL.md` | Create（本轮：smoke skill fixture） |
-| `tui/tests/parity/evidence/runtime-evidence.json` | Modify（本轮：fresh evidence，15/15 全绿） |
+| `tui/tests/parity/real_parity_smoke_test.go` | Create（真实 runtime 16-gate smoke；本验收轮补 bashApprovalAlways + 加强 runCancel + drainUntilIdle） |
+| `tui/tests/parity/parity_runner_test.go` | Modify（real-runtime evidence 结构迁至 real_parity_smoke_test.go） |
+| `scripts/run-real-parity-smoke.sh` | Create（真实 OpenCode smoke harness） |
+| `tests/fixtures/real-parity/fake_model.py` | Create（确定性流式模型 stub） |
+| `tests/fixtures/real-parity/opencode.json` | Create（fake provider 配置，permission.bash=ask） |
+| `tests/fixtures/real-parity/skills/smoke-skill/SKILL.md` | Create（smoke skill fixture） |
+| `tui/tests/parity/evidence/runtime-evidence.json` | Modify（fresh evidence，16/16 全绿） |
 
 ## 与计划偏差
 
 1. 计划 Step 1 文案建议「未映射事件类型 → 添加到 knownTypes 或确认为 Raw 透传」。经 Golden SSE 样本盘点确认 `session.next.*` 非 tool 事件在样本中不存在 legacy 等价语义，强行映射缺乏可验证样本，故保留 raw 透传——零静默丢失由 raw 透传保证，不做无依据的语义化。
 2. 计划 Step 2 伪代码引用 `opencode.NewEventMapper()`（构造器）；实际 `MapEvent` 为包级函数（`opencode.MapEvent(raw, seq)`），测试直接调用该函数，无构造器。
 3. 计划仅列 Modify `event_mapper.go`「确认覆盖」；实际发现并修复了 `CodeaEventToolSuccess`/`CodeaEventToolFailed` 从未映射的真实缺口（Application 层已消费、Adapter 层从未产出），属超出「确认」的必要修复。
-4. `tui/tests/parity/evidence/runtime-evidence.json` 为本轮真实 parity smoke 的 fresh evidence 产物（15/15 全绿），**本次正式纳入提交**，供人工验收直接审阅。
+4. `tui/tests/parity/evidence/runtime-evidence.json` 为本轮真实 parity smoke 的 fresh evidence 产物（16/16 全绿），**本次正式纳入提交**，供人工验收直接审阅。
 
 ## Gate 结论
 
