@@ -6,10 +6,10 @@ current:
   task: "9"
   step: 5
   status: awaiting_acceptance
-  nextAction: 等待人工验收（真实 OpenCode parity smoke 15/15 全绿，原生能力无退化）
+  nextAction: 等待人工验收（真实 OpenCode parity smoke 16/16 全绿，TUI ToolActivity 按 CallID 去重，原生能力无退化）
 checkpoint:
-  commit: 5093f2d91da3fd772a2a1dc1825563f3843efd75
-  updatedAt: "2026-08-14T15:21:58Z"
+  commit: ac9392c
+  updatedAt: "2026-08-14T15:35:00Z"
 verification:
   status: pass
   commands:
@@ -40,7 +40,7 @@ tasks:
   "6": {status: completed, completedSteps: [1, 2, 3, 4, 5], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: df5c582aa803f55bb091dabaf3a3cf41e0f02f78, report: docs/task-reports/task-06.md}
   "7": {status: completed, completedSteps: [1, 2, 3, 4, 5, 6], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: 0e523e8d70cb5c3357b9e8beb7a1dae6b2480e46, report: docs/task-reports/task-07.md}
   "8": {status: completed, completedSteps: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: 716b8c1e87ebd865d2c8fae47e3aa36c8c0c4865, report: docs/task-reports/task-08.md}
-  "9": {status: awaiting_acceptance, completedSteps: [1, 2, 3, 4, 5], verificationStatus: pass, taskGateStatus: pass, humanAccepted: false, checkpoint: 5093f2d91da3fd772a2a1dc1825563f3843efd75, report: docs/task-reports/task-09.md}
+  "9": {status: awaiting_acceptance, completedSteps: [1, 2, 3, 4, 5], verificationStatus: pass, taskGateStatus: pass, humanAccepted: false, checkpoint: ac9392c, report: docs/task-reports/task-09.md}
   "10": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-10.md}
   "11": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-11.md}
   "12": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-12.md}

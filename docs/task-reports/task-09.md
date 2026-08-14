@@ -2,7 +2,7 @@
 
 ## Overview
 
-Checkpoint: `5093f2d91da3fd772a2a1dc1825563f3843efd75`
+Checkpoint: `ac9392c`
 
 确保 General Agent 的 Shell、Edit、Subagent、Plugin 能力完整透传，事件零静默丢失。核心边界：Codea 的 AgentRuntime/Adapter/EventMapper/TUI 层不得削弱、阻断或静默丢弃 OpenCode General Agent 原生能力；Subagent 调度、Agent Loop 仍完全属于 OpenCode Runtime，Go TUI/Application 绝不重新实现；Shell 安全引擎属 Task 12，本 Task 不扩范围。
 
@@ -94,9 +94,19 @@ Checkpoint: `5093f2d91da3fd772a2a1dc1825563f3843efd75`
 2. **Cancel 加强（real_parity_smoke_test.go）**：原 `runCancel` 只验证 `Cancel()` API 返回成功即 PASS；现验证「approval pending → Cancel → 该 session 真正 idle → 被取消的 bash 未报 success → 未产出正常 answer → 再新建 session 完整走 read tool 生命周期」。证明 Cancel 生效、全局 SSE 未坏、Runtime 未坏、Adapter 后续仍可工作。
 3. **`always` 持久化语义的测试排序（关键发现）**：真实 OpenCode 的 `always` 决策会在 project 级持久化一条 bash 权限规则，导致后续任何 session 的 bash 都自动放行、不再发 `permission.asked`。因此 `bashApprovalAlways` 必须放在 reject/cancel **之后**（作为最后一个 approval scenario），否则会饿死 reject/cancel 的 `permission.asked`。这是真实 runtime 行为，非 stub 假设。
 
+### 本轮补强（Blocking：TUI ToolActivity 按 CallID 去重）
+
+真实 OpenCode 的 tool 生命周期是 `message.part.updated` 且 `part.type=tool`、`state.status` 依次 `pending→running→completed|error`，全程共享同一 `callID`。mapper 将 `pending` 与 `running` 都映射为 `tool.called`，而 Application 层 `addTool()` 原为按事件逐个 `append`，导致同一 callID 产生两条 `ToolActivity`；终态 `tool.success`/`tool.failed` 只 `updateTool` 第一个匹配项，残留第二条卡在 `running`。
+
+- **修复（internal/app/update.go）**：`addTool()` 改为按 `CallID` 幂等 upsert——命中既有 CallID 时只更新 Name/Status，不追加；未命中才 append。`ToolActivity` 的身份 = CallID。
+- **真实链路回归测试（internal/app/tool_lifecycle_test.go，Create）**：两条测试走完整真实链路 `OpenCode 风格 JSON → opencode.MapEvent → runtime.Event → Model.processRuntimeEvent → TUI ToolActivity`，非 `addTool` 单测：
+  - `TestToolLifecycleMergesPendingRunningIntoSingleSuccess`：pending(c1)→running(c1)→completed(c1) → `len==1`、`CallID=c1`、`Name=bash`、`Status=ToolSuccess`。
+  - `TestToolLifecycleErrorLeavesSingleFailed`：pending(c2)→running(c2)→error(c2) → `len==1`、`CallID=c2`、`Name=bash`、`Status=ToolFailed`。
+- 16-gate real parity smoke 未受影响（其 observer 以 `called` map 判存在性，不覆盖 TUI Model 层），修复只作用于 Application/TUI 层，未触碰 mapper、ApprovalAlways、Cancel、Golden SSE、Subagent 等已通过部分。
+
 ## Full Gate Verification
 
-针对 Final Implementation Commit `5093f2d91da3fd772a2a1dc1825563f3843efd75`：
+针对 Final Implementation Commit `ac9392c`：
 
 | Gate | Result |
 |------|--------|
@@ -130,6 +140,8 @@ Checkpoint: `5093f2d91da3fd772a2a1dc1825563f3843efd75`
 |------|--------|
 | `tui/internal/opencode/event_mapper.go` | Modify（session.next.tool.* 映射 + CallID/Tool 提取；本轮补真实 `message.part.updated` state.status 生命周期映射） |
 | `tui/internal/opencode/event_mapper_test.go` | Modify（TestEventMapperSessionNextToolLifecycle；本轮补 RealToolLifecycle 四态 + CallID 关联） |
+| `tui/internal/app/update.go` | Modify（`addTool` 按 CallID 幂等 upsert，消除 pending/running 双 `tool.called` 造成的重复 ToolActivity） |
+| `tui/internal/app/tool_lifecycle_test.go` | Create（真实链路 OpenCode JSON → MapEvent → processRuntimeEvent → ToolActivity 去重回归，2 条） |
 | `tui/tests/parity/event_passthrough_test.go` | Create |
 | `tui/tests/parity/general_agent_test.go` | Create |
 | `tui/tests/parity/native_tools_test.go` | Create |
