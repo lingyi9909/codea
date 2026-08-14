@@ -4,12 +4,12 @@ plan: docs/superpowers/plans/2026-07-30-codea-v1-plan.md
 taskOrder: ["0", "1", "2", "2A", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21"]
 current:
   task: "9"
-  step: 1
+  step: 5
   status: awaiting_acceptance
-  nextAction: 等待人工验收（General Agent 原生能力对齐 parity 门禁全绿）
+  nextAction: 等待人工验收（真实 OpenCode parity smoke 15/15 全绿，原生能力无退化）
 checkpoint:
-  commit: ee067901291e233a679b5b12e12463cd3352f0b3
-  updatedAt: "2026-08-14T06:48:48Z"
+  commit: 5785b015943d325dd29b366e7afcf96aa7bc0530
+  updatedAt: "2026-08-14T14:55:28Z"
 verification:
   status: pass
   commands:
@@ -40,7 +40,7 @@ tasks:
   "6": {status: completed, completedSteps: [1, 2, 3, 4, 5], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: df5c582aa803f55bb091dabaf3a3cf41e0f02f78, report: docs/task-reports/task-06.md}
   "7": {status: completed, completedSteps: [1, 2, 3, 4, 5, 6], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: 0e523e8d70cb5c3357b9e8beb7a1dae6b2480e46, report: docs/task-reports/task-07.md}
   "8": {status: completed, completedSteps: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: 716b8c1e87ebd865d2c8fae47e3aa36c8c0c4865, report: docs/task-reports/task-08.md}
-  "9": {status: awaiting_acceptance, completedSteps: [1, 2, 3, 4, 5], verificationStatus: pass, taskGateStatus: pass, humanAccepted: false, checkpoint: ee067901291e233a679b5b12e12463cd3352f0b3, report: docs/task-reports/task-09.md}
+  "9": {status: awaiting_acceptance, completedSteps: [1, 2, 3, 4, 5], verificationStatus: pass, taskGateStatus: pass, humanAccepted: false, checkpoint: 5785b015943d325dd29b366e7afcf96aa7bc0530, report: docs/task-reports/task-09.md}
   "10": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-10.md}
   "11": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-11.md}
   "12": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-12.md}
