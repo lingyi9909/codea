@@ -2,9 +2,16 @@
 
 ## Overview
 
-Checkpoint: `bfac6654ed650526b4ac5401ec76729c14c35bb6`
+Checkpoint: `abf73ca1ebe7bb4e01355c0cf3f402b1773dc2cf`
 
 实现 Session 列表/恢复、Tool 权限确认弹窗、危险命令检测。核心边界：TUI/Application 层绝不接触 OpenCode Vendor DTO/Permission 类型，全部消费 Codea domain（`runtime.ApprovalRequest` / `runtime.ApprovalReply` / `runtime.ApprovalDecision` / `AgentRuntime.ReplyApproval`）；UI 不伪造 vendor "remember" 标志，once/always/reject 三种决策直接映射到 Contract，由 Adapter 负责映射到 Vendor。网络请求全部走 `tea.Cmd`，绝不阻塞 Bubble Tea Update。
+
+## Acceptance Review Fixes（Round 2 — Blocking 1 + 验收缺口 2）
+
+首轮人工验收结论为「暂不通过」，锁定 1 个代码 Blocking + 1 个验收证据缺口，本轮一次性修复（不扩审）：
+
+- **Blocking 1 — Approval 异步结果按 approvalID 关联 + 防重复提交**：`Model` 新增 `approvalPending bool`。`replyApproval()` 发出请求时置 `approvalPending=true`；`handleApprovalKey()` 在 pending 时吞掉 Y/A/N/Esc，杜绝同一 Approval 被重复回复或发送冲突决定。`Update()` 收到 `approvalResultMsg` 时先校验 `msg.approvalID == m.permission.Request.ID`，不匹配（stale result）直接忽略——修复「A reply 在途 → B 到达 → A 结果返回误关/污染 B」的竞态；匹配时成功关模态、失败保留模态并置 `approvalErr`，均复位 `approvalPending=false`。新 `permission.asked` 到达时同样复位 `approvalPending=false`。新增 3 个回归测试：`TestApprovalStaleSuccessDoesNotCloseNewRequest` / `TestApprovalStaleErrorDoesNotPolluteNewRequest` / `TestApprovalDuplicateKeyIgnoredWhilePending`。
+- **验收缺口 2 — real TUI smoke 覆盖 Task 8 新 UI**：扩展 `tui/internal/supervisor/fakeopencode/main.go`——`GET /session` 返回双 session（`Alpha Task`/`Beta Task`）、新增 `/permission/{id}/reply`（响应 `true` 并触发 continuation）、按 prompt 计数区分 review/approval 脚本、新增 `emitApprovalScript`（`permission.asked`，`metadata.command="rm -rf ./build"`）与 `emitApprovalContinuation`（`answer.delta "Deleted build directory."` + `step.finished`）。扩展 `smoke_test.go`：第二 prompt 触发 approval modal（断言 "Tool approval required"/"bash"/"rm -rf ./build"/"Potentially dangerous command"）→ 按 Y → 断言 "Deleted build directory."（Agent 继续）；随后 `ctrl+s` 打开 Session 面板（断言 "Sessions"/"Alpha Task"/"Beta Task"）→ ↑↓ 移动 → Enter resume（断言 active 标记迁移到 "Beta Task (active)"）→ Esc 关闭。真实 PTY 全链路通过，transcript 已更新。
 
 ## Step 1 — Session 列表组件
 
@@ -77,7 +84,7 @@ Checkpoint: `bfac6654ed650526b4ac5401ec76729c14c35bb6`
 
 ## Full Gate Verification
 
-针对 Final Implementation Commit `bfac6654ed650526b4ac5401ec76729c14c35bb6`：
+针对 Final Implementation Commit `abf73ca1ebe7bb4e01355c0cf3f402b1773dc2cf`（Round 2 验收修复后）：
 
 | Gate | Result |
 |------|--------|
@@ -136,7 +143,8 @@ Checkpoint: `bfac6654ed650526b4ac5401ec76729c14c35bb6`
 
 | Commit | Step |
 |--------|------|
-| `bfac665` | 全部 Step 1-10 一次性实现（Session 列表/恢复、Tool Approval 弹窗、危险命令检测、隔离测试）（Final Implementation Commit） |
+| `bfac665` | 全部 Step 1-10 一次性实现（Session 列表/恢复、Tool Approval 弹窗、危险命令检测、隔离测试） |
+| `abf73ca` | Round 2 验收修复 — approval 结果按 ID 关联 + 防重复提交 + smoke 覆盖 Session/Approval UI（Final Implementation Commit） |
 
 ## 与计划偏差
 
