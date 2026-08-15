@@ -5,8 +5,8 @@ taskOrder: ["0", "1", "2", "2A", "3", "4", "5", "6", "7", "8", "9", "10", "11", 
 current:
   task: "10"
   step: 1
-  status: pending
-  nextAction: 阅读 Task 10（Skill/Plugin Manager）计划内容并开始执行
+  status: in_progress
+  nextAction: Step 1：定义 Skill Domain Contract（runtime.SkillRuntime + skill 领域模型），先写测试
 checkpoint:
   commit: ac9392c1a6ffe5ca773455b6240a8149010bfe42
   updatedAt: "2026-08-15T05:58:58Z"
@@ -41,7 +41,7 @@ tasks:
   "7": {status: completed, completedSteps: [1, 2, 3, 4, 5, 6], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: 0e523e8d70cb5c3357b9e8beb7a1dae6b2480e46, report: docs/task-reports/task-07.md}
   "8": {status: completed, completedSteps: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: 716b8c1e87ebd865d2c8fae47e3aa36c8c0c4865, report: docs/task-reports/task-08.md}
   "9": {status: completed, completedSteps: [1, 2, 3, 4, 5], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: ac9392c1a6ffe5ca773455b6240a8149010bfe42, report: docs/task-reports/task-09.md}
-  "10": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-10.md}
+  "10": {status: in_progress, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-10.md}
   "11": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-11.md}
   "12": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-12.md}
   "13": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-13.md}
