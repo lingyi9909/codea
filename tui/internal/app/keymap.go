@@ -13,6 +13,8 @@ type KeyMap struct {
 	Help        key.Binding
 
 	Sessions    key.Binding
+	Skills      key.Binding
+	Refresh     key.Binding
 	Up          key.Binding
 	Down        key.Binding
 	Esc         key.Binding
@@ -51,6 +53,14 @@ func DefaultKeyMap() KeyMap {
 		Sessions: key.NewBinding(
 			key.WithKeys("ctrl+s"),
 			key.WithHelp("ctrl+s", "sessions"),
+		),
+		Skills: key.NewBinding(
+			key.WithKeys("ctrl+k"),
+			key.WithHelp("ctrl+k", "skills"),
+		),
+		Refresh: key.NewBinding(
+			key.WithKeys("r"),
+			key.WithHelp("r", "refresh"),
 		),
 		Up: key.NewBinding(
 			key.WithKeys("up"),

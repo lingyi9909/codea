@@ -62,6 +62,15 @@ func (m *Model) renderView() string {
 		return b.String()
 	}
 
+	if m.currentPage == PageSkills {
+		b.WriteString(m.skillPanel.View())
+		if m.skillNotice != "" {
+			b.WriteString("\n")
+			b.WriteString(theme.MutedStyle().Render(m.skillNotice))
+		}
+		return b.String()
+	}
+
 	status := theme.MutedStyle().Render(m.renderStatusLine())
 	input := theme.AccentStyle().Render(m.renderInput())
 	footer := theme.MutedStyle().Render(m.renderFooter())
@@ -142,7 +151,7 @@ func (m *Model) renderInput() string {
 
 // renderFooter returns the one-line shortcut hint.
 func (m *Model) renderFooter() string {
-	return "enter submit · alt+enter newline · ctrl+t thinking · ctrl+s sessions · ctrl+l clear · ctrl+c quit"
+	return "enter submit · alt+enter newline · ctrl+t thinking · ctrl+s sessions · ctrl+k skills · ctrl+l clear · ctrl+c quit"
 }
 
 // formatDuration renders a duration compactly for the reasoning summary.

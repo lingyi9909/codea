@@ -106,6 +106,17 @@ type Model struct {
 	// conflicting decisions).
 	approvalPending bool
 
+	// skills is the skill manager driving the skills page. It is injected by the
+	// composition root; nil means the skills page is unavailable.
+	skills skillManager
+
+	// skillPanel is the skills-page presentation component (cursor + display).
+	skillPanel components.SkillModel
+
+	// skillNotice is a transient skills-page message (load/toggle failure or a
+	// count of skills that failed to load).
+	skillNotice string
+
 	eventCh <-chan runtime.Event
 
 	// streamBuf and reasoningBuf coalesce high-frequency streaming deltas so a
@@ -138,3 +149,7 @@ func NewModel(client runtime.AgentRuntime) *Model {
 		dirty:         true,
 	}
 }
+
+// SetSkillManager injects the skill manager used by the skills page. A nil
+// manager leaves the page unavailable (the page still opens but shows a notice).
+func (m *Model) SetSkillManager(mgr skillManager) { m.skills = mgr }

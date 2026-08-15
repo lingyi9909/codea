@@ -111,6 +111,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.markDirty()
 		return m, nil
 
+	case listSkillsResultMsg:
+		return m, m.handleSkillListResult(msg)
+
+	case setSkillResultMsg:
+		return m, m.handleSkillSetResult(msg)
+
 	case subscribeErrMsg:
 		m.runtimeStatus = runtime.RuntimeCrashed
 		m.markDirty()
@@ -156,6 +162,9 @@ func (m *Model) handleKey(msg tea.KeyMsg) tea.Cmd {
 	if m.sessionPanel.Visible {
 		return m.handleSessionKey(msg)
 	}
+	if m.currentPage == PageSkills {
+		return m.handleSkillKey(msg)
+	}
 	switch {
 	case key.Matches(msg, m.keys.Submit):
 		return m.submit()
@@ -164,6 +173,8 @@ func (m *Model) handleKey(msg tea.KeyMsg) tea.Cmd {
 		return nil
 	case key.Matches(msg, m.keys.Sessions):
 		return m.toggleSessions()
+	case key.Matches(msg, m.keys.Skills):
+		return m.toggleSkills()
 	case key.Matches(msg, m.keys.ClearScreen):
 		m.clearChat()
 		return nil

@@ -178,3 +178,26 @@ func TestHTTPClientListAgentsDecodesGeneratedAgentSlice(t *testing.T) {
 		t.Fatalf("ListAgents = %#v", agents)
 	}
 }
+
+func TestHTTPClientListSkillsScopesByDirectory(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/skill" {
+			t.Errorf("request = %s %s, want GET /skill", r.Method, r.URL.Path)
+		}
+		if got := r.URL.Query().Get("directory"); got != "/some/project dir" {
+			t.Errorf("directory = %q, want %q", got, "/some/project dir")
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`[{"name":"git","description":"Git helpers.","location":"/skills/git"}]`))
+	}))
+	defer server.Close()
+
+	client := NewHTTPClient(server.URL, "", "")
+	skills, err := client.ListSkills(context.Background(), "/some/project dir")
+	if err != nil {
+		t.Fatalf("ListSkills returned error: %v", err)
+	}
+	if len(skills) != 1 || skills[0].Name != "git" || skills[0].Location != "/skills/git" {
+		t.Fatalf("ListSkills = %#v", skills)
+	}
+}

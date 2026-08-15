@@ -10,9 +10,11 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"codea/tui/internal/app"
 	"codea/tui/internal/opencode"
+	"codea/tui/internal/skill"
 	"codea/tui/internal/supervisor"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -34,6 +36,7 @@ func run() error {
 	defer cleanup()
 
 	model := app.NewModel(adapter)
+	model.SetSkillManager(buildSkillManager(adapter))
 	p := tea.NewProgram(model, tea.WithAltScreen())
 	if _, err := p.Run(); err != nil {
 		return fmt.Errorf("run TUI: %w", err)
@@ -79,4 +82,44 @@ func supervisorConfig() supervisor.Config {
 		ConfigDir:   os.Getenv("OPENCODE_CONFIG_DIR"),
 		ProjectRoot: projectRoot,
 	}
+}
+
+// buildSkillManager assembles the Skill Manager from the environment. The
+// adapter doubles as the runtime.SkillRuntime so the manager's loaded-state
+// reconciliation queries the real OpenCode /skill endpoint.
+func buildSkillManager(adapter *opencode.OpenCodeAdapter) *skill.Manager {
+	home, _ := os.UserHomeDir()
+	projectDir, _ := os.Getwd()
+
+	// The controlled runtime config dir is where enabled Codea skills are
+	// materialized for OpenCode to load. It defaults to OpenCode's own config
+	// dir so the sync target is what the runtime actually scans.
+	configDir := os.Getenv("OPENCODE_CONFIG_DIR")
+	if configDir == "" {
+		configDir = filepath.Join(home, ".config", "opencode")
+	}
+
+	// Codea distribution skills; overridable for dev/test.
+	codeaSkills := os.Getenv("CODEA_SKILLS_DIR")
+	if codeaSkills == "" {
+		codeaSkills = filepath.Join(projectDir, "..", "distribution", "skills")
+	}
+
+	roots := []skill.Root{
+		{Dir: codeaSkills, Source: skill.SourceCodea},
+		{Dir: filepath.Join(projectDir, ".opencode", "skills"), Source: skill.SourceProject},
+		{Dir: filepath.Join(projectDir, ".agents", "skills"), Source: skill.SourceProject},
+	}
+	if home != "" {
+		roots = append(roots, skill.Root{Dir: filepath.Join(home, ".claude", "skills"), Source: skill.SourceUser})
+		// The user's default opencode skills dir is a User root only when it is
+		// not the controlled sync target (OPENCODE_CONFIG_DIR is set elsewhere).
+		if os.Getenv("OPENCODE_CONFIG_DIR") != "" {
+			roots = append(roots, skill.Root{Dir: filepath.Join(home, ".config", "opencode", "skills"), Source: skill.SourceUser})
+		}
+	}
+
+	targetDir := filepath.Join(configDir, "skills")
+	store := skill.NewFileStore(filepath.Join(configDir, "codea", "skills.json"))
+	return skill.NewManager(roots, store, targetDir, projectDir, adapter)
 }

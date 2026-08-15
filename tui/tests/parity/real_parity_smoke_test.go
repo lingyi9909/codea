@@ -46,6 +46,7 @@ type runtimeEvidence struct {
 	BashReject     *gateResult `json:"bashApprovalReject"`
 	Subagent       *gateResult `json:"subagent"`
 	Skill          *gateResult `json:"skill"`
+	SkillManager   *gateResult `json:"skillManager"`
 	Plugin         *gateResult `json:"plugin"`
 	SessionResume  *gateResult `json:"sessionResume"`
 	Cancel         *gateResult `json:"cancel"`
@@ -381,6 +382,23 @@ func TestRealRuntimeEvidence(t *testing.T) {
 	skillObs := runScenario(t, adapter, ch, state, "SKILL please", nil)
 	ev.Skill = ev.gate(skillObs.calledOnce("skill") && skillObs.succeededOnce("skill"),
 		"skill tool loaded smoke-skill and completed", nil)
+
+	// SkillManager: the Codea Skill Manager's real-runtime contract — ListSkills
+	// queries the real /skill endpoint and reports the runtime's loaded skills,
+	// including the smoke-skill materialized in the controlled config dir.
+	skillMgrSkills, skillMgrErr := adapter.ListSkills(ctx, "")
+	{
+		var names []string
+		hasSmokeSkill := false
+		for _, s := range skillMgrSkills {
+			names = append(names, s.Name)
+			if s.Name == "smoke-skill" {
+				hasSmokeSkill = true
+			}
+		}
+		ev.SkillManager = ev.gate(skillMgrErr == nil && len(skillMgrSkills) > 0 && hasSmokeSkill,
+			fmt.Sprintf("skills=%v", names), skillMgrErr)
+	}
 
 	// Plugin: plugin.added events observed on the global stream (plugins load);
 	// the skill tool above already proves a plugin is invocable.
