@@ -1,0 +1,49 @@
+{
+  "agents": {
+    "general": {
+      "read": "allow",
+      "grep": "allow",
+      "glob": "allow",
+      "write": "ask",
+      "edit": "ask",
+      "bash": "ask",
+      "agent": "allow",
+      "skill": "allow",
+      "plugin": "allow"
+    },
+    "code-reviewer": {
+      "read": "allow",
+      "grep": "allow",
+      "glob": "allow",
+      "collect_review_context": "allow",
+      "dify-query": "allow",
+      "write": "deny",
+      "edit": "deny",
+      "bash": "deny"
+    },
+    "unit-test-generator": {
+      "read": "allow",
+      "grep": "allow",
+      "glob": "allow",
+      "analyze_test_project": "allow",
+      "write_test_file": "allow",
+      "run_project_test": "allow",
+      "dify-query": "allow",
+      "bash": "deny",
+      "edit": "deny",
+      "write": "deny"
+    },
+    "api-documentation": {
+      "read": "allow",
+      "grep": "allow",
+      "glob": "allow",
+      "extract_api_spec": "allow",
+      "validate_api_example": "allow",
+      "write_document": "allow",
+      "dify-query": "allow",
+      "write": "deny",
+      "edit": "deny",
+      "bash": "deny"
+    }
+  }
+}
