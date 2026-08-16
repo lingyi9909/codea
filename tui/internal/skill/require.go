@@ -6,9 +6,22 @@ import (
 )
 
 // ValidateRequirements checks that every required skill is installed, enabled
-// and loaded. Any unavailable required skill is a hard failure: the returned
-// error names the skill and the reason, and callers must not start degraded.
+// and loaded under compatible semantics (no approval policy). Retained for Task
+// 10 compatibility.
 func ValidateRequirements(skills []Skill, reqs []SkillRequirement) error {
+	return validateRequiredSkills(skills, reqs, SkillPolicy{Mode: SkillModeCompatible})
+}
+
+// ValidateRequiredSkills checks required skills against the reconciled skill set
+// under the active policy. In strict mode a required skill must also be an
+// approved Codea skill, otherwise it fails closed with a distinct "not allowed"
+// error rather than a misleading "not installed". Order is fixed:
+// installed -> approved -> enabled -> loaded.
+func ValidateRequiredSkills(skills []Skill, reqs []SkillRequirement, p SkillPolicy) error {
+	return validateRequiredSkills(skills, reqs, p)
+}
+
+func validateRequiredSkills(skills []Skill, reqs []SkillRequirement, p SkillPolicy) error {
 	byName := make(map[string]Skill, len(skills))
 	for _, s := range skills {
 		byName[s.Name] = s
@@ -20,6 +33,8 @@ func ValidateRequirements(skills []Skill, reqs []SkillRequirement) error {
 		switch {
 		case !ok || !s.Installed:
 			errs = append(errs, SkillError{Name: r.Name, Stage: StageRequire, Message: "skill not installed"})
+		case p.Mode == SkillModeStrict && !p.StrictAllowed(s):
+			errs = append(errs, SkillError{Name: r.Name, Source: s.Source, Stage: StageRequire, Message: "not allowed by strict policy"})
 		case !s.Enabled:
 			errs = append(errs, SkillError{Name: r.Name, Source: s.Source, Stage: StageRequire, Message: "skill is disabled"})
 		case !s.Loaded:
