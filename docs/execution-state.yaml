@@ -8,8 +8,8 @@ current:
   status: awaiting_acceptance
   nextAction: 等待人工验收 Task 11（strict/compatible + Enterprise 模式隔离）
 checkpoint:
-  commit: 03d37af5d6b9cae384d4c0639fb9afb860bd6888
-  updatedAt: "2026-08-16T03:54:56Z"
+  commit: a77cd96448894b515eb9ec5530659cd922b8b839
+  updatedAt: "2026-08-16T04:38:00Z"
 verification:
   status: pass
   commands:
@@ -52,7 +52,7 @@ tasks:
   "8": {status: completed, completedSteps: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: 716b8c1e87ebd865d2c8fae47e3aa36c8c0c4865, report: docs/task-reports/task-08.md}
   "9": {status: completed, completedSteps: [1, 2, 3, 4, 5], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: ac9392c1a6ffe5ca773455b6240a8149010bfe42, report: docs/task-reports/task-09.md}
   "10": {status: completed, completedSteps: [1, 2, 3, 4, 5, 6, 7], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: eb5359dc26e322b777feaf6ddf6cbfdbbccbc685, report: docs/task-reports/task-10.md}
-  "11": {status: awaiting_acceptance, completedSteps: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], verificationStatus: pass, taskGateStatus: pass, humanAccepted: false, checkpoint: 03d37af5d6b9cae384d4c0639fb9afb860bd6888, report: docs/task-reports/task-11.md}
+  "11": {status: awaiting_acceptance, completedSteps: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], verificationStatus: pass, taskGateStatus: pass, humanAccepted: false, checkpoint: a77cd96448894b515eb9ec5530659cd922b8b839, report: docs/task-reports/task-11.md}
   "12": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-12.md}
   "13": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-13.md}
   "14": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-14.md}
