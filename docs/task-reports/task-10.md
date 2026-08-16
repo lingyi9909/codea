@@ -135,7 +135,7 @@ Checkpoint: `421d763107d2a6aacd697cdef2b22e6f32039f3f`
 
 ## Remediation（2026-08-16，人工验收 C — 不通过后修复）
 
-Checkpoint：`81cadfde18abba35210aabf3da0c7cc940bcf176`
+Checkpoint：`eb5359dc26e322b777feaf6ddf6cbfdbbccbc685`
 
 人工验收确认 3 个实质问题（2 阻塞 + 1 非阻塞）。本轮范围锁死，只修这 3 项。
 

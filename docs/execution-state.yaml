@@ -8,8 +8,8 @@ current:
   status: awaiting_acceptance
   nextAction: remediation 完成（3 项修复 + 回归测试 + 全量 Gate 通过），等待人工复核；复核通过前不标记 completed，不启动 Task 11
 checkpoint:
-  commit: 81cadfde18abba35210aabf3da0c7cc940bcf176
-  updatedAt: "2026-08-16T01:45:00Z"
+  commit: eb5359dc26e322b777feaf6ddf6cbfdbbccbc685
+  updatedAt: "2026-08-16T01:55:00Z"
 verification:
   status: pass
   commands:
@@ -41,7 +41,7 @@ tasks:
   "7": {status: completed, completedSteps: [1, 2, 3, 4, 5, 6], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: 0e523e8d70cb5c3357b9e8beb7a1dae6b2480e46, report: docs/task-reports/task-07.md}
   "8": {status: completed, completedSteps: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: 716b8c1e87ebd865d2c8fae47e3aa36c8c0c4865, report: docs/task-reports/task-08.md}
   "9": {status: completed, completedSteps: [1, 2, 3, 4, 5], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: ac9392c1a6ffe5ca773455b6240a8149010bfe42, report: docs/task-reports/task-09.md}
-  "10": {status: awaiting_acceptance, completedSteps: [1, 2, 3, 4, 5, 6, 7], verificationStatus: pass, taskGateStatus: pass, humanAccepted: false, checkpoint: 81cadfde18abba35210aabf3da0c7cc940bcf176, report: docs/task-reports/task-10.md}
+  "10": {status: awaiting_acceptance, completedSteps: [1, 2, 3, 4, 5, 6, 7], verificationStatus: pass, taskGateStatus: pass, humanAccepted: false, checkpoint: eb5359dc26e322b777feaf6ddf6cbfdbbccbc685, report: docs/task-reports/task-10.md}
   "11": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-11.md}
   "12": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-12.md}
   "13": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-13.md}
