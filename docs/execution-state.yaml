@@ -5,13 +5,13 @@ taskOrder: ["0", "1", "2", "2A", "3", "4", "5", "6", "7", "8", "9", "10", "11", 
 current:
   task: "12"
   step: 1
-  status: in_progress
-  nextAction: 建立 Plugin 工程骨架（distribution/plugins），随后实现安全基础（command-policy/DLP/path-policy/Dify 熔断/审计/security guard）
+  status: awaiting_acceptance
+  nextAction: Task 12 + Task 13 代码与 Gate 全绿，已提交 Batch Human Review；等待人工验收后按 validator 顺序纯状态收口（Task 12 completed → Task 13 awaiting_acceptance → Task 13 completed）
 checkpoint:
-  commit: 7a23955a52f9eeb3b3eaf025b96dd69d10e05761
-  updatedAt: "2026-08-16T08:51:22Z"
+  commit: ef8207576f9c3aaf328d8436e01f6a619c58559d
+  updatedAt: "2026-08-16T14:44:08Z"
 verification:
-  status: not_run
+  status: pass
   commands:
     - "GOTOOLCHAIN=local go test ./... -count=1"
     - "GOTOOLCHAIN=local go test -race ./... -count=1"
@@ -25,19 +25,19 @@ verification:
   errorSummary: ""
   recoveryAdvice: ""
 taskGate:
-  status: not_evaluated
+  status: pass
   gateItems:
-    test: not_run
-    race: not_run
-    vet: not_run
-    build: not_run
-    crossCompile: not_run
-    runtimeBoundary: not_run
-    pluginTests: not_run
-    pluginBundle: not_run
-    offlineDeps: not_run
-    securitySmoke: not_run
-    executionState: not_run
+    test: pass
+    race: pass
+    vet: pass
+    build: pass
+    crossCompile: pass
+    runtimeBoundary: pass
+    pluginTests: pass
+    pluginBundle: pass
+    offlineDeps: pass
+    securitySmoke: pass
+    executionState: pass
 humanAcceptance:
   accepted: false
 tasks:
@@ -54,8 +54,8 @@ tasks:
   "9": {status: completed, completedSteps: [1, 2, 3, 4, 5], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: ac9392c1a6ffe5ca773455b6240a8149010bfe42, report: docs/task-reports/task-09.md}
   "10": {status: completed, completedSteps: [1, 2, 3, 4, 5, 6, 7], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: eb5359dc26e322b777feaf6ddf6cbfdbbccbc685, report: docs/task-reports/task-10.md}
   "11": {status: completed, completedSteps: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: a77cd96448894b515eb9ec5530659cd922b8b839, report: docs/task-reports/task-11.md}
-  "12": {status: in_progress, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-12.md}
-  "13": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-13.md}
+  "12": {status: awaiting_acceptance, completedSteps: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], verificationStatus: pass, taskGateStatus: pass, humanAccepted: false, checkpoint: ef8207576f9c3aaf328d8436e01f6a619c58559d, report: docs/task-reports/task-12.md}
+  "13": {status: pending, completedSteps: [], verificationStatus: pass, taskGateStatus: pass, humanAccepted: false, checkpoint: 68f49e9bbc6008d860a83d8a0ad378f88e2338d9, report: docs/task-reports/task-13.md}
   "14": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-14.md}
   "15": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-15.md}
   "16": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-16.md}

@@ -117,4 +117,4 @@ Task 12/13 按连续 Batch 执行，不修改 execution-state validator（保持
 
 - verification：pass（Task 12 独立 Gate 全绿）
 - Task Gate：pass
-- 状态：`in_progress`（Batch Exception，暂不进入 awaiting_acceptance，继续 Task 13 开发）
+- 状态：`awaiting_acceptance`（Batch Exception，随 Task 13 一起提交 Batch Human Review）
