@@ -1,0 +1,135 @@
+======================================================================
+STEP: go test
+CMD: bash -c cd tui && GOTOOLCHAIN=local go test ./... -count=1
+AT: 2026-08-16T06:36:36Z
+======================================================================
+ok  	codea/tui/cmd/codea	5.791s
+ok  	codea/tui/cmd/openapi-gen	1.741s
+?   	codea/tui/cmd/parity-runner	[no test files]
+ok  	codea/tui/cmd/spike-s2	1.311s
+ok  	codea/tui/cmd/spike-s3	2.363s
+ok  	codea/tui/cmd/spike-s4	2.020s
+ok  	codea/tui/internal/app	3.016s
+ok  	codea/tui/internal/capability	2.663s
+ok  	codea/tui/internal/components	3.336s
+ok  	codea/tui/internal/opencode	41.833s
+ok  	codea/tui/internal/parity	12.733s
+ok  	codea/tui/internal/reasoning	4.344s
+ok  	codea/tui/internal/runtime	4.673s
+ok  	codea/tui/internal/skill	5.066s
+ok  	codea/tui/internal/supervisor	12.752s
+?   	codea/tui/internal/supervisor/fakeopencode	[no test files]
+ok  	codea/tui/internal/theme	4.817s
+ok  	codea/tui/tests/architecture	4.739s
+ok  	codea/tui/tests/contract	6.344s
+ok  	codea/tui/tests/fixtures/fake-runtime	4.813s
+ok  	codea/tui/tests/parity	4.839s
+ok  	codea/tui/tests/tui-smoke	4.795s
+---- exit: 0 ----
+======================================================================
+STEP: go test -race
+CMD: bash -c cd tui && GOTOOLCHAIN=local go test -race ./... -count=1
+AT: 2026-08-16T06:37:18Z
+======================================================================
+ok  	codea/tui/cmd/codea	7.018s
+ok  	codea/tui/cmd/openapi-gen	3.315s
+?   	codea/tui/cmd/parity-runner	[no test files]
+ok  	codea/tui/cmd/spike-s2	3.131s
+ok  	codea/tui/cmd/spike-s3	2.399s
+ok  	codea/tui/cmd/spike-s4	3.460s
+ok  	codea/tui/internal/app	4.143s
+ok  	codea/tui/internal/capability	3.784s
+ok  	codea/tui/internal/components	4.470s
+ok  	codea/tui/internal/opencode	43.035s
+ok  	codea/tui/internal/parity	13.902s
+ok  	codea/tui/internal/reasoning	5.541s
+ok  	codea/tui/internal/runtime	5.858s
+ok  	codea/tui/internal/skill	6.228s
+ok  	codea/tui/internal/supervisor	13.764s
+?   	codea/tui/internal/supervisor/fakeopencode	[no test files]
+ok  	codea/tui/internal/theme	4.923s
+ok  	codea/tui/tests/architecture	4.541s
+ok  	codea/tui/tests/contract	6.253s
+ok  	codea/tui/tests/fixtures/fake-runtime	4.901s
+ok  	codea/tui/tests/parity	4.918s
+ok  	codea/tui/tests/tui-smoke	4.876s
+---- exit: 0 ----
+======================================================================
+STEP: go vet
+CMD: bash -c cd tui && GOTOOLCHAIN=local go vet ./...
+AT: 2026-08-16T06:38:01Z
+======================================================================
+---- exit: 0 ----
+======================================================================
+STEP: go build
+CMD: bash -c cd tui && GOTOOLCHAIN=local go build ./...
+AT: 2026-08-16T06:38:02Z
+======================================================================
+---- exit: 0 ----
+======================================================================
+STEP: cross windows
+CMD: bash -c cd tui && GOOS=windows GOARCH=amd64 GOTOOLCHAIN=local go build ./cmd/codea ./cmd/parity-runner
+AT: 2026-08-16T06:38:02Z
+======================================================================
+---- exit: 0 ----
+======================================================================
+STEP: cross darwin
+CMD: bash -c cd tui && GOOS=darwin GOARCH=amd64 GOTOOLCHAIN=local go build ./cmd/codea ./cmd/parity-runner
+AT: 2026-08-16T06:38:02Z
+======================================================================
+---- exit: 0 ----
+======================================================================
+STEP: runtime boundary
+CMD: bash -c ./scripts/check-runtime-boundary.sh
+AT: 2026-08-16T06:38:02Z
+======================================================================
+PASS: no vendor DTO leakage
+---- exit: 0 ----
+======================================================================
+STEP: execution state
+CMD: bash -c ./scripts/check-execution-state.sh
+AT: 2026-08-16T06:38:03Z
+======================================================================
+Execution state is valid: Task 11 Step 10 (awaiting_acceptance)
+---- exit: 0 ----
+======================================================================
+STEP: state validator
+CMD: bash -c tests/execution-state/state_validator_test.sh
+AT: 2026-08-16T06:38:03Z
+======================================================================
+Execution state is valid: Task 11 Step 10 (awaiting_acceptance)
+Execution state validator tests passed.
+---- exit: 0 ----
+======================================================================
+STEP: parity smoke
+CMD: bash -c OPENCODE_BIN=/Users/zhangzhanhui/Documents/job/codea/docs/spike-artifacts/opencode ./scripts/run-real-parity-smoke.sh
+AT: 2026-08-16T06:38:05Z
+======================================================================
+OpenCode healthy: version=1.18.11
+=== RUN   TestRealRuntimeEvidence
+    real_parity_smoke_test.go:433: real runtime evidence: 17/17 checks passed (artifact: evidence/runtime-evidence.json)
+--- PASS: TestRealRuntimeEvidence (2.07s)
+PASS
+ok  	codea/tui/tests/parity	3.191s
+evidence green: available=true totalChecks=17 passedChecks=17 failedChecks=0
+  version=1.18.11 timestamp=2026-08-16T06:38:07Z
+[PASS] real OpenCode parity smoke: all native capability + approval + cancel gates green
+---- exit: 0 ----
+======================================================================
+STEP: skill-native smoke
+CMD: bash -c OPENCODE_BIN=/Users/zhangzhanhui/Documents/job/codea/docs/spike-artifacts/opencode ./scripts/run-skill-native-smoke.sh
+AT: 2026-08-16T06:38:09Z
+======================================================================
+[PASS] isolated config keeps native user skill loadable: ['codea-smoke', 'customize-opencode', 'native-user-skill']
+[PASS] skill native smoke: codea-smoke + native-user-skill both present in /skill
+---- exit: 0 ----
+======================================================================
+STEP: skill-mode smoke
+CMD: bash -c OPENCODE_BIN=/Users/zhangzhanhui/Documents/job/codea/docs/spike-artifacts/opencode ./scripts/run-skill-mode-smoke.sh
+AT: 2026-08-16T06:38:10Z
+======================================================================
+[PASS] compatible: Codea+Project+Runtime loadable, User/Claude/Agents isolated (['codea-skill', 'customize-opencode', 'project-skill'])
+[PASS] strict: only approved Codea loadable (['codea-approved', 'customize-opencode'])
+[PASS] skill mode smoke: compatible + strict both verified
+---- exit: 0 ----
+=== FULL GATE exit=0 ===
