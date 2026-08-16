@@ -18,7 +18,7 @@ if [ ! -f "$BUNDLE" ]; then
 fi
 
 # Allowed bare specifiers: bun built-ins only. Everything else must be bundled in.
-ALLOWED_BUILTINS='^(fs|path|os|node:fs|node:path|node:os|bun:test)$'
+ALLOWED_BUILTINS='^(fs|path|os|child_process|node:fs|node:path|node:os|node:child_process|bun:test)$'
 
 IMPORTS=$(grep -oE 'from "[^"]+"|from '"'"'[^'"'"']+'"'"'|require\("[^"]+"\)' "$BUNDLE" 2>/dev/null || true)
 

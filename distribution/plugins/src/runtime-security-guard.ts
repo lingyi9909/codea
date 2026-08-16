@@ -1,6 +1,7 @@
 import { AuditLogger, type AuditEntry } from "./audit-log";
 import { analyzeCommand } from "./security/command-policy";
-import { scanDlp, type DlpContext } from "./security/dlp";
+import { scanDlp } from "./security/dlp";
+import type { DlpContext } from "./security/types";
 import { resolveProjectPath } from "./security/path-policy";
 import { RiskDeny, RiskSafe } from "./security/types";
 

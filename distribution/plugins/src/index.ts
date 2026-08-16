@@ -11,3 +11,14 @@ export * from "./dify-query";
 export * from "./audit-log";
 export * from "./runtime-security-guard";
 export * from "./permissions";
+
+export * from "./tools/types";
+export * from "./tools/errors";
+export * from "./tools/failure-classifier";
+export * from "./tools/collect-review-context";
+export * from "./tools/analyze-test-project";
+export * from "./tools/write-test-file";
+export * from "./tools/run-project-test";
+export * from "./tools/extract-api-spec";
+export * from "./tools/validate-api-example";
+export * from "./tools/write-document";

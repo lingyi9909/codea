@@ -1,4 +1,5 @@
-import { CommandAnalysis, CommandRisk, RiskAsk, RiskDeny, RiskSafe } from "./types";
+import type { CommandAnalysis, CommandRisk } from "./types";
+import { RiskAsk, RiskDeny, RiskSafe } from "./types";
 
 // Shell command safety analysis. V1 is deliberately not a full shell parser, but
 // it must never treat a "safe prefix" as making the whole command safe: the full

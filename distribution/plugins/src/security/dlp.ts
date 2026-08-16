@@ -1,4 +1,4 @@
-import { DlpContext, DlpFinding, DlpResult, DlpSeverity } from "./types";
+import type { DlpContext, DlpFinding, DlpResult, DlpSeverity } from "./types";
 
 // Four-layer DLP:
 //   Layer 1: secrets / credentials  (block)

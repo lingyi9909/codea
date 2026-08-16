@@ -84,7 +84,7 @@ export function assertWithinAllowedRoots(p: string, roots: readonly string[]): v
     const rootAbs = path.resolve(root);
     if (!isWithin(rootAbs, target)) continue;
     try {
-      const realRoot = fs.realpathSync(rootAbs);
+      const realRoot = realpathExisting(rootAbs);
       const realTarget = realpathExisting(target);
       if (isWithin(realRoot, realTarget)) return;
     } catch {
