@@ -18,24 +18,24 @@ func TestFilterForModeCompatibleKeepsAll(t *testing.T) {
 	}
 }
 
-func TestFilterForModeStrictKeepsApprovedEnabledCodea(t *testing.T) {
+func TestFilterForModeStrictKeepsApprovedCodea(t *testing.T) {
 	skills := []Skill{
-		codea("code-review", true),
-		codea("experimental", true),
-		codea("unit-test", false),
+		codea("code-review", true),  // approved + enabled
+		codea("unit-test", false),   // approved + disabled: KEPT (enabled is orthogonal)
+		codea("experimental", true), // unapproved: dropped
 		{Name: "proj", Source: SourceProject, Installed: true, Enabled: true},
 		{Name: "user", Source: SourceUser, Installed: true, Enabled: true},
 	}
 	got := FilterForMode(skills, SkillPolicy{
 		Mode:     SkillModeStrict,
-		Approved: map[string]bool{"code-review": true},
+		Approved: map[string]bool{"code-review": true, "unit-test": true},
 	})
 	names := map[string]bool{}
 	for _, s := range got {
 		names[s.Name] = true
 	}
-	if len(got) != 1 || !names["code-review"] {
-		t.Fatalf("strict should keep only approved+enabled Codea: %+v", got)
+	if len(got) != 2 || !names["code-review"] || !names["unit-test"] {
+		t.Fatalf("strict should keep only approved Codea (enabled orthogonal): %+v", got)
 	}
 }
 

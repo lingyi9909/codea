@@ -45,18 +45,20 @@ func ParseApprovedSkills(s string) map[string]bool {
 	return out
 }
 
-// FilterForMode returns the skills visible under the policy. Compatible keeps
-// everything. Strict keeps only enabled Codea skills that are approved; project,
-// user and runtime skills are dropped from the Codea-managed view (the runtime
-// independently hides project/user via env flags, and re-adds built-ins during
-// loaded reconciliation).
+// FilterForMode returns the skills allowed under the policy. Compatible keeps
+// everything. Strict keeps only approved Codea skills; project, user and runtime
+// skills are dropped from the Codea-managed view (the runtime independently
+// hides project/user via env flags, and re-adds built-ins during loaded
+// reconciliation). The enabled dimension is deliberately NOT gated here: it is
+// orthogonal to mode (Installed/Enabled/Loaded stay independent, per Task 10),
+// and materialization is gated by Sync, which already skips disabled skills.
 func FilterForMode(skills []Skill, p SkillPolicy) []Skill {
 	if p.Mode != SkillModeStrict {
 		return skills
 	}
 	out := make([]Skill, 0, len(skills))
 	for _, s := range skills {
-		if !s.Enabled || !p.StrictAllowed(s) {
+		if !p.StrictAllowed(s) {
 			continue
 		}
 		out = append(out, s)
