@@ -38,8 +38,9 @@ type Config struct {
 	ProjectRoot    string
 	StartupTimeout time.Duration
 	StopTimeout    time.Duration
-	// CodeaSkillsOnly disables the runtime's discovery of external (user) and
-	// project skills so only Codea-controlled skills load. Set for strict mode.
+	// CodeaSkillsOnly additionally disables project-skill discovery (strict
+	// mode). User and external (.claude/.agents) skills are isolated in BOTH
+	// modes by the always-on env in buildEnv.
 	CodeaSkillsOnly bool
 }
 
@@ -357,19 +358,20 @@ func buildEnv(config Config, username, password string) []string {
 		"OPENCODE_DISABLE_EMBEDDED_WEB_UI=1",
 		"OPENCODE_DISABLE_LSP_DOWNLOAD=1",
 		"OPENCODE_DISABLE_DEFAULT_PLUGINS=1",
+		// Task 1 S6 isolation baseline (BOTH modes): external (.claude/.agents)
+		// skills are disabled, and the native user skills dir
+		// (~/.config/opencode/skills) is isolated by pointing XDG_CONFIG_HOME
+		// away from ~/.config. Project skills stay discoverable unless strict
+		// also sets OPENCODE_DISABLE_PROJECT_CONFIG.
+		"OPENCODE_DISABLE_EXTERNAL_SKILLS=1",
+		"XDG_CONFIG_HOME="+filepath.Join(config.ConfigDir, "xdg", "config"),
+		"XDG_DATA_HOME="+filepath.Join(config.ConfigDir, "xdg", "data"),
+		"XDG_CACHE_HOME="+filepath.Join(config.ConfigDir, "xdg", "cache"),
+		"XDG_STATE_HOME="+filepath.Join(config.ConfigDir, "xdg", "state"),
 	)
 	if config.CodeaSkillsOnly {
 		env = append(env,
-			"OPENCODE_DISABLE_EXTERNAL_SKILLS=1",
 			"OPENCODE_DISABLE_PROJECT_CONFIG=1",
-			// Isolate the native OpenCode user skills dir (~/.config/opencode/skills).
-			// OPENCODE_DISABLE_EXTERNAL_SKILLS does NOT disable it; only pointing
-			// XDG_CONFIG_HOME away from ~/.config does (S5/S6 spike). HOME is left
-			// untouched — ~/.claude is already disabled by OPENCODE_DISABLE_CLAUDE_CODE.
-			"XDG_CONFIG_HOME="+filepath.Join(config.ConfigDir, "xdg", "config"),
-			"XDG_DATA_HOME="+filepath.Join(config.ConfigDir, "xdg", "data"),
-			"XDG_CACHE_HOME="+filepath.Join(config.ConfigDir, "xdg", "cache"),
-			"XDG_STATE_HOME="+filepath.Join(config.ConfigDir, "xdg", "state"),
 		)
 	}
 	return env

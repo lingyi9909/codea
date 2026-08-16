@@ -6,15 +6,39 @@ func codea(name string, enabled bool) Skill {
 	return Skill{Name: name, Source: SourceCodea, Installed: true, Enabled: enabled}
 }
 
-func TestFilterForModeCompatibleKeepsAll(t *testing.T) {
+func TestFilterForModeCompatibleKeepsCodeaProjectDropsUser(t *testing.T) {
 	skills := []Skill{
 		codea("code-review", true),
 		{Name: "proj", Source: SourceProject, Installed: true, Enabled: true},
 		{Name: "user", Source: SourceUser, Installed: true, Enabled: true},
+		{Name: "runtime", Source: SourceRuntime, Installed: true, Enabled: true},
 	}
 	got := FilterForMode(skills, SkillPolicy{Mode: SkillModeCompatible})
-	if len(got) != 3 {
-		t.Fatalf("compatible must keep all, got %d", len(got))
+	names := map[string]bool{}
+	for _, s := range got {
+		names[s.Name] = true
+	}
+	if len(got) != 3 || !names["code-review"] || !names["proj"] || !names["runtime"] {
+		t.Fatalf("compatible must keep Codea+Project+Runtime and drop User, got %+v", got)
+	}
+	if names["user"] {
+		t.Fatal("compatible must not keep the user skill")
+	}
+}
+
+func TestCompatibleAllowed(t *testing.T) {
+	p := SkillPolicy{Mode: SkillModeCompatible}
+	if !p.CompatibleAllowed(codea("code-review", true)) {
+		t.Fatal("Codea skill must be compatible-allowed")
+	}
+	if !p.CompatibleAllowed(Skill{Name: "proj", Source: SourceProject}) {
+		t.Fatal("project skill must be compatible-allowed")
+	}
+	if !p.CompatibleAllowed(Skill{Name: "customize-opencode", Source: SourceRuntime}) {
+		t.Fatal("runtime built-in must be compatible-allowed")
+	}
+	if p.CompatibleAllowed(Skill{Name: "user", Source: SourceUser}) {
+		t.Fatal("user skill must never be compatible-allowed")
 	}
 }
 

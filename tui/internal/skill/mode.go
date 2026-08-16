@@ -9,8 +9,8 @@ const (
 	// SkillModeStrict is the V1 default: only Approved + Enabled Codea skills
 	// enter the runtime; project and user skills are isolated out.
 	SkillModeStrict SkillMode = "strict"
-	// SkillModeCompatible preserves OpenCode native skill discovery: Codea +
-	// Project + User (+ runtime built-in) skills are all available.
+	// SkillModeCompatible allows Codea + Project (+ runtime built-in) skills;
+	// user skills (~/.config/opencode/skills) stay isolated (Task 1 S6 baseline).
 	SkillModeCompatible SkillMode = "compatible"
 )
 

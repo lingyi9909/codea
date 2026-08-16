@@ -250,14 +250,17 @@ func hasEnv(env []string, k string) bool {
 
 func TestBuildEnvIsolation(t *testing.T) {
 	base := buildEnv(Config{ConfigDir: "/c", CodeaSkillsOnly: false}, "u", "p")
-	if hasEnv(base, "OPENCODE_DISABLE_EXTERNAL_SKILLS=1") || hasEnv(base, "OPENCODE_DISABLE_PROJECT_CONFIG=1") {
-		t.Fatal("compatible mode must not disable external/project skills")
+	if !hasEnv(base, "OPENCODE_DISABLE_EXTERNAL_SKILLS=1") {
+		t.Fatal("compatible mode must disable external (.agents) skills")
+	}
+	if hasEnv(base, "OPENCODE_DISABLE_PROJECT_CONFIG=1") {
+		t.Fatal("compatible mode must not disable project skills")
 	}
 	if !hasEnv(base, "OPENCODE_DISABLE_CLAUDE_CODE=1") {
 		t.Fatal("Task 1 offline lock must remain")
 	}
-	if hasEnv(base, "XDG_CONFIG_HOME=/c/xdg/config") {
-		t.Fatal("compatible mode must not redirect XDG_CONFIG_HOME")
+	if !hasEnv(base, "XDG_CONFIG_HOME=/c/xdg/config") {
+		t.Fatal("compatible mode must redirect XDG_CONFIG_HOME to isolate native user skills")
 	}
 
 	strict := buildEnv(Config{ConfigDir: "/c", CodeaSkillsOnly: true}, "u", "p")

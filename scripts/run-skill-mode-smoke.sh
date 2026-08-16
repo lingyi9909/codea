@@ -4,12 +4,12 @@ set -euo pipefail
 # run-skill-mode-smoke.sh
 #
 # Proves Task 11's two skill modes against the real locked OpenCode v1.18.11:
-#   Smoke A (compatible): Codea + Project + User skills are ALL loadable — the
-#                         isolated Codea config dir must not shadow native skills.
+#   Smoke A (compatible): Codea + Project + Runtime-native skills are loadable;
+#                         User (~/.config/opencode/skills), Claude (~/.claude/skills)
+#                         and Agents (.agents/skills) skills are isolated out.
 #   Smoke B (strict):     only the approved Codea skill is loadable; project,
-#                         user and unapproved-Codea skills are isolated out via
-#                         OPENCODE_DISABLE_EXTERNAL_SKILLS + PROJECT_CONFIG and
-#                         materialization of approved-only skills.
+#                         user, claude, agents and unapproved-Codea skills are
+#                         isolated out.
 #
 # Exits 0 only when both profiles pass.
 
@@ -63,16 +63,18 @@ start_server() { # $1=project_dir $2=config_dir $3=home $4=mode
     export OPENCODE_DISABLE_EMBEDDED_WEB_UI=1
     export OPENCODE_DISABLE_LSP_DOWNLOAD=1
     export OPENCODE_DISABLE_DEFAULT_PLUGINS=1
+    # Task 1 S6 isolation baseline (BOTH modes): external (.claude/.agents) skills
+    # are disabled, and the native user skills dir (~/.config/opencode/skills) is
+    # isolated by redirecting XDG_CONFIG_HOME away from ~/.config. OPENCODE_DISABLE_
+    # EXTERNAL_SKILLS does NOT disable the native user dir on its own. Mirrors
+    # supervisor buildEnv.
+    export OPENCODE_DISABLE_EXTERNAL_SKILLS=1
+    export XDG_CONFIG_HOME="$config/xdg/config"
+    export XDG_DATA_HOME="$config/xdg/data"
+    export XDG_CACHE_HOME="$config/xdg/cache"
+    export XDG_STATE_HOME="$config/xdg/state"
     if [ "$mode" = "strict" ]; then
-      export OPENCODE_DISABLE_EXTERNAL_SKILLS=1
       export OPENCODE_DISABLE_PROJECT_CONFIG=1
-      # OPENCODE_DISABLE_EXTERNAL_SKILLS does not disable the native user skills
-      # dir (~/.config/opencode/skills); only redirecting XDG_CONFIG_HOME away
-      # from ~/.config isolates it (S5/S6 spike). Mirrors supervisor buildEnv.
-      export XDG_CONFIG_HOME="$config/xdg/config"
-      export XDG_DATA_HOME="$config/xdg/data"
-      export XDG_CACHE_HOME="$config/xdg/cache"
-      export XDG_STATE_HOME="$config/xdg/state"
     fi
     "$opencode_bin" serve --hostname 127.0.0.1 --port "$port"
   ) >"$run_root/opencode-$mode.log" 2>&1 &
@@ -128,6 +130,8 @@ project="$run_root/projectA"
 mkdir -p "$project" "$config/skills"
 write_skill "$config/skills" "codea-skill"
 write_skill "$home/.config/opencode/skills" "user-skill"
+write_skill "$home/.claude/skills" "claude-skill"
+write_skill "$project/.agents/skills" "agents-skill"
 write_skill "$project/.opencode/skills" "project-skill"
 
 start_server "$project" "$config" "$home" "compatible"
@@ -139,11 +143,15 @@ python3 - "$resp" <<'PY'
 import json, pathlib, sys
 payload = json.loads(pathlib.Path(sys.argv[1]).read_text())
 names = {item["name"] for item in payload}
-required = {"codea-skill", "project-skill", "user-skill"}
+required = {"codea-skill", "project-skill", "customize-opencode"}
 missing = sorted(required - names)
 if missing:
     raise SystemExit(f"compatible missing {missing}; got {sorted(names)}")
-print(f"[PASS] compatible: Codea+Project+User all loadable ({sorted(names)})")
+forbidden = {"user-skill", "claude-skill", "agents-skill"}
+present = sorted(forbidden & names)
+if present:
+    raise SystemExit(f"compatible leaked isolated skills {present}; got {sorted(names)}")
+print(f"[PASS] compatible: Codea+Project+Runtime loadable, User/Claude/Agents isolated ({sorted(names)})")
 PY
 
 # --- Smoke B: strict ----------------------------------------------------------
@@ -156,6 +164,8 @@ write_skill "$config/skills" "codea-approved"
 # mirroring how Codea's strict sync never materializes it.
 write_skill "$run_root/distribution" "codea-unapproved"
 write_skill "$home/.config/opencode/skills" "user-skill"
+write_skill "$home/.claude/skills" "claude-skill"
+write_skill "$project/.agents/skills" "agents-skill"
 write_skill "$project/.opencode/skills" "project-skill"
 
 start_server "$project" "$config" "$home" "strict"
@@ -169,7 +179,7 @@ payload = json.loads(pathlib.Path(sys.argv[1]).read_text())
 names = {item["name"] for item in payload}
 if "codea-approved" not in names:
     raise SystemExit(f"strict missing approved skill; got {sorted(names)}")
-forbidden = {"project-skill", "user-skill", "codea-unapproved"}
+forbidden = {"project-skill", "user-skill", "claude-skill", "agents-skill", "codea-unapproved"}
 present = sorted(forbidden & names)
 if present:
     raise SystemExit(f"strict leaked non-approved skills {present}; got {sorted(names)}")
