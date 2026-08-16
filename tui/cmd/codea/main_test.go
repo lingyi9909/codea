@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"codea/tui/internal/app"
+	"codea/tui/internal/skill"
 )
 
 // fakeOpenCodeBin is the path to the compiled fake opencode server, built once
@@ -45,7 +46,7 @@ func TestBootstrapRuntimeSupervisedChain(t *testing.T) {
 	t.Setenv("OPENCODE_URL", "") // force supervised path, not the dev override
 	t.Setenv("FAKE_OPENCODE_REQUIRE_AUTH", "1")
 
-	adapter, cleanup, err := bootstrapRuntime()
+	adapter, cleanup, err := bootstrapRuntime(t.TempDir())
 	if err != nil {
 		t.Fatalf("bootstrapRuntime: %v", err)
 	}
@@ -84,7 +85,7 @@ func TestBootstrapRuntimeStartupFailure(t *testing.T) {
 	t.Setenv("OPENCODE_URL", "")
 	t.Setenv("FAKE_OPENCODE_MODE", "exit-immediately")
 
-	adapter, cleanup, err := bootstrapRuntime()
+	adapter, cleanup, err := bootstrapRuntime(t.TempDir())
 	if err == nil {
 		if cleanup != nil {
 			cleanup()
@@ -96,5 +97,51 @@ func TestBootstrapRuntimeStartupFailure(t *testing.T) {
 	}
 	if err.Error() == "" {
 		t.Error("startup failure error must be non-empty")
+	}
+}
+
+// TestCodeaConfigDirDefaultsIsolated guards P0-1: the default controlled config
+// dir must be a dedicated Codea location, never OpenCode's native ~/.config/opencode.
+func TestCodeaConfigDirDefaultsIsolated(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("CODEA_RUNTIME_CONFIG_DIR", "")
+
+	got := codeaConfigDir()
+	want := filepath.Join(home, ".codea", "runtime-config")
+	if got != want {
+		t.Fatalf("codeaConfigDir = %q, want %q", got, want)
+	}
+	if got == filepath.Join(home, ".config", "opencode") {
+		t.Fatal("codeaConfigDir must not be OpenCode's native ~/.config/opencode")
+	}
+}
+
+func TestCodeaConfigDirHonorsOverride(t *testing.T) {
+	custom := filepath.Join(t.TempDir(), "custom")
+	t.Setenv("CODEA_RUNTIME_CONFIG_DIR", custom)
+	if got := codeaConfigDir(); got != custom {
+		t.Fatalf("codeaConfigDir = %q, want %q", got, custom)
+	}
+}
+
+// TestSkillRootsTreatsUserOpenCodeAsReadOnly guards P0-1: the user's native
+// OpenCode skills dir must appear as a read-only SourceUser root, never as the
+// Codea sync target.
+func TestSkillRootsTreatsUserOpenCodeAsReadOnly(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("CODEA_SKILLS_DIR", filepath.Join(t.TempDir(), "dist"))
+
+	roots := skillRoots()
+
+	found := false
+	for _, r := range roots {
+		if r.Source == skill.SourceUser && r.Dir == filepath.Join(home, ".config", "opencode", "skills") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("~/.config/opencode/skills missing as SourceUser root: %+v", roots)
 	}
 }

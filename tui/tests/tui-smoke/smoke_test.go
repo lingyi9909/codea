@@ -152,7 +152,7 @@ func TestRealTUISmoke(t *testing.T) {
 	cmd := exec.Command(codeaBin)
 	cmd.Env = append(os.Environ(),
 		"OPENCODE_BIN="+fakeBin,
-		"OPENCODE_CONFIG_DIR="+filepath.Join(dir, "config"),
+		"CODEA_RUNTIME_CONFIG_DIR="+filepath.Join(dir, "config"),
 		"FAKE_OPENCODE_PID_FILE="+pidFile,
 		"TERM=xterm-256color",
 	)

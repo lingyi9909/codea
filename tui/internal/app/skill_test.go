@@ -96,7 +96,7 @@ func TestToggleSelectedSkillFlipsEnabled(t *testing.T) {
 	m := NewModel(fakeruntime.New())
 	fm := &fakeSkillManager{}
 	m.SetSkillManager(fm)
-	m.skillPanel.Open([]components.SkillItem{{Name: "git", Enabled: true}})
+	m.skillPanel.Open([]components.SkillItem{{Name: "git", Source: string(skill.SourceCodea), Enabled: true}})
 
 	cmd := m.toggleSelectedSkill()
 
@@ -126,5 +126,24 @@ func TestHandleSkillSetResultSurfacesError(t *testing.T) {
 
 	if !strings.Contains(m.skillNotice, "Failed to update") {
 		t.Fatalf("skillNotice = %q, want update failure", m.skillNotice)
+	}
+}
+
+func TestToggleSelectedSkillRejectsNonCodea(t *testing.T) {
+	m := NewModel(fakeruntime.New())
+	fm := &fakeSkillManager{}
+	m.SetSkillManager(fm)
+	m.skillPanel.Open([]components.SkillItem{{Name: "proj", Source: string(skill.SourceProject), Enabled: true}})
+
+	cmd := m.toggleSelectedSkill()
+
+	if cmd != nil {
+		t.Fatal("non-Codea skill must not issue a toggle command")
+	}
+	if len(fm.toggles) != 0 {
+		t.Fatalf("no toggle should reach the manager: %v", fm.toggles)
+	}
+	if !strings.Contains(m.skillNotice, "Only Codea") {
+		t.Fatalf("skillNotice = %q, want read-only notice", m.skillNotice)
 	}
 }

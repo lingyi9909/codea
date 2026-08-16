@@ -1,11 +1,26 @@
 package skill
 
 import (
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"sort"
 )
+
+// SyncEnabled discovers skills, applies the persisted overrides, and materializes
+// enabled Codea skills into targetDir. It is the cold-start equivalent of
+// Manager.SetEnabled's sync path and deliberately does not query the runtime, so
+// it can run before the runtime process has started.
+func SyncEnabled(roots []Root, store Store, targetDir string) error {
+	skills, _ := Discover(roots)
+	overrides, err := store.Load()
+	if err != nil {
+		return fmt.Errorf("load skill overrides: %w", err)
+	}
+	skills = applyOverrides(skills, overrides)
+	return Sync(skills, targetDir)
+}
 
 // Sync materializes enabled Codea skills into targetDir (the controlled runtime
 // config directory) and removes any previously synced skill that is no longer

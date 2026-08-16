@@ -52,19 +52,21 @@ func (m *Manager) List(ctx context.Context) (Snapshot, error) {
 	return Snapshot{Skills: skills, Errors: errs}, nil
 }
 
-// SetEnabled persists an enable/disable override for name and re-syncs the
-// runtime config so a disabled skill is no longer materialized.
+// SetEnabled persists an enable/disable override for a Codea skill and re-syncs
+// the runtime config so a disabled skill is no longer materialized. Only
+// SourceCodea skills can be managed; project/user/runtime skills are read-only
+// and are never toggled.
 func (m *Manager) SetEnabled(name string, enabled bool) error {
 	skills, _ := Discover(m.roots)
 	found := false
 	for _, s := range skills {
-		if s.Name == name {
+		if s.Name == name && s.Source == SourceCodea {
 			found = true
 			break
 		}
 	}
 	if !found {
-		return fmt.Errorf("skill %q not found", name)
+		return fmt.Errorf("codea skill %q not found", name)
 	}
 
 	overrides, err := m.store.Load()
@@ -75,14 +77,18 @@ func (m *Manager) SetEnabled(name string, enabled bool) error {
 	if err := m.store.Save(overrides); err != nil {
 		return fmt.Errorf("save skill overrides: %w", err)
 	}
-	skills = applyOverrides(skills, overrides)
-	return Sync(skills, m.targetDir)
+	return SyncEnabled(m.roots, m.store, m.targetDir)
 }
 
-// applyOverrides sets Enabled from explicit overrides, defaulting to enabled
-// for any skill without an override.
+// applyOverrides sets Enabled from explicit overrides. Overrides only ever
+// apply to SourceCodea skills: project/user/runtime skills are read-only and
+// remain available regardless of a same-named Codea override.
 func applyOverrides(skills []Skill, overrides map[string]bool) []Skill {
 	for i := range skills {
+		if skills[i].Source != SourceCodea {
+			skills[i].Enabled = true
+			continue
+		}
 		if v, ok := overrides[skills[i].Name]; ok {
 			skills[i].Enabled = v
 		} else {

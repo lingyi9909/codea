@@ -95,10 +95,15 @@ func (m *Model) handleSkillKey(msg tea.KeyMsg) tea.Cmd {
 
 // toggleSelectedSkill flips the enabled state of the skill under the cursor and
 // re-fetches the snapshot so the UI reflects the persisted + runtime-loaded
-// state rather than an optimistic local flip.
+// state rather than an optimistic local flip. Only Codea skills are toggleable;
+// project/user/runtime skills are read-only.
 func (m *Model) toggleSelectedSkill() tea.Cmd {
 	item, ok := m.skillPanel.Selected()
 	if !ok {
+		return nil
+	}
+	if item.Source != string(skill.SourceCodea) {
+		m.skillNotice = "Only Codea skills can be enabled or disabled."
 		return nil
 	}
 	m.skillNotice = ""
