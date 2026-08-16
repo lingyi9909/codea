@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -361,6 +362,14 @@ func buildEnv(config Config, username, password string) []string {
 		env = append(env,
 			"OPENCODE_DISABLE_EXTERNAL_SKILLS=1",
 			"OPENCODE_DISABLE_PROJECT_CONFIG=1",
+			// Isolate the native OpenCode user skills dir (~/.config/opencode/skills).
+			// OPENCODE_DISABLE_EXTERNAL_SKILLS does NOT disable it; only pointing
+			// XDG_CONFIG_HOME away from ~/.config does (S5/S6 spike). HOME is left
+			// untouched — ~/.claude is already disabled by OPENCODE_DISABLE_CLAUDE_CODE.
+			"XDG_CONFIG_HOME="+filepath.Join(config.ConfigDir, "xdg", "config"),
+			"XDG_DATA_HOME="+filepath.Join(config.ConfigDir, "xdg", "data"),
+			"XDG_CACHE_HOME="+filepath.Join(config.ConfigDir, "xdg", "cache"),
+			"XDG_STATE_HOME="+filepath.Join(config.ConfigDir, "xdg", "state"),
 		)
 	}
 	return env

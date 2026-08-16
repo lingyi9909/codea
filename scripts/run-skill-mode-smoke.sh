@@ -66,6 +66,13 @@ start_server() { # $1=project_dir $2=config_dir $3=home $4=mode
     if [ "$mode" = "strict" ]; then
       export OPENCODE_DISABLE_EXTERNAL_SKILLS=1
       export OPENCODE_DISABLE_PROJECT_CONFIG=1
+      # OPENCODE_DISABLE_EXTERNAL_SKILLS does not disable the native user skills
+      # dir (~/.config/opencode/skills); only redirecting XDG_CONFIG_HOME away
+      # from ~/.config isolates it (S5/S6 spike). Mirrors supervisor buildEnv.
+      export XDG_CONFIG_HOME="$config/xdg/config"
+      export XDG_DATA_HOME="$config/xdg/data"
+      export XDG_CACHE_HOME="$config/xdg/cache"
+      export XDG_STATE_HOME="$config/xdg/state"
     fi
     "$opencode_bin" serve --hostname 127.0.0.1 --port "$port"
   ) >"$run_root/opencode-$mode.log" 2>&1 &

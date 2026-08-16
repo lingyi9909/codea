@@ -256,9 +256,18 @@ func TestBuildEnvIsolation(t *testing.T) {
 	if !hasEnv(base, "OPENCODE_DISABLE_CLAUDE_CODE=1") {
 		t.Fatal("Task 1 offline lock must remain")
 	}
+	if hasEnv(base, "XDG_CONFIG_HOME=/c/xdg/config") {
+		t.Fatal("compatible mode must not redirect XDG_CONFIG_HOME")
+	}
 
 	strict := buildEnv(Config{ConfigDir: "/c", CodeaSkillsOnly: true}, "u", "p")
 	if !hasEnv(strict, "OPENCODE_DISABLE_EXTERNAL_SKILLS=1") || !hasEnv(strict, "OPENCODE_DISABLE_PROJECT_CONFIG=1") {
 		t.Fatal("strict mode must disable external + project skills")
+	}
+	if !hasEnv(strict, "XDG_CONFIG_HOME=/c/xdg/config") {
+		t.Fatal("strict mode must redirect XDG_CONFIG_HOME away from ~/.config")
+	}
+	if !hasEnv(strict, "XDG_DATA_HOME=/c/xdg/data") || !hasEnv(strict, "XDG_CACHE_HOME=/c/xdg/cache") || !hasEnv(strict, "XDG_STATE_HOME=/c/xdg/state") {
+		t.Fatal("strict mode must redirect XDG data/cache/state")
 	}
 }
