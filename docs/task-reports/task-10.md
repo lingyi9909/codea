@@ -130,3 +130,63 @@ Checkpoint: `421d763107d2a6aacd697cdef2b22e6f32039f3f`
 - verification：pass
 - Task Gate：pass
 - 进入 `awaiting_acceptance`，等待人工验收；验收前不标记 completed，不启动 Task 11。
+
+---
+
+## Remediation（2026-08-16，人工验收 C — 不通过后修复）
+
+Checkpoint：`81cadfde18abba35210aabf3da0c7cc940bcf176`
+
+人工验收确认 3 个实质问题（2 阻塞 + 1 非阻塞）。本轮范围锁死，只修这 3 项。
+
+### 修复 1（P0-1）：隔离 Codea 受控配置目录
+
+**根因**：`buildSkillManager` 在 `OPENCODE_CONFIG_DIR` 为空时把 `~/.config/opencode` 当作受控目录，`targetDir = ~/.config/opencode/skills`；`Sync()` 第一步 `RemoveAll(targetDir)` 会删掉用户真实 OpenCode skills。
+
+**修复**：新增 `codeaConfigDir()`，默认返回 Codea 专属目录 `~/.codea/runtime-config`（可 `CODEA_RUNTIME_CONFIG_DIR` 覆盖），永不用 `~/.config/opencode`。supervisor 用它做 `ConfigDir`。`~/.config/opencode/skills` 恒为只读 `SourceUser` root。`Sync` 的 `RemoveAll` 从此只可能作用于 Codea 自有目录，不会删用户文件。
+
+### 修复 2（P0-2）：冷启动初始 Sync
+
+**根因**：`run()` 先 `bootstrapRuntime` 再 `buildSkillManager`（只 `NewManager` 不 Sync）；`Sync` 只在 `SetEnabled` 里调用，冷启动不闭环。
+
+**修复**：新增 `skill.SyncEnabled(roots, store, targetDir)`（Discover → Load overrides → applyOverrides → Sync，不查 runtime），在 `run()` 中于 `bootstrapRuntime` **之前**执行，确保首次冷启动 enabled Codea skill 即真实进入 `/skill`。`Manager.SetEnabled` 复用同一 sync 路径。
+
+### 修复 3（P1-3）：非 Codea Skill 只读 + override 源作用域
+
+**根因**：`applyOverrides`/`SetEnabled`/TUI toggle 均按裸 `name` 作用于所有来源；`Sync` 只控制 `SourceCodea`，导致禁用 project/user skill 只改 UI 不改 Runtime；同名跨源还会互相污染。
+
+**修复**：
+- `applyOverrides` 只对 `SourceCodea` 生效；project/user/runtime skill 恒 `Enabled=true`（只读可用）。
+- `Manager.SetEnabled` 只接受 `SourceCodea`，否则返回「codea skill not found」。
+- TUI `toggleSelectedSkill` 对非 Codea 项只显示提示、不发出 toggle 命令。
+
+### 新增测试
+
+- `internal/skill/coldstart_test.go`：`TestSyncEnabledColdStart`（无手动 toggle，冷启动物化 enabled/不物化 disabled）、`TestSyncEnabledPreservesForeignDir`（Codea sync 不碰用户目录）。
+- `internal/skill/readonly_test.go`：`TestApplyOverridesOnlyAffectsCodea`、`TestSetEnabledRejectsNonCodea`。
+- `cmd/codea/main_test.go`：`TestCodeaConfigDirDefaultsIsolated`、`TestCodeaConfigDirHonorsOverride`、`TestSkillRootsTreatsUserOpenCodeAsReadOnly`。
+- `internal/app/skill_test.go`：`TestToggleSelectedSkillRejectsNonCodea`；原 `TestToggleSelectedSkillFlipsEnabled` 补 `SourceCodea`。
+
+### 复核 Gate
+
+| Gate | Result |
+|------|--------|
+| `GOTOOLCHAIN=local go test ./... -count=1` | PASS |
+| `GOTOOLCHAIN=local go test -race ./internal/skill/ ./internal/app/ ./cmd/codea/ -count=1` | PASS |
+| `GOTOOLCHAIN=local go vet ./...` | clean |
+| `GOTOOLCHAIN=local go build ./...` | clean |
+| `GOOS=windows GOARCH=amd64 ... go build ./cmd/codea ./cmd/parity-runner` | PASS |
+| `GOOS=darwin GOARCH=amd64 ... go build ./cmd/codea ./cmd/parity-runner` | PASS |
+| `./scripts/check-runtime-boundary.sh` | PASS（no vendor DTO leakage） |
+| `OPENCODE_BIN=... ./scripts/run-real-parity-smoke.sh` | PASS（17/17 gates，version=1.18.11） |
+| `./scripts/check-execution-state.sh` | valid |
+| `tests/execution-state/state_validator_test.sh` | valid |
+
+### 已知边界（如实记录）
+
+`reconcileLoaded` 的 `Loaded` 仍按 `name` 匹配（OpenCode `/skill` 仅返回 name + location）。多来源同名 skill 时，若 runtime 加载了其中任一，同名的几个来源可能都被标 `Loaded=true`。override 已源作用域化，但 `Loaded` 的跨源同名消歧需依赖 location 规范化，本轮未做，留待后续。
+
+### 结论
+
+- 3 项修复完成，全量 Gate 通过。
+- `Task 10` 保持 `awaiting_acceptance`，等待人工复核；复核通过前不标记 completed，不启动 Task 11。
