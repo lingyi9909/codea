@@ -79,6 +79,8 @@ Checkpoint: `a77cd96448894b515eb9ec5530659cd922b8b839`
 | `./scripts/check-execution-state.sh` | valid |
 | `tests/execution-state/state_validator_test.sh` | valid |
 
+> 原始输出留档：`docs/task-reports/task-11-gate.log`（12 项 gate 全 exit 0，离线缓存模式 `GOPROXY=off GOSUMDB=off` 规避内网 proxy.golang.org 60s 超时；module cache 已就绪，结果一致）。parity evidence 已随本次重跑刷新（17/17，timestamp 2026-08-16T06:38:07Z）。
+
 ## Task 11 Gate Checklist
 
 - [x] `SkillMode` strict/compatible 解析正确；未知值报错；空值默认 strict
