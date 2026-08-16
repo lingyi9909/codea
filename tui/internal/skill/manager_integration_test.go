@@ -31,6 +31,7 @@ func TestManagerFullChain(t *testing.T) {
 		targetDir,
 		filepath.Join(t.TempDir(), "project"),
 		rt,
+		DefaultPolicy,
 	)
 
 	// Initial list: both discovered, enabled by default, loaded from runtime.

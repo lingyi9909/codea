@@ -23,12 +23,14 @@ type Manager struct {
 	targetDir  string
 	projectDir string
 	runtime    runtime.SkillRuntime
+	policy     SkillPolicy
 }
 
 // NewManager constructs a Manager. projectDir is the project directory passed to
-// the runtime so it can resolve project-scoped skills; it may be empty.
-func NewManager(roots []Root, store Store, targetDir string, projectDir string, rt runtime.SkillRuntime) *Manager {
-	return &Manager{roots: roots, store: store, targetDir: targetDir, projectDir: projectDir, runtime: rt}
+// the runtime so it can resolve project-scoped skills; it may be empty. p is the
+// skill mode policy governing visibility and sync.
+func NewManager(roots []Root, store Store, targetDir string, projectDir string, rt runtime.SkillRuntime, p SkillPolicy) *Manager {
+	return &Manager{roots: roots, store: store, targetDir: targetDir, projectDir: projectDir, runtime: rt, policy: p}
 }
 
 // List discovers skills, applies enable/disable overrides, and reconciles the
@@ -42,6 +44,14 @@ func (m *Manager) List(ctx context.Context) (Snapshot, error) {
 		return Snapshot{}, fmt.Errorf("load skill overrides: %w", err)
 	}
 	skills = applyOverrides(skills, overrides)
+
+	skills = FilterForMode(skills, m.policy)
+
+	for _, s := range skills {
+		if err := ValidateSkill(s); err != nil {
+			errs = append(errs, err.(SkillError))
+		}
+	}
 
 	skills, err = m.reconcileLoaded(ctx, skills)
 	if err != nil {
@@ -77,7 +87,7 @@ func (m *Manager) SetEnabled(name string, enabled bool) error {
 	if err := m.store.Save(overrides); err != nil {
 		return fmt.Errorf("save skill overrides: %w", err)
 	}
-	return SyncEnabled(m.roots, m.store, m.targetDir)
+	return SyncEnabled(m.roots, m.store, m.targetDir, m.policy)
 }
 
 // applyOverrides sets Enabled from explicit overrides. Overrides only ever

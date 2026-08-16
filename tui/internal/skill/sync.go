@@ -8,17 +8,19 @@ import (
 	"sort"
 )
 
-// SyncEnabled discovers skills, applies the persisted overrides, and materializes
-// enabled Codea skills into targetDir. It is the cold-start equivalent of
-// Manager.SetEnabled's sync path and deliberately does not query the runtime, so
-// it can run before the runtime process has started.
-func SyncEnabled(roots []Root, store Store, targetDir string) error {
+// SyncEnabled discovers skills, applies the persisted overrides and the mode
+// policy, and materializes the resulting enabled Codea skills into targetDir.
+// It is the cold-start equivalent of Manager.SetEnabled's sync path and
+// deliberately does not query the runtime, so it can run before the runtime
+// process has started.
+func SyncEnabled(roots []Root, store Store, targetDir string, p SkillPolicy) error {
 	skills, _ := Discover(roots)
 	overrides, err := store.Load()
 	if err != nil {
 		return fmt.Errorf("load skill overrides: %w", err)
 	}
 	skills = applyOverrides(skills, overrides)
+	skills = FilterForMode(skills, p)
 	return Sync(skills, targetDir)
 }
 

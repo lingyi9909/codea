@@ -39,6 +39,7 @@ func TestSetEnabledRejectsNonCodea(t *testing.T) {
 		filepath.Join(t.TempDir(), "target"),
 		filepath.Join(t.TempDir(), "project"),
 		&fakeSkillRuntime{},
+		DefaultPolicy,
 	)
 	if err := m.SetEnabled("proj", false); err == nil {
 		t.Fatal("expected error when toggling a non-Codea skill")

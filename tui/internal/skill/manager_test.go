@@ -41,6 +41,7 @@ func newTestManager(t *testing.T, root string, rt runtime.SkillRuntime, override
 		filepath.Join(t.TempDir(), "target"),
 		filepath.Join(t.TempDir(), "project"),
 		rt,
+		DefaultPolicy,
 	)
 }
 
@@ -106,8 +107,9 @@ func TestManagerListAppliesOverride(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if snap.Skills[0].Enabled {
-		t.Error("override should disable git")
+	// Under strict DefaultPolicy a disabled Codea skill is filtered from the view.
+	if len(snap.Skills) != 0 {
+		t.Errorf("disabled Codea skill must be filtered from strict view: %+v", snap.Skills)
 	}
 }
 
@@ -122,13 +124,14 @@ func TestManagerSetEnabledDisablesAndSyncs(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(m.targetDir, "git")); !os.IsNotExist(err) {
 		t.Fatalf("disabled skill must not be synced: %v", err)
 	}
-	// The override must be persisted for the next List.
+	// The override must be persisted for the next List: a disabled Codea skill is
+	// filtered from the strict view, so the re-list is empty.
 	snap, err := m.List(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if snap.Skills[0].Enabled {
-		t.Error("override should persist as disabled")
+	if len(snap.Skills) != 0 {
+		t.Errorf("disabled Codea skill must be filtered from strict view: %+v", snap.Skills)
 	}
 }
 

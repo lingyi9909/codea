@@ -17,7 +17,7 @@ func TestSyncEnabledColdStart(t *testing.T) {
 	target := filepath.Join(t.TempDir(), "skills")
 	store := &memStore{m: map[string]bool{"unit-test": false}}
 
-	if err := SyncEnabled([]Root{{Dir: root, Source: SourceCodea}}, store, target); err != nil {
+	if err := SyncEnabled([]Root{{Dir: root, Source: SourceCodea}}, store, target, DefaultPolicy); err != nil {
 		t.Fatal(err)
 	}
 
@@ -41,7 +41,7 @@ func TestSyncEnabledPreservesForeignDir(t *testing.T) {
 
 	target := filepath.Join(t.TempDir(), "codea", "skills")
 
-	if err := SyncEnabled([]Root{{Dir: root, Source: SourceCodea}}, &memStore{}, target); err != nil {
+	if err := SyncEnabled([]Root{{Dir: root, Source: SourceCodea}}, &memStore{}, target, DefaultPolicy); err != nil {
 		t.Fatal(err)
 	}
 	// Disable the Codea skill and re-sync; the foreign dir must survive.
