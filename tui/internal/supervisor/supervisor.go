@@ -37,6 +37,9 @@ type Config struct {
 	ProjectRoot    string
 	StartupTimeout time.Duration
 	StopTimeout    time.Duration
+	// CodeaSkillsOnly disables the runtime's discovery of external (user) and
+	// project skills so only Codea-controlled skills load. Set for strict mode.
+	CodeaSkillsOnly bool
 }
 
 // Supervisor owns the OpenCode process lifecycle. Start/Stop/Status live here,
@@ -341,7 +344,7 @@ func buildArgs(_ Config, port int) []string {
 }
 
 func buildEnv(config Config, username, password string) []string {
-	return append(os.Environ(),
+	env := append(os.Environ(),
 		"OPENCODE_CONFIG_DIR="+config.ConfigDir,
 		"OPENCODE_SERVER_USERNAME="+username,
 		"OPENCODE_SERVER_PASSWORD="+password,
@@ -354,6 +357,13 @@ func buildEnv(config Config, username, password string) []string {
 		"OPENCODE_DISABLE_LSP_DOWNLOAD=1",
 		"OPENCODE_DISABLE_DEFAULT_PLUGINS=1",
 	)
+	if config.CodeaSkillsOnly {
+		env = append(env,
+			"OPENCODE_DISABLE_EXTERNAL_SKILLS=1",
+			"OPENCODE_DISABLE_PROJECT_CONFIG=1",
+		)
+	}
+	return env
 }
 
 // healthResponse is the supervisor-local view of GET /global/health. Kept local

@@ -238,3 +238,27 @@ func TestMarkHealthyRejectsStaleRun(t *testing.T) {
 		t.Fatalf("status = %s, want %s", got, runtime.RuntimeStarting)
 	}
 }
+
+func hasEnv(env []string, k string) bool {
+	for _, e := range env {
+		if e == k {
+			return true
+		}
+	}
+	return false
+}
+
+func TestBuildEnvIsolation(t *testing.T) {
+	base := buildEnv(Config{ConfigDir: "/c", CodeaSkillsOnly: false}, "u", "p")
+	if hasEnv(base, "OPENCODE_DISABLE_EXTERNAL_SKILLS=1") || hasEnv(base, "OPENCODE_DISABLE_PROJECT_CONFIG=1") {
+		t.Fatal("compatible mode must not disable external/project skills")
+	}
+	if !hasEnv(base, "OPENCODE_DISABLE_CLAUDE_CODE=1") {
+		t.Fatal("Task 1 offline lock must remain")
+	}
+
+	strict := buildEnv(Config{ConfigDir: "/c", CodeaSkillsOnly: true}, "u", "p")
+	if !hasEnv(strict, "OPENCODE_DISABLE_EXTERNAL_SKILLS=1") || !hasEnv(strict, "OPENCODE_DISABLE_PROJECT_CONFIG=1") {
+		t.Fatal("strict mode must disable external + project skills")
+	}
+}
