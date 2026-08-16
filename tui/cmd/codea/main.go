@@ -31,17 +31,26 @@ func main() {
 func run() error {
 	cfgDir := codeaConfigDir()
 
-	// Cold-start sync: materialize enabled Codea skills into the controlled
-	// runtime config dir BEFORE the runtime starts so they are actually loaded
-	// by OpenCode on first launch.
+	mode, err := skill.ResolveSkillMode(os.Getenv("CODEA_SKILL_MODE"))
+	if err != nil {
+		return err
+	}
+	policy := skill.SkillPolicy{
+		Mode:     mode,
+		Approved: skill.ParseApprovedSkills(os.Getenv("CODEA_APPROVED_SKILLS")),
+	}
+
+	// Cold-start sync: materialize the mode-policy-approved enabled Codea skills
+	// into the controlled runtime config dir BEFORE the runtime starts so they
+	// are actually loaded by OpenCode on first launch.
 	roots := skillRoots()
 	store := skill.NewFileStore(filepath.Join(cfgDir, "codea", "skills.json"))
 	targetDir := filepath.Join(cfgDir, "skills")
-	if err := skill.SyncEnabled(roots, store, targetDir); err != nil {
+	if err := skill.SyncEnabled(roots, store, targetDir, policy); err != nil {
 		return fmt.Errorf("sync skills: %w", err)
 	}
 
-	adapter, cleanup, err := bootstrapRuntime(cfgDir)
+	adapter, cleanup, err := bootstrapRuntime(cfgDir, mode)
 	if err != nil {
 		return err
 	}
@@ -49,7 +58,7 @@ func run() error {
 
 	projectDir, _ := os.Getwd()
 	model := app.NewModel(adapter)
-	model.SetSkillManager(skill.NewManager(roots, store, targetDir, projectDir, adapter))
+	model.SetSkillManager(skill.NewManager(roots, store, targetDir, projectDir, adapter, policy))
 	p := tea.NewProgram(model, tea.WithAltScreen())
 	if _, err := p.Run(); err != nil {
 		return fmt.Errorf("run TUI: %w", err)
@@ -62,7 +71,7 @@ func run() error {
 // supervisor's auto-generated base URL and credentials, with a cleanup func
 // that stops the process. When OPENCODE_URL is set (dev/test override), the
 // process is assumed to be managed externally and cleanup is a no-op.
-func bootstrapRuntime(cfgDir string) (adapter *opencode.OpenCodeAdapter, cleanup func(), err error) {
+func bootstrapRuntime(cfgDir string, mode skill.SkillMode) (adapter *opencode.OpenCodeAdapter, cleanup func(), err error) {
 	if baseURL := os.Getenv("OPENCODE_URL"); baseURL != "" {
 		adapter = opencode.NewOpenCodeAdapter(
 			baseURL,
@@ -72,7 +81,7 @@ func bootstrapRuntime(cfgDir string) (adapter *opencode.OpenCodeAdapter, cleanup
 		return adapter, func() {}, nil
 	}
 
-	sup := supervisor.NewSupervisor(supervisorConfig(cfgDir))
+	sup := supervisor.NewSupervisor(supervisorConfig(cfgDir, mode))
 	if err := sup.Start(context.Background()); err != nil {
 		return nil, nil, fmt.Errorf("start runtime: %w", err)
 	}
@@ -84,16 +93,17 @@ func bootstrapRuntime(cfgDir string) (adapter *opencode.OpenCodeAdapter, cleanup
 // supervisorConfig builds the supervisor config. OPENCODE_BIN selects the
 // OpenCode binary (default "opencode" on PATH); cfgDir is Codea's controlled
 // config directory, exported to OpenCode as OPENCODE_CONFIG_DIR.
-func supervisorConfig(cfgDir string) supervisor.Config {
+func supervisorConfig(cfgDir string, mode skill.SkillMode) supervisor.Config {
 	bin := os.Getenv("OPENCODE_BIN")
 	if bin == "" {
 		bin = "opencode"
 	}
 	projectRoot, _ := os.Getwd()
 	return supervisor.Config{
-		OpenCodeBin: bin,
-		ConfigDir:   cfgDir,
-		ProjectRoot: projectRoot,
+		OpenCodeBin:     bin,
+		ConfigDir:       cfgDir,
+		ProjectRoot:     projectRoot,
+		CodeaSkillsOnly: mode == skill.SkillModeStrict,
 	}
 }
 

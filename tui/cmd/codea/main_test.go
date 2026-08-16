@@ -46,7 +46,7 @@ func TestBootstrapRuntimeSupervisedChain(t *testing.T) {
 	t.Setenv("OPENCODE_URL", "") // force supervised path, not the dev override
 	t.Setenv("FAKE_OPENCODE_REQUIRE_AUTH", "1")
 
-	adapter, cleanup, err := bootstrapRuntime(t.TempDir())
+	adapter, cleanup, err := bootstrapRuntime(t.TempDir(), skill.SkillModeStrict)
 	if err != nil {
 		t.Fatalf("bootstrapRuntime: %v", err)
 	}
@@ -85,7 +85,7 @@ func TestBootstrapRuntimeStartupFailure(t *testing.T) {
 	t.Setenv("OPENCODE_URL", "")
 	t.Setenv("FAKE_OPENCODE_MODE", "exit-immediately")
 
-	adapter, cleanup, err := bootstrapRuntime(t.TempDir())
+	adapter, cleanup, err := bootstrapRuntime(t.TempDir(), skill.SkillModeStrict)
 	if err == nil {
 		if cleanup != nil {
 			cleanup()
@@ -143,5 +143,19 @@ func TestSkillRootsTreatsUserOpenCodeAsReadOnly(t *testing.T) {
 	}
 	if !found {
 		t.Fatalf("~/.config/opencode/skills missing as SourceUser root: %+v", roots)
+	}
+}
+
+// TestSupervisorConfigMapsStrictToIsolation guards the strict-by-default
+// entrypoint wiring: strict mode must enable CodeaSkillsOnly (runtime skill
+// isolation), compatible mode must not.
+func TestSupervisorConfigMapsStrictToIsolation(t *testing.T) {
+	strict := supervisorConfig(t.TempDir(), skill.SkillModeStrict)
+	if !strict.CodeaSkillsOnly {
+		t.Fatal("strict mode must set CodeaSkillsOnly")
+	}
+	compat := supervisorConfig(t.TempDir(), skill.SkillModeCompatible)
+	if compat.CodeaSkillsOnly {
+		t.Fatal("compatible mode must not set CodeaSkillsOnly")
 	}
 }
