@@ -181,6 +181,7 @@ Checkpoint：`81cadfde18abba35210aabf3da0c7cc940bcf176`
 | `OPENCODE_BIN=... ./scripts/run-real-parity-smoke.sh` | PASS（17/17 gates，version=1.18.11） |
 | `./scripts/check-execution-state.sh` | valid |
 | `tests/execution-state/state_validator_test.sh` | valid |
+| `OPENCODE_BIN=... ./scripts/run-skill-native-smoke.sh` | PASS（/skill 返回 codea-smoke + native-user-skill + customize-opencode，证明 isolated config 不屏蔽原生 User Skill） |
 
 ### 已知边界（如实记录）
 
@@ -189,4 +190,5 @@ Checkpoint：`81cadfde18abba35210aabf3da0c7cc940bcf176`
 ### 结论
 
 - 3 项修复完成，全量 Gate 通过。
+- 新增 `run-skill-native-smoke.sh`：真实 OpenCode 1.18.11 下，isolated `OPENCODE_CONFIG_DIR` 仍加载原生 User Skill（/skill 同时返回 codea-smoke 与 native-user-skill），Native 不退化获得真实 Runtime 证据。
 - `Task 10` 保持 `awaiting_acceptance`，等待人工复核；复核通过前不标记 completed，不启动 Task 11。
