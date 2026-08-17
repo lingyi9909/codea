@@ -2,7 +2,7 @@
 
 ## Overview
 
-Checkpoint: `ef8207576f9c3aaf328d8436e01f6a619c58559d`
+Checkpoint: `9cbd5e64b04b82e494119a08d89376f202f8327f`
 
 建立 `distribution/plugins/` Plugin 工程骨架（TypeScript + Bun + 自包含 ESM bundle，非 npm+esbuild），并实现安全基础：Command Policy（风险分级）、4 层 DLP、路径策略（canonicalize/realpath）、Permissions（General 与 3 个企业 Agent 分离）、Dify 熔断器、审计日志、Runtime Security Guard。
 
@@ -118,3 +118,15 @@ Task 12/13 按连续 Batch 执行，不修改 execution-state validator（保持
 - verification：pass（Task 12 独立 Gate 全绿）
 - Task Gate：pass
 - 状态：`awaiting_acceptance`（Batch Exception，随 Task 13 一起提交 Batch Human Review）
+
+## 验收整改（Batch 12-13 Remediation）
+
+Checkpoint：`9cbd5e64b04b82e494119a08d89376f202f8327f`（整改后全量 Gate 复跑证据）
+
+人工验收指出的安全整改，本 Task 侧（Command Policy / Runtime Security Guard）修复：
+
+1. **Safe Command 不得跳过 DLP/path**：`runtime-security-guard.ts` 的 `before()` 去掉「RiskSafe 早退」，safe command 现在仍进入 DLP input 扫描（command 字符串 + tool input 合并扫描），携带 secret 的 `grep password=...` 会命中 `dlp-blocked`。
+2. **参数级安全控制**：`command-policy.ts` 新增 `findDangerousGitOption()`（`-c/--config/--config-env/-C/--directory/--git-dir/--work-tree/--output/--upload-pack/--receive-pack/--pager/--exec-path` → deny，阻止只读 git 升级为代码执行/目录逃逸/写文件）与 `findSensitivePath()`（绝对路径/`~`/Windows drive/`..` traversal/`.env`/`.ssh`/`.aws`/`.gnupg`/ssh-key/credentials 文件 → deny）。`git -c core.pager=sh log` 与 `cat .env` 不再读作 safe。
+3. **负向测试**：新增 12 个 CommandPolicy 用例 + 2 个 Guard 用例（safe command 带敏感路径 → deny、safe command 带 secret → DLP-block）。
+
+整改后 Gate 复跑（Task 12 侧）：`bun test` 178 pass（原 155）、`bun run build` 61.84 KB、`./scripts/check-plugin-bundle.sh` PASS、`./scripts/run-plugin-smoke.sh` PASS、`GOTOOLCHAIN=local go test ./... -count=1` 22 packages PASS、`-race` PASS、`go vet` clean、`go build` PASS、Windows/darwin 交叉编译 PASS、`./scripts/check-runtime-boundary.sh` PASS、`OPENCODE_BIN=<abs> ./scripts/run-real-parity-smoke.sh` 17/17 PASS（v1.18.11）。

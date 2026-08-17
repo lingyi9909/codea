@@ -2,7 +2,7 @@
 
 ## Overview
 
-Checkpoint: `68f49e9bbc6008d860a83d8a0ad378f88e2338d9`
+Checkpoint: `9cbd5e64b04b82e494119a08d89376f202f8327f`
 
 在 Task 12 的 Plugin 工程与安全基础之上，实现 7 个企业 Custom Tool（代码审查上下文收集 / 测试工程分析 / 测试文件写入 / 测试运行 / API 规范提取 / API 示例校验 / 文档写入），并建立统一 Tool 基础设施（ToolContext / ToolError / ToolResult / 9 类错误分类 / JSON Schema 校验 / 受控 exec / 受控文件系统），配真实 java-maven fixture 与 E2E（3 流程），每个 write/exec tool 配安全负向 Gate。
 
@@ -136,3 +136,17 @@ Task 12/13 按连续 Batch 执行，不修改 execution-state validator（保持
 - Task Gate：pass
 - 真实 OpenCode parity：17/17 PASS（v1.18.11）
 - 状态：`pending`（Batch Exception，随 Task 12 一起提交人工 Review）
+
+## 验收整改（Batch 12-13 Remediation）
+
+Checkpoint：`9cbd5e64b04b82e494119a08d89376f202f8327f`（整改后全量 Gate 复跑证据）
+
+人工验收指出的安全整改，本 Task 侧（7 个 Custom Tool）修复：
+
+1. **write_test_file 删除调用方可控 testRoots**：移除 `WriteTestFileInput.testRoots` 与 SCHEMA 字段；test roots 一律来自 `analyze_test_project` 的 `detectTestRoots(ctx.projectRoot)`（detectTestRoots 改为 export）。无 test roots → `NOT_SUPPORTED`。新增 2 个负向测试（caller testRoots → INVALID_INPUT、无 test roots → NOT_SUPPORTED）。
+2. **write_document 删除调用方可控 docsRoot**：移除 `WriteDocumentInput.docsRoot`；allowedRoots 固定为 `DEFAULT_DOCS_ROOTS`（docs/doc/api-docs）。新增 1 个负向测试。
+3. **run_project_test 删除 extraArgs**：移除 `extraArgs` 字段、`EXTRA_ARG_FORBIDDEN` 与 build 注入，禁止 Maven/Gradle 扩展机制绕过受控测试执行。原 2 个 extraArgs 注入测试改为断言 `INVALID_INPUT`。
+4. **collect_review_context ref validation / option-injection 防护**：新增 `validateRef()`（`GIT_REF_RE` 首字符必须字母数字、拒绝 `..`/`@{`/元字符），对 baseBranch/commit/rangeFrom/rangeTo 校验。新增 4 个负向测试（`--output`、`--upload-pack`、`--git-dir`、shell 元字符 → INVALID_INPUT）。
+5. **Real Maven Integration Smoke**：新增 `scripts/run-real-maven-smoke.sh`，拷贝 fixture 到临时目录、删除 mvnw stub、`mvn -B test` 真实编译执行 JUnit，断言 `BUILD SUCCESS` + `Tests run: N, Failures: 0, Errors: 0, Skipped: 0`。fixture 补 `spring-boot-starter-validation` 依赖 + jakarta.validation imports（@NotBlank/@Email/@Min/@Max）使真实 Maven 编译通过。
+
+整改后 Gate 复跑（Task 13 侧）：`bun test` 178 pass（原 155）、`bun run build` 61.84 KB、`./scripts/check-plugin-bundle.sh` PASS、`./scripts/run-plugin-smoke.sh` PASS、`./scripts/run-real-maven-smoke.sh` PASS（fixture 真实编译运行绿）、`GOTOOLCHAIN=local go test ./... -count=1` 22 packages PASS、`-race` PASS、`go vet` clean、`go build` PASS、Windows/darwin 交叉编译 PASS、`./scripts/check-runtime-boundary.sh` PASS、`OPENCODE_BIN=<abs> ./scripts/run-real-parity-smoke.sh` 17/17 PASS（v1.18.11）。
