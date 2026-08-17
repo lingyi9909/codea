@@ -120,6 +120,18 @@ export class RuntimeSecurityGuard {
     this.audit.log(entry);
   }
 
+  // Applies output DLP to tool output before it is returned to the model.
+  // Layer-1 secrets (block action) cause the whole output to be blocked; ordinary
+  // sensitive values (paths, credentials) are redacted in place.
+  guardOutput(output: unknown): { output: string; blocked: boolean; rule?: string } {
+    const dlp = scanDlp(stringify(output), "tool-output");
+    if (!dlp.allowed) {
+      const rule = dlp.findings[0]?.rule ?? "secret";
+      return { output: `[DLP blocked output: ${rule}]`, blocked: true, rule };
+    }
+    return { output: dlp.redacted, blocked: false };
+  }
+
   private auditDeny(input: BeforeInput, reason: string): void {
     const entry: AuditEntry = {
       timestamp: new Date().toISOString(),

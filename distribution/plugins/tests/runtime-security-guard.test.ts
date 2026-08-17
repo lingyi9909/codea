@@ -95,3 +95,27 @@ describe("RuntimeSecurityGuard.after — audit", () => {
     expect(entry.duration).toBe(5);
   });
 });
+
+describe("RuntimeSecurityGuard.guardOutput — output DLP", () => {
+  test("blocks output carrying a layer-1 secret", () => {
+    const { g } = guard();
+    const r = g.guardOutput({ result: "ok", token: "Authorization: Bearer abc123xyz" });
+    expect(r.blocked).toBe(true);
+    expect(r.output).toContain("DLP blocked");
+  });
+
+  test("redacts sensitive paths but allows the output", () => {
+    const { g } = guard();
+    const r = g.guardOutput("reading /home/user/.env");
+    expect(r.blocked).toBe(false);
+    expect(r.output).not.toContain(".env");
+    expect(r.output).toContain("[REDACTED");
+  });
+
+  test("passes through clean output unchanged", () => {
+    const { g } = guard();
+    const r = g.guardOutput("build succeeded: 3 tests passed");
+    expect(r.blocked).toBe(false);
+    expect(r.output).toBe("build succeeded: 3 tests passed");
+  });
+});

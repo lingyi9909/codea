@@ -110,6 +110,16 @@ function findDangerousGitOption(tokens: readonly string[]): string | null {
   return null;
 }
 
+// Detects dynamic shell expansion in an otherwise-safe command: globs, character
+// classes and variable references can expand to a sensitive path at runtime
+// (e.g. `cat .e*` -> `.env`, `cat $SECRET_FILE`) that static path scanning cannot
+// see. Such commands are downgraded to ask rather than whitelisted safe.
+function hasDynamicExpansion(command: string): boolean {
+  if (/[\*\?\[]/.test(command)) return true;
+  if (/\$\{?[A-Za-z_][A-Za-z0-9_]*/.test(command)) return true;
+  return false;
+}
+
 // Detects sensitive-path arguments on a read-only command: absolute paths escape
 // the project root, and dotfiles/credential/ssh-key paths are an exfil target.
 function findSensitivePath(command: string): string | null {
@@ -174,6 +184,10 @@ export function analyzeCommand(input: string): CommandAnalysis {
       if (sensitivePath) {
         analysis.risk = RiskDeny;
         analysis.matchedRule = `sensitive-path:${sensitivePath}`;
+        return analysis;
+      }
+      if (hasDynamicExpansion(command)) {
+        analysis.risk = RiskAsk;
         return analysis;
       }
       analysis.risk = RiskSafe;

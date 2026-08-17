@@ -3,8 +3,13 @@ set -euo pipefail
 
 # run-plugin-smoke.sh
 #
-# Builds the plugin bundle then loads it and exercises the security foundation
-# (guard + audit + Dify degradation) with zero public-network activity.
+# Builds the plugin bundle then exercises it with zero public-network activity:
+#   - bundle-smoke.ts: guard + audit + Dify degradation on the built bundle
+#   - plugin-smoke.ts: the OpenCode plugin adapter — loads the bundle's DEFAULT
+#     export (the readV1Plugin contract), invokes server() to obtain Hooks.tool
+#     (the fromPlugin contract), and drives all 8 tools (7 enterprise + dify-query)
+#     through the guard: path deny, DLP input deny, write permission ask, output
+#     DLP block, and Dify degradation.
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PLUGIN_DIR="$SCRIPT_DIR/../distribution/plugins"
@@ -21,3 +26,4 @@ fi
 cd "$PLUGIN_DIR"
 bun run build
 bun run tests/bundle-smoke.ts
+bun run tests/plugin-smoke.ts

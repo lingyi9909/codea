@@ -49,12 +49,23 @@ const SCHEMA: JsonSchema = {
   additionalProperties: false,
 };
 
-function buildCommand(input: RunProjectTestInput, root: string): string[] {
+const WRAPPERS: Record<"maven" | "gradle", string[]> = {
+  maven: ["mvnw", "mvnw.cmd"],
+  gradle: ["gradlew", "gradlew.bat"],
+};
+
+function detectWrapper(root: string, buildSystem: "maven" | "gradle"): string | null {
+  for (const name of WRAPPERS[buildSystem]) {
+    if (fileExists(root, name)) return name;
+  }
+  return null;
+}
+
+export function buildCommand(input: RunProjectTestInput, root: string): string[] {
   const isMaven = input.buildSystem === "maven";
-  const wrapper = isMaven ? "mvnw" : "gradlew";
   const bare = isMaven ? "mvn" : "gradle";
-  const hasWrapper = fileExists(root, wrapper);
-  const base = hasWrapper ? `./${wrapper}` : bare;
+  const wrapper = detectWrapper(root, isMaven ? "maven" : "gradle");
+  const base = wrapper ? `./${wrapper}` : bare;
 
   const argv: string[] = [base];
 

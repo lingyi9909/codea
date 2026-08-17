@@ -42,9 +42,10 @@ describe("validateExample", () => {
     expect(r.errors.some((e) => e.includes('"name"'))).toBe(true);
   });
 
-  test("flags an unknown field as a warning", () => {
+  test("rejects an unknown field (not a warning)", () => {
     const r = validateExample({ example: { name: "A", age: 30, hack: true }, spec: SPEC, endpointIndex: 0 });
-    expect(r.warnings.some((w) => w.includes('"hack"'))).toBe(true);
+    expect(r.valid).toBe(false);
+    expect(r.errors.some((e) => e.includes('"hack"'))).toBe(true);
   });
 
   test("rejects an out-of-enum value", () => {

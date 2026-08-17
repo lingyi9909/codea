@@ -150,3 +150,17 @@ Checkpoint：`9cbd5e64b04b82e494119a08d89376f202f8327f`（整改后全量 Gate �
 5. **Real Maven Integration Smoke**：新增 `scripts/run-real-maven-smoke.sh`，拷贝 fixture 到临时目录、删除 mvnw stub、`mvn -B test` 真实编译执行 JUnit，断言 `BUILD SUCCESS` + `Tests run: N, Failures: 0, Errors: 0, Skipped: 0`。fixture 补 `spring-boot-starter-validation` 依赖 + jakarta.validation imports（@NotBlank/@Email/@Min/@Max）使真实 Maven 编译通过。
 
 整改后 Gate 复跑（Task 13 侧）：`bun test` 178 pass（原 155）、`bun run build` 61.84 KB、`./scripts/check-plugin-bundle.sh` PASS、`./scripts/run-plugin-smoke.sh` PASS、`./scripts/run-real-maven-smoke.sh` PASS（fixture 真实编译运行绿）、`GOTOOLCHAIN=local go test ./... -count=1` 22 packages PASS、`-race` PASS、`go vet` clean、`go build` PASS、Windows/darwin 交叉编译 PASS、`./scripts/check-runtime-boundary.sh` PASS、`OPENCODE_BIN=<abs> ./scripts/run-real-parity-smoke.sh` 17/17 PASS（v1.18.11）。
+
+## 验收整改（Round 2 — 4 个 Tool 修复 + 真实 OpenCode Plugin 注册）
+
+人工二次验收指出的 Blocking 项，本 Task 侧（Custom Tool）修复：
+
+1. **unknown API example field → invalid（非 warning）**：`validate-api-example.ts` 对 `example` 中不存在于提取 DTO 的字段由 warning 改为 `unknown field "..." (not in extracted DTO)` error，杜绝「无中生有」的字段通过校验。
+2. **Windows wrapper 支持**：`run-project-test.ts` 新增 `WRAPPERS`（maven: `mvnw`/`mvnw.cmd`；gradle: `gradlew`/`gradlew.bat`）+ `detectWrapper()`，`buildCommand()` 优先使用平台正确 wrapper，`.cmd`/`.bat` 在 Windows 下可执行。
+3. **API endpoint path 合并 class basePath**：`extract-api-spec.ts` 新增 `joinPaths(basePath, endpointPath)`，`/api/users` + `/{id}` → `/api/users/{id}`；`execute()` 对每个 endpoint 应用合并后的 path。
+4. **package-aware DTO 查找 + params 逗号解析（泛型）+ method-scoped 错误码**：`extract-api-spec.ts` 新增 `findJavaFileByImport()`（按 import 的 package 路径 + 类名在项目内定位 DTO）、`splitTopLevel()`（按 `<`/`>` 深度拆分逗号，正确处理 `Map<String, List<Foo>>` 泛型）、`balancedBlock()`（提取方法体）。错误码拆分 DECLARED（`@ExceptionHandler`/`@ResponseStatus`，全类）与 REFERENCED（`throw new XxxException`，方法体 scope）。
+5. **test root 标准布局安全推导**：`analyze-test-project.ts` 的 `detectTestRoots()` 在物理存在的 test root 之外，对 Maven/Gradle 项目按标准布局（`src/test/java`，gradle 追加 `src/test/kotlin`）推导，未测试过的工程也有约定目标。
+
+OpenCode Plugin Adapter（跨 Task 12/13）注册上述 7 个 tool + dify-query，见 Task 12 Round 2。
+
+Round 2 Gate 复跑（Task 13 侧）：`bun test` 201 pass、`bun run build` 0.52 MB、`./scripts/check-plugin-bundle.sh` PASS、`./scripts/run-plugin-smoke.sh` PASS、`./scripts/run-real-maven-smoke.sh` PASS、`OPENCODE_BIN=<abs> ./scripts/run-real-plugin-smoke.sh` PASS、`OPENCODE_BIN=<abs> ./scripts/run-real-parity-smoke.sh` 17/17 PASS（v1.18.11）、`GOTOOLCHAIN=local go test ./... -count=1` 22 packages PASS、`-race` PASS、`go vet` clean、`go build` PASS、Windows/darwin 交叉编译 PASS、`./scripts/check-runtime-boundary.sh` PASS、`./scripts/check-execution-state.sh` valid。

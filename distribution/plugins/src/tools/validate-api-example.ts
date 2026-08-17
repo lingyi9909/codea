@@ -69,10 +69,11 @@ export function validateExample(input: ValidateExampleInput): ValidationResult {
 
   const fieldByName = new Map(dto.fields.map((f) => [f.name, f]));
 
-  // unknown fields
+  // unknown fields: a field not present in the extracted DTO is a fabrication
+  // against the spec, so it is an error, not a warning.
   for (const key of Object.keys(exampleObj)) {
     if (!fieldByName.has(key)) {
-      warnings.push(`unknown field "${key}" (not in extracted DTO)`);
+      errors.push(`unknown field "${key}" (not in extracted DTO)`);
     }
   }
 

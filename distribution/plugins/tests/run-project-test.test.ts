@@ -1,9 +1,39 @@
 import { describe, expect, test } from "bun:test";
+import * as fs from "node:fs";
 import * as path from "node:path";
-import { parseTestSummary, runProjectTestTool } from "../src/tools/run-project-test";
+import { parseTestSummary, runProjectTestTool, buildCommand } from "../src/tools/run-project-test";
 import { makeTempRoot, makeContext } from "./helpers";
 
 const FIXTURE = path.resolve(import.meta.dir, "../../../tui/tests/e2e/fixtures/java-maven-project");
+
+describe("buildCommand — wrapper detection", () => {
+  test("prefers the unix wrapper when present", () => {
+    const root = makeTempRoot("codea-wrapper-");
+    fs.writeFileSync(path.join(root, "mvnw"), "#!/bin/sh\n");
+    const argv = buildCommand({ buildSystem: "maven" }, root);
+    expect(argv[0]).toBe("./mvnw");
+  });
+
+  test("falls back to mvnw.cmd on Windows-only projects", () => {
+    const root = makeTempRoot("codea-wrapper-");
+    fs.writeFileSync(path.join(root, "mvnw.cmd"), "@echo off\n");
+    const argv = buildCommand({ buildSystem: "maven" }, root);
+    expect(argv[0]).toBe("./mvnw.cmd");
+  });
+
+  test("falls back to gradlew.bat on Windows-only gradle projects", () => {
+    const root = makeTempRoot("codea-wrapper-");
+    fs.writeFileSync(path.join(root, "gradlew.bat"), "@echo off\n");
+    const argv = buildCommand({ buildSystem: "gradle" }, root);
+    expect(argv[0]).toBe("./gradlew.bat");
+  });
+
+  test("falls back to bare mvn when no wrapper exists", () => {
+    const root = makeTempRoot("codea-wrapper-");
+    const argv = buildCommand({ buildSystem: "maven" }, root);
+    expect(argv[0]).toBe("mvn");
+  });
+});
 
 describe("parseTestSummary", () => {
   test("parses surefire summary", () => {

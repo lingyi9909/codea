@@ -130,3 +130,15 @@ Checkpoint：`9cbd5e64b04b82e494119a08d89376f202f8327f`（整改后全量 Gate �
 3. **负向测试**：新增 12 个 CommandPolicy 用例 + 2 个 Guard 用例（safe command 带敏感路径 → deny、safe command 带 secret → DLP-block）。
 
 整改后 Gate 复跑（Task 12 侧）：`bun test` 178 pass（原 155）、`bun run build` 61.84 KB、`./scripts/check-plugin-bundle.sh` PASS、`./scripts/run-plugin-smoke.sh` PASS、`GOTOOLCHAIN=local go test ./... -count=1` 22 packages PASS、`-race` PASS、`go vet` clean、`go build` PASS、Windows/darwin 交叉编译 PASS、`./scripts/check-runtime-boundary.sh` PASS、`OPENCODE_BIN=<abs> ./scripts/run-real-parity-smoke.sh` 17/17 PASS（v1.18.11）。
+
+## 验收整改（Round 2 — OpenCode Plugin Adapter + 输出 DLP 生效 + 动态 shell 降级）
+
+人工二次验收指出的 Blocking 项，本 Task 侧修复：
+
+1. **OpenCode v1.18.11 Plugin Adapter/Entry**：新增 `src/opencode/types.ts`（OpenCode Plugin SDK 契约的 type-only 镜像）与 `src/opencode/entry.ts`（真正 default-export `{id: "codea-enterprise", server}`）。`server(input)` 返回 `Hooks.tool`：注册 7 个企业 Custom Tool（Task 13）+ `dify-query`，把 OpenCode `ToolContext`（`sessionID/agent/directory/ask`）映射为 Codea `ToolContext`，并挂 Guard：`guard.before` deny → throw 中止；write/execute action → `ctx.ask` 进入 permission 流程；`guard.guardOutput` 作用于返回给模型的输出。`src/index.ts` 增加 `export { plugin, plugin as default }`。args 使用真实 zod schema（与 OpenCode 锁定的 zod 4.1.8 一致），保证 `fromPlugin` 走 `zodJsonSchema` 得到正确的 required/optional。
+2. **输出 DLP 真正作用于返回模型的数据**：`runtime-security-guard.ts` 新增 `guardOutput(output)`，返回 `{output, blocked, rule}`；adapter 在每个 tool 执行后对序列化结果调用 `guardOutput`，layer-1 secret 整体 block、普通敏感值原地 redact，并以 `dlpBlocked/dlpRule` metadata 透传。
+3. **safe command 动态 shell 表达式降级 ask**：`command-policy.ts` 新增 `hasDynamicExpansion()`（`* ? [ ]` glob、`$VAR`/`${VAR}` 变量展开），白名单命中后仍检测到动态展开则降级 `ask`，避免只读命令经 glob/变量升级为任意执行。
+
+新增 Real OpenCode Plugin Smoke：`tests/plugin-smoke.ts` 加载 bundle 的 default export（`readV1Plugin` 契约）→ 调用 `server()` 得到 `Hooks.tool`（`fromPlugin` 契约）→ 驱动 8 个 tool 走完整 Guard 链（path deny / DLP input deny / write permission ask / output DLP block / dify degraded，零公网）。`scripts/run-real-plugin-smoke.sh` 额外用真实 `opencode serve`（v1.18.11）注册插件并断言 health。
+
+Round 2 Gate 复跑（Task 12 侧）：`bun test` 201 pass、`bun run build` 0.52 MB（zod 内联）、`./scripts/check-plugin-bundle.sh` PASS、`./scripts/run-plugin-smoke.sh` PASS、`OPENCODE_BIN=<abs> ./scripts/run-real-plugin-smoke.sh` PASS、`OPENCODE_BIN=<abs> ./scripts/run-real-parity-smoke.sh` 17/17 PASS（v1.18.11）、`GOTOOLCHAIN=local go test ./... -count=1` 22 packages PASS、`-race` PASS、`go vet` clean、`go build` PASS、Windows/darwin 交叉编译 PASS、`./scripts/check-runtime-boundary.sh` PASS、`./scripts/check-execution-state.sh` valid。

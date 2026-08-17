@@ -53,9 +53,17 @@ function detectTestFramework(root: string, buildSystem: BuildSystem): { framewor
 
 export function detectTestRoots(root: string): string[] {
   const roots: string[] = [];
+  // Always include physically-present test roots (existing behaviour).
   if (fileExists(root, "src/test/java")) roots.push("src/test/java");
   if (fileExists(root, "src/test/kotlin")) roots.push("src/test/kotlin");
   if (fileExists(root, "src/test/groovy")) roots.push("src/test/groovy");
+  // Derive from standard layout for never-tested Maven/Gradle projects, so a
+  // project with no test directory yet still has a conventional target.
+  const buildSystem = detectBuildSystem(root);
+  if (buildSystem === "maven" || buildSystem === "gradle") {
+    if (!roots.includes("src/test/java")) roots.push("src/test/java");
+    if (buildSystem === "gradle" && !roots.includes("src/test/kotlin")) roots.push("src/test/kotlin");
+  }
   return roots;
 }
 

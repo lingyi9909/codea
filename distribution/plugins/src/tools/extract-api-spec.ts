@@ -79,6 +79,52 @@ function extractStringArg(annotation: string): string | undefined {
   return m?.[1];
 }
 
+// Merge a class-level base path with an endpoint path: "/api/users" + "/{id}"
+// -> "/api/users/{id}". Empty endpoint paths inherit the base path.
+export function joinPaths(basePath: string, endpointPath: string): string {
+  const base = basePath || "";
+  const endpoint = endpointPath || "";
+  if (!base) return endpoint || "/";
+  if (!endpoint || endpoint === "/") return base;
+  const b = base.endsWith("/") ? base.slice(0, -1) : base;
+  const e = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
+  return `${b}${e}`;
+}
+
+// Split on commas at the top level only, so generic type arguments such as
+// `Map<String, Object>` do not break the parameter list.
+function splitTopLevel(text: string): string[] {
+  const parts: string[] = [];
+  let depth = 0;
+  let current = "";
+  for (const ch of text) {
+    if (ch === "<") depth += 1;
+    else if (ch === ">") depth = Math.max(0, depth - 1);
+    if (ch === "," && depth === 0) {
+      parts.push(current);
+      current = "";
+    } else {
+      current += ch;
+    }
+  }
+  if (current.trim()) parts.push(current);
+  return parts;
+}
+
+// Returns the balanced `{ ... }` block starting at openIndex.
+function balancedBlock(source: string, openIndex: number): string {
+  let depth = 0;
+  for (let i = openIndex; i < source.length; i++) {
+    const ch = source[i];
+    if (ch === "{") depth += 1;
+    else if (ch === "}") {
+      depth -= 1;
+      if (depth === 0) return source.slice(openIndex, i + 1);
+    }
+  }
+  return source.slice(openIndex);
+}
+
 function extractValidation(block: string): string[] {
   const out: string[] = [];
   if (/@NotNull\b/.test(block)) out.push("@NotNull");
@@ -152,7 +198,11 @@ export function parseEndpoints(source: string): ApiEndpoint[] {
     const bodyParam = parameters.find((p) => p.location === "body");
     const requestBody = bodyParam ? { type: bodyParam.type, fields: [] as FieldInfo[] } : undefined;
 
-    const errorCodes = collectErrorCodes(rest);
+    // Error codes: declared handlers are class-level, referenced throws are
+    // scoped to this method's body only (never the remainder of the file).
+    const openBrace = sigMatch.index + sigMatch[0].lastIndexOf("{");
+    const methodBody = balancedBlock(rest, openBrace);
+    const errorCodes = collectErrorCodes(source, methodBody);
 
     endpoints.push({
       method,
@@ -172,8 +222,9 @@ function parseParameters(paramsText: string): ApiParameter[] {
   if (!paramsText.trim()) return [];
   const parameters: ApiParameter[] = [];
 
-  // Split on top-level commas (V1 fixture has simple, non-generic params).
-  const parts = paramsText.split(",");
+  // Split on top-level commas only, so generic type arguments (Map<String,Object>)
+  // are not treated as parameter separators.
+  const parts = splitTopLevel(paramsText);
   for (const part of parts) {
     const p = part.trim();
     if (!p) continue;
@@ -205,19 +256,23 @@ function parseParameters(paramsText: string): ApiParameter[] {
   return parameters;
 }
 
-function collectErrorCodes(methodBody: string): ApiErrorCode[] {
+function collectErrorCodes(classSource: string, methodBody: string): ApiErrorCode[] {
   const codes: ApiErrorCode[] = [];
 
+  // DECLARED error handlers are class-level (@ExceptionHandler/@ResponseStatus)
+  // and apply to every endpoint, regardless of their position in the file.
   const declaredRe = /@ExceptionHandler\s*\(\s*(\w+)\.class\s*\)/g;
   let m: RegExpExecArray | null;
-  while ((m = declaredRe.exec(methodBody)) !== null) {
+  while ((m = declaredRe.exec(classSource)) !== null) {
     codes.push({ code: m[1] ?? "", status: "", source: "DECLARED" });
   }
   const statusRe = /@ResponseStatus\s*\(\s*(?:code\s*=\s*)?(?:HttpStatus\.)?(\w+)\s*\)/g;
-  while ((m = statusRe.exec(methodBody)) !== null) {
+  while ((m = statusRe.exec(classSource)) !== null) {
     codes.push({ code: m[1] ?? "", status: m[1] ?? "", source: "DECLARED" });
   }
 
+  // REFERENCED error codes come from `throw new XxxException` and are scoped to
+  // the method body, so a throw in one endpoint never leaks into another.
   const throwRe = /throw\s+new\s+(\w+Exception)\s*\(/g;
   while ((m = throwRe.exec(methodBody)) !== null) {
     codes.push({ code: m[1] ?? "", status: "", source: "REFERENCED" });
@@ -291,6 +346,20 @@ function findJavaFile(root: string, className: string): string | null {
   return null;
 }
 
+// Package-aware lookup: resolve the import's package path to a source directory
+// so two classes sharing a name in different packages are disambiguated.
+function findJavaFileByImport(root: string, imp: ImportInfo): string | null {
+  const candidates = ["src/main/java", "src/test/java", "src/main/kotlin"];
+  const pkgSegments = imp.packagePath ? imp.packagePath.split(".") : [];
+  if (pkgSegments.length > 0) {
+    for (const base of candidates) {
+      const abs = path.join(root, base, ...pkgSegments, `${imp.className}.java`);
+      if (fs.existsSync(abs)) return abs;
+    }
+  }
+  return findJavaFile(root, imp.className);
+}
+
 function findInDir(dir: string, className: string): string | null {
   if (!fs.existsSync(dir)) return null;
   const direct = path.join(dir, `${className}.java`);
@@ -321,14 +390,14 @@ export const extractApiSpecTool = {
       const source = fs.readFileSync(abs, "utf8");
 
       const { controllerName, basePath } = parseClassInfo(source);
-      const endpoints = parseEndpoints(source);
+      const endpoints = parseEndpoints(source).map((ep) => ({ ...ep, path: joinPaths(basePath, ep.path) }));
       const imports = extractImports(source);
 
       const dtos: Record<string, { fields: FieldInfo[] }> = {};
       const enums: Record<string, { values: string[] }> = {};
 
       for (const imp of imports) {
-        const file = findJavaFile(ctx.projectRoot, imp.className);
+        const file = findJavaFileByImport(ctx.projectRoot, imp);
         if (!file) continue;
         const rel = path.relative(ctx.projectRoot, file).replace(/\\/g, "/");
         const src = fs.readFileSync(file, "utf8");

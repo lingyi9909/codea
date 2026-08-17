@@ -22,3 +22,9 @@ export * from "./tools/run-project-test";
 export * from "./tools/extract-api-spec";
 export * from "./tools/validate-api-example";
 export * from "./tools/write-document";
+
+// OpenCode v1.18.11 plugin adapter — the default export is what OpenCode loads
+// when this bundle is registered as a file plugin. It registers the 7 enterprise
+// custom tools plus dify-query, and wires RuntimeSecurityGuard into the before/
+// output paths.
+export { plugin, plugin as default } from "./opencode/entry";

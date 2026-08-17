@@ -102,6 +102,24 @@ describe("analyzeCommand — argument-level: sensitive paths -> deny", () => {
   }
 });
 
+describe("analyzeCommand — dynamic expansion -> ask (glob/variable bypass)", () => {
+  const cases = [
+    "cat .e?v",
+    "cat .e*",
+    "cat $SECRET_FILE",
+    "cat ${SECRET_FILE}",
+    "ls *.java",
+    "grep foo *",
+    "head [a-z]*.txt",
+  ];
+  for (const cmd of cases) {
+    test(`${cmd} -> ask`, () => {
+      const a = analyzeCommand(cmd);
+      expect(a.risk).toBe("ask");
+    });
+  }
+});
+
 describe("analyzeCommand — argument-level: dangerous git options -> deny", () => {
   const cases: [string, string][] = [
     ["git -c core.pager=sh log", "git-option:-c/--config"],
