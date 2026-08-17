@@ -51,7 +51,7 @@ function detectTestFramework(root: string, buildSystem: BuildSystem): { framewor
   return { framework, dependencies };
 }
 
-function detectTestRoots(root: string): string[] {
+export function detectTestRoots(root: string): string[] {
   const roots: string[] = [];
   if (fileExists(root, "src/test/java")) roots.push("src/test/java");
   if (fileExists(root, "src/test/kotlin")) roots.push("src/test/kotlin");

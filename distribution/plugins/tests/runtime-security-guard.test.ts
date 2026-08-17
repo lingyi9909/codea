@@ -56,6 +56,18 @@ describe("RuntimeSecurityGuard.before — command policy", () => {
     const r = g.before({ ...base(), action: "execute", tool: "bash", command: "mystery-tool" });
     expect(r.decision).toBe("ask");
   });
+  test("safe command with sensitive path arg is denied (not allowed)", () => {
+    const { g } = guard();
+    const r = g.before({ ...base(), action: "execute", tool: "bash", command: "cat .env" });
+    expect(r.decision).toBe("deny");
+    expect(r.reason ?? "").toContain("command-denied");
+  });
+  test("safe command carrying a secret is DLP-blocked (does not skip DLP)", () => {
+    const { g } = guard();
+    const r = g.before({ ...base(), action: "execute", tool: "bash", command: "grep password=hunter2 file.txt" });
+    expect(r.decision).toBe("deny");
+    expect(r.reason ?? "").toContain("dlp-blocked");
+  });
 });
 
 describe("RuntimeSecurityGuard.before — DLP input", () => {

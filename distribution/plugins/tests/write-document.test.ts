@@ -57,4 +57,11 @@ describe("writeDocumentTool.execute", () => {
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error.category).toBe("INVALID_INPUT");
   });
+
+  test("rejects caller-supplied docsRoot (not caller-controllable)", async () => {
+    const { ctx } = setup();
+    const result = await writeDocumentTool.execute({ path: "src/main/Main.java", content: "x", docsRoot: "src" }, ctx);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.category).toBe("INVALID_INPUT");
+  });
 });

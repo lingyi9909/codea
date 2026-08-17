@@ -111,4 +111,25 @@ describe("writeTestFileTool.execute", () => {
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error.category).toBe("INVALID_INPUT");
   });
+
+  test("rejects caller-supplied testRoots (not caller-controllable)", async () => {
+    const { ctx } = setup();
+    const result = await writeTestFileTool.execute(
+      { path: "src/main/java/Evil.java", content: "x", testRoots: ["src/main/java"] },
+      ctx,
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.category).toBe("INVALID_INPUT");
+  });
+
+  test("rejects when no test roots are detected", async () => {
+    const root = makeTempRoot("codea-write-noroot-");
+    const { ctx } = makeContext(root);
+    const result = await writeTestFileTool.execute(
+      { path: "src/test/java/X.java", content: "x" },
+      ctx,
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.category).toBe("NOT_SUPPORTED");
+  });
 });

@@ -1,13 +1,14 @@
 import { fileExists } from "./filesystem";
 import { execCommand } from "./exec";
-import { invalidInput, permissionDenied } from "./errors";
+import { invalidInput } from "./errors";
 import { toToolError } from "./failure-classifier";
 import { validateSchema, type JsonSchema } from "./schemas";
 import { err, ok, type ToolContext, type ToolResult } from "./types";
 
 // Unit Test execution tool. Prefers ./mvnw / ./gradlew, falls back to bare
-// mvn/gradle only when no wrapper exists. Always argv arrays (no shell), with a
-// whitelist on extraArgs. Output is parsed into structured pass/fail counts.
+// mvn/gradle only when no wrapper exists. Always argv arrays (no shell), no
+// caller-supplied extra args (no Maven/Gradle extension bypass). Output is
+// parsed into structured pass/fail counts.
 
 export type TestRunCategory = "PASS" | "FAIL" | "TIMEOUT" | "ERROR";
 
@@ -17,7 +18,6 @@ export interface RunProjectTestInput {
   testClass?: string;
   testMethod?: string;
   profiles?: string[];
-  extraArgs?: string[];
   timeoutSeconds?: number;
 }
 
@@ -43,15 +43,11 @@ const SCHEMA: JsonSchema = {
     testClass: { type: "string" },
     testMethod: { type: "string" },
     profiles: { type: "array", items: { type: "string" } },
-    extraArgs: { type: "array", items: { type: "string" } },
     timeoutSeconds: { type: "integer", minimum: 1 },
   },
   required: ["buildSystem"],
   additionalProperties: false,
 };
-
-// shell metacharacters or command words that must never appear in extraArgs.
-const EXTRA_ARG_FORBIDDEN = /[;&|`$<>\\\n]|^(rm|rmdir|sudo|doas|curl|wget|sh|bash|zsh|cmd|powershell|pwsh|nc|netcat|telnet)\b/i;
 
 function buildCommand(input: RunProjectTestInput, root: string): string[] {
   const isMaven = input.buildSystem === "maven";
@@ -74,7 +70,6 @@ function buildCommand(input: RunProjectTestInput, root: string): string[] {
     if (input.testClass) argv.push("--tests", input.testMethod ? `${input.testClass}.${input.testMethod}` : input.testClass);
   }
 
-  if (input.extraArgs) argv.push(...input.extraArgs);
   return argv;
 }
 
@@ -124,14 +119,6 @@ export const runProjectTestTool = {
         throw invalidInput(`invalid input: ${issues.map((i) => `${i.path} ${i.message}`).join("; ")}`);
       }
       const input = params as RunProjectTestInput;
-
-      if (input.extraArgs) {
-        for (const arg of input.extraArgs) {
-          if (EXTRA_ARG_FORBIDDEN.test(arg)) {
-            throw permissionDenied(`extraArg rejected by whitelist: ${arg}`);
-          }
-        }
-      }
 
       const timeoutMs = Math.min(input.timeoutSeconds ?? DEFAULT_TIMEOUT_SECONDS, MAX_TIMEOUT_SECONDS) * 1000;
       const argv = buildCommand(input, ctx.projectRoot);

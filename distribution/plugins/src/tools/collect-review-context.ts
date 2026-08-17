@@ -75,6 +75,18 @@ function buildGitDiffCommand(params: ReviewContextInput): string[] {
   }
 }
 
+// A valid ref/sha. First char must be alphanumeric (so a leading '-' can never
+// inject a git option), and '..' / '@{' / shell metacharacters are rejected. The
+// tool itself inserts the '^' (commit parent) and '..' (range) separators.
+const GIT_REF_RE = /^[A-Za-z0-9][A-Za-z0-9._/@^~-]*$/;
+
+function validateRef(ref: string | undefined, label: string): void {
+  if (ref === undefined || ref === "") return;
+  if (!GIT_REF_RE.test(ref) || ref.includes("..") || ref.includes("@{")) {
+    throw invalidInput(`invalid ${label}: ${ref}`);
+  }
+}
+
 function validateInput(params: unknown): ReviewContextInput {
   const issues = validateSchema(SCHEMA, params);
   if (issues.length > 0) {
@@ -84,6 +96,10 @@ function validateInput(params: unknown): ReviewContextInput {
   if (p.source === "commit" && !p.commit) throw invalidInput("commit is required for source=commit");
   if (p.source === "range" && (!p.rangeFrom || !p.rangeTo)) throw invalidInput("rangeFrom and rangeTo are required for source=range");
   if (p.source === "file-path" && !p.filePath) throw invalidInput("filePath is required for source=file-path");
+  validateRef(p.baseBranch, "baseBranch");
+  validateRef(p.commit, "commit");
+  validateRef(p.rangeFrom, "rangeFrom");
+  validateRef(p.rangeTo, "rangeTo");
   return p;
 }
 

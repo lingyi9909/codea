@@ -3,7 +3,7 @@ import { analyzeCommand } from "./security/command-policy";
 import { scanDlp } from "./security/dlp";
 import type { DlpContext } from "./security/types";
 import { resolveProjectPath } from "./security/path-policy";
-import { RiskDeny, RiskSafe } from "./security/types";
+import { RiskAsk, RiskDeny } from "./security/types";
 
 // Unified before/after hook. Applies path policy, command policy and DLP input
 // on the way in; DLP output + audit on the way out. Contains no tool-specific
@@ -78,15 +78,21 @@ export class RuntimeSecurityGuard {
         this.auditDeny(input, `command-denied: ${analysis.matchedRule}`);
         return { decision: "deny", reason: `command-denied: ${analysis.matchedRule}` };
       }
-      if (analysis.risk === RiskSafe) {
-        return { decision: "allow" };
+      if (analysis.risk === RiskAsk) {
+        this.auditDeny(input, "command-requires-approval");
+        return { decision: "ask", reason: "command-requires-approval" };
       }
-      this.auditDeny(input, "command-requires-approval");
-      return { decision: "ask", reason: "command-requires-approval" };
+      // RiskSafe falls through — a safe command must still be DLP-scanned so a
+      // secret embedded in its arguments is not skipped.
     }
 
-    // 3. DLP input
-    const dlp = scanDlp(stringify(input.input), "tool-input");
+    // 3. DLP input — scan the command string (if present) together with the tool
+    // input so safe commands cannot bypass secret/path redaction.
+    const dlpParts: string[] = [];
+    if (input.command !== undefined && input.command !== "") dlpParts.push(input.command);
+    const inputStr = stringify(input.input);
+    if (inputStr !== "") dlpParts.push(inputStr);
+    const dlp = scanDlp(dlpParts.join(" "), "tool-input");
     if (!dlp.allowed) {
       const rule = dlp.findings[0]?.rule ?? "secret";
       this.auditDeny(input, `dlp-blocked: ${rule}`);

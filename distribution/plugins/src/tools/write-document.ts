@@ -4,14 +4,13 @@ import { toToolError } from "./failure-classifier";
 import { validateSchema, type JsonSchema } from "./schemas";
 import { err, ok, type ToolContext, type ToolResult } from "./types";
 
-// API Doc write tool. Path restricted to docs/, doc/, api-docs/ (or an approved
-// docs root), DLP-gated and atomic. Never writes to src/, .git/ or outside the
-// project root — the path policy enforces this before any bytes are written.
+// API Doc write tool. Path restricted to the fixed docs roots docs/, doc/,
+// api-docs/ — the caller cannot nominate a docs root. DLP-gated and atomic.
+// Never writes to src/, .git/ or outside the project root.
 
 export interface WriteDocumentInput {
   path: string;
   content: string;
-  docsRoot?: string;
 }
 
 const DEFAULT_DOCS_ROOTS = ["docs", "doc", "api-docs"];
@@ -21,7 +20,6 @@ const SCHEMA: JsonSchema = {
   properties: {
     path: { type: "string", minLength: 1 },
     content: { type: "string" },
-    docsRoot: { type: "string" },
   },
   required: ["path", "content"],
   additionalProperties: false,
@@ -41,13 +39,11 @@ export const writeDocumentTool = {
       }
       const input = params as WriteDocumentInput;
 
-      const allowedRoots = input.docsRoot ? [input.docsRoot] : DEFAULT_DOCS_ROOTS;
-
       const result = writeFileAtomic({
         projectRoot: ctx.projectRoot,
         relPath: input.path,
         content: input.content,
-        allowedRoots,
+        allowedRoots: DEFAULT_DOCS_ROOTS,
         overwrite: true,
       });
 

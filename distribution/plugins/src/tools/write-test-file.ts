@@ -1,21 +1,20 @@
 import { writeFileAtomic, type WriteResult } from "./filesystem";
-import { invalidInput } from "./errors";
+import { invalidInput, notSupported } from "./errors";
 import { toToolError } from "./failure-classifier";
 import { validateSchema, type JsonSchema } from "./schemas";
 import { err, ok, type ToolContext, type ToolResult } from "./types";
+import { detectTestRoots } from "./analyze-test-project";
 
-// Unit Test write tool. Path is restricted to detected test roots (never source
-// roots), overwrite is off by default, DLP runs before write, and the write is
-// atomic. Traversal/absolute/symlink escape is rejected by the path policy.
+// Unit Test write tool. The allowed roots are derived from the real project
+// layout (the same detection analyze_test_project reports), never from caller
+// input — a caller cannot nominate src/main or an arbitrary root. Overwrite is
+// off by default, DLP runs before write, and the write is atomic.
 
 export interface WriteTestFileInput {
   path: string;
   content: string;
   overwrite?: boolean;
-  testRoots?: string[];
 }
-
-const DEFAULT_TEST_ROOTS = ["src/test/java"];
 
 const SCHEMA: JsonSchema = {
   type: "object",
@@ -23,7 +22,6 @@ const SCHEMA: JsonSchema = {
     path: { type: "string", minLength: 1 },
     content: { type: "string" },
     overwrite: { type: "boolean" },
-    testRoots: { type: "array", items: { type: "string" } },
   },
   required: ["path", "content"],
   additionalProperties: false,
@@ -43,7 +41,10 @@ export const writeTestFileTool = {
       }
       const input = params as WriteTestFileInput;
 
-      const testRoots = input.testRoots && input.testRoots.length > 0 ? input.testRoots : DEFAULT_TEST_ROOTS;
+      const testRoots = detectTestRoots(ctx.projectRoot);
+      if (testRoots.length === 0) {
+        throw notSupported("no test roots detected (run analyze_test_project first)");
+      }
 
       const result = writeFileAtomic({
         projectRoot: ctx.projectRoot,

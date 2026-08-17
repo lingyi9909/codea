@@ -9,6 +9,8 @@ import { RiskAsk, RiskDeny, RiskSafe } from "./types";
 // Policy:
 //   - explicit dangerous token          -> deny
 //   - shell composition (pipe/redir/sub)-> ask
+//   - dangerous git option (on git ...) -> deny
+//   - sensitive path arg (on read cmds) -> deny
 //   - strict read-only whitelist        -> safe
 //   - anything else                     -> ask
 
@@ -63,6 +65,24 @@ const SAFE_COMMANDS: readonly RegExp[] = [
   /^find(\s+.*)?$/,
 ];
 
+// Git options that let a read-only command turn into arbitrary code execution,
+// directory escape, or file writes. Blocked on any `git ...` command before the
+// whitelist is consulted, so `git -c core.pager=sh log` can never read as safe.
+const DANGEROUS_GIT_OPTIONS: readonly string[] = [
+  "-c", // --config: sets core.pager/sshCommand/alias/filter (code exec)
+  "--config",
+  "--config-env",
+  "-C", // --directory: change directory (escape root)
+  "--directory",
+  "--exec-path",
+  "--git-dir",
+  "--work-tree",
+  "--output", // writes a file
+  "--upload-pack",
+  "--receive-pack",
+  "--pager",
+];
+
 // Split into command tokens on whitespace and shell metacharacters so dangerous
 // commands are matched as whole words (and inside substitutions too).
 function tokenize(input: string): string[] {
@@ -70,6 +90,38 @@ function tokenize(input: string): string[] {
     .toLowerCase()
     .split(/[\s;&|()<>$`"'\\]+/)
     .filter((t) => t.length > 0);
+}
+
+// Detects a dangerous git option among the tokens. Returns a short label or null.
+function findDangerousGitOption(tokens: readonly string[]): string | null {
+  for (const tok of tokens) {
+    if (tok === "git") continue;
+    if (tok === "-c" || tok.startsWith("-c=") || /^-c[a-z]/.test(tok)) return "-c/--config";
+    if (tok === "--config" || tok.startsWith("--config=") || tok.startsWith("--config-env")) return "--config";
+    if (tok === "--directory" || tok.startsWith("--directory=")) return "--directory";
+    if (tok === "--exec-path" || tok.startsWith("--exec-path=")) return "--exec-path";
+    if (tok === "--git-dir" || tok.startsWith("--git-dir=")) return "--git-dir";
+    if (tok === "--work-tree" || tok.startsWith("--work-tree=")) return "--work-tree";
+    if (tok === "--output" || tok.startsWith("--output=")) return "--output";
+    if (tok === "--upload-pack" || tok.startsWith("--upload-pack=")) return "--upload-pack";
+    if (tok === "--receive-pack" || tok.startsWith("--receive-pack=")) return "--receive-pack";
+    if (tok === "--pager" || tok.startsWith("--pager=")) return "--pager";
+  }
+  return null;
+}
+
+// Detects sensitive-path arguments on a read-only command: absolute paths escape
+// the project root, and dotfiles/credential/ssh-key paths are an exfil target.
+function findSensitivePath(command: string): string | null {
+  if (/(^|[\s'"])\//.test(command)) return "absolute-path";
+  if (/(^|[\s'"])~([\\/]|$)/.test(command)) return "home-path";
+  if (/(^|[\s'"])[a-zA-Z]:[\\/]/.test(command)) return "windows-absolute";
+  if (/(^|[\\/\s'"])\.\.([\\/]|$)/.test(command)) return "parent-traversal";
+  if (/\.env(\.[\w-]+)?([\\/]|$)/i.test(command)) return "sensitive-file:.env";
+  if (/(^|[\\/\s'"])(\.ssh|\.aws|\.gnupg)([\\/]|$)/i.test(command)) return "sensitive-dir";
+  if (/(^|[\\/\s'"])(id_rsa|id_ed25519|id_ecdsa|id_dsa)([\\/]|$)/i.test(command)) return "sensitive-file:ssh-key";
+  if (/(^|[\\/\s'"])credentials([\\/]|$)|\.git-credentials|\.npmrc|\.netrc|\.pem([\\/]|$)/i.test(command)) return "sensitive-file:credentials";
+  return null;
 }
 
 export function analyzeCommand(input: string): CommandAnalysis {
@@ -89,7 +141,8 @@ export function analyzeCommand(input: string): CommandAnalysis {
   analysis.hasSubCmd = /\$\(/.test(command) || /`/.test(command);
   analysis.hasChain = /&&|\|\||;/.test(command);
 
-  for (const token of tokenize(command)) {
+  const tokens = tokenize(command);
+  for (const token of tokens) {
     if (DANGEROUS_COMMANDS.has(token)) {
       analysis.risk = RiskDeny;
       analysis.matchedRule = token;
@@ -102,9 +155,27 @@ export function analyzeCommand(input: string): CommandAnalysis {
     return analysis;
   }
 
+  // Argument-level controls for git: block options that escalate a read-only
+  // command into code execution / directory escape / file write.
+  if (tokens[0] === "git") {
+    const gitOption = findDangerousGitOption(tokens);
+    if (gitOption) {
+      analysis.risk = RiskDeny;
+      analysis.matchedRule = `git-option:${gitOption}`;
+      return analysis;
+    }
+  }
+
   const lower = command.toLowerCase();
   for (const re of SAFE_COMMANDS) {
     if (re.test(lower)) {
+      // A whitelisted read-only command must not touch sensitive paths.
+      const sensitivePath = findSensitivePath(command);
+      if (sensitivePath) {
+        analysis.risk = RiskDeny;
+        analysis.matchedRule = `sensitive-path:${sensitivePath}`;
+        return analysis;
+      }
       analysis.risk = RiskSafe;
       return analysis;
     }

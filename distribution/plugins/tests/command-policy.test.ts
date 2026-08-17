@@ -81,3 +81,41 @@ describe("analyzeCommand — composition flags", () => {
     expect(analyzeCommand("echo hi > f").hasRedirect).toBe(true);
   });
 });
+
+describe("analyzeCommand — argument-level: sensitive paths -> deny", () => {
+  const cases: [string, string][] = [
+    ["cat .env", "sensitive-path:sensitive-file:.env"],
+    ["cat /etc/passwd", "sensitive-path:absolute-path"],
+    ["grep password ~/.aws/credentials", "sensitive-path:home-path"],
+    ["find / -name '*.pem'", "sensitive-path:absolute-path"],
+    ["head -n 5 ~/.ssh/id_rsa", "sensitive-path:home-path"],
+    ["cat ../../etc/passwd", "sensitive-path:parent-traversal"],
+    ["git diff -- .env", "sensitive-path:sensitive-file:.env"],
+    ["tail ~/.git-credentials", "sensitive-path:home-path"],
+  ];
+  for (const [cmd, rule] of cases) {
+    test(`${cmd} -> deny (${rule})`, () => {
+      const a = analyzeCommand(cmd);
+      expect(a.risk).toBe("deny");
+      expect(a.matchedRule).toBe(rule);
+    });
+  }
+});
+
+describe("analyzeCommand — argument-level: dangerous git options -> deny", () => {
+  const cases: [string, string][] = [
+    ["git -c core.pager=sh log", "git-option:-c/--config"],
+    ["git --config core.sshCommand=evil status", "git-option:--config"],
+    ["git --git-dir=/tmp/x log", "git-option:--git-dir"],
+    ["git diff --output=/tmp/leak", "git-option:--output"],
+    ["git --work-tree=/tmp status", "git-option:--work-tree"],
+    ["git -C /tmp status", "git-option:-c/--config"],
+  ];
+  for (const [cmd, rule] of cases) {
+    test(`${cmd} -> deny (${rule})`, () => {
+      const a = analyzeCommand(cmd);
+      expect(a.risk).toBe("deny");
+      expect(a.matchedRule).toBe(rule);
+    });
+  }
+});

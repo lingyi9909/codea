@@ -49,6 +49,52 @@ var SAFE_COMMANDS = [
 function tokenize(input) {
   return input.toLowerCase().split(/[\s;&|()<>$`"'\\]+/).filter((t) => t.length > 0);
 }
+function findDangerousGitOption(tokens) {
+  for (const tok of tokens) {
+    if (tok === "git")
+      continue;
+    if (tok === "-c" || tok.startsWith("-c=") || /^-c[a-z]/.test(tok))
+      return "-c/--config";
+    if (tok === "--config" || tok.startsWith("--config=") || tok.startsWith("--config-env"))
+      return "--config";
+    if (tok === "--directory" || tok.startsWith("--directory="))
+      return "--directory";
+    if (tok === "--exec-path" || tok.startsWith("--exec-path="))
+      return "--exec-path";
+    if (tok === "--git-dir" || tok.startsWith("--git-dir="))
+      return "--git-dir";
+    if (tok === "--work-tree" || tok.startsWith("--work-tree="))
+      return "--work-tree";
+    if (tok === "--output" || tok.startsWith("--output="))
+      return "--output";
+    if (tok === "--upload-pack" || tok.startsWith("--upload-pack="))
+      return "--upload-pack";
+    if (tok === "--receive-pack" || tok.startsWith("--receive-pack="))
+      return "--receive-pack";
+    if (tok === "--pager" || tok.startsWith("--pager="))
+      return "--pager";
+  }
+  return null;
+}
+function findSensitivePath(command) {
+  if (/(^|[\s'"])\//.test(command))
+    return "absolute-path";
+  if (/(^|[\s'"])~([\\/]|$)/.test(command))
+    return "home-path";
+  if (/(^|[\s'"])[a-zA-Z]:[\\/]/.test(command))
+    return "windows-absolute";
+  if (/(^|[\\/\s'"])\.\.([\\/]|$)/.test(command))
+    return "parent-traversal";
+  if (/\.env(\.[\w-]+)?([\\/]|$)/i.test(command))
+    return "sensitive-file:.env";
+  if (/(^|[\\/\s'"])(\.ssh|\.aws|\.gnupg)([\\/]|$)/i.test(command))
+    return "sensitive-dir";
+  if (/(^|[\\/\s'"])(id_rsa|id_ed25519|id_ecdsa|id_dsa)([\\/]|$)/i.test(command))
+    return "sensitive-file:ssh-key";
+  if (/(^|[\\/\s'"])credentials([\\/]|$)|\.git-credentials|\.npmrc|\.netrc|\.pem([\\/]|$)/i.test(command))
+    return "sensitive-file:credentials";
+  return null;
+}
 function analyzeCommand(input) {
   const command = input.trim();
   const analysis = {
@@ -64,7 +110,8 @@ function analyzeCommand(input) {
   analysis.hasRedirect = />|>>|</.test(command);
   analysis.hasSubCmd = /\$\(/.test(command) || /`/.test(command);
   analysis.hasChain = /&&|\|\||;/.test(command);
-  for (const token of tokenize(command)) {
+  const tokens = tokenize(command);
+  for (const token of tokens) {
     if (DANGEROUS_COMMANDS.has(token)) {
       analysis.risk = RiskDeny;
       analysis.matchedRule = token;
@@ -75,9 +122,23 @@ function analyzeCommand(input) {
     analysis.risk = RiskAsk;
     return analysis;
   }
+  if (tokens[0] === "git") {
+    const gitOption = findDangerousGitOption(tokens);
+    if (gitOption) {
+      analysis.risk = RiskDeny;
+      analysis.matchedRule = `git-option:${gitOption}`;
+      return analysis;
+    }
+  }
   const lower = command.toLowerCase();
   for (const re of SAFE_COMMANDS) {
     if (re.test(lower)) {
+      const sensitivePath = findSensitivePath(command);
+      if (sensitivePath) {
+        analysis.risk = RiskDeny;
+        analysis.matchedRule = `sensitive-path:${sensitivePath}`;
+        return analysis;
+      }
       analysis.risk = RiskSafe;
       return analysis;
     }
@@ -473,13 +534,18 @@ class RuntimeSecurityGuard {
         this.auditDeny(input, `command-denied: ${analysis.matchedRule}`);
         return { decision: "deny", reason: `command-denied: ${analysis.matchedRule}` };
       }
-      if (analysis.risk === RiskSafe) {
-        return { decision: "allow" };
+      if (analysis.risk === RiskAsk) {
+        this.auditDeny(input, "command-requires-approval");
+        return { decision: "ask", reason: "command-requires-approval" };
       }
-      this.auditDeny(input, "command-requires-approval");
-      return { decision: "ask", reason: "command-requires-approval" };
     }
-    const dlp = scanDlp(stringify(input.input), "tool-input");
+    const dlpParts = [];
+    if (input.command !== undefined && input.command !== "")
+      dlpParts.push(input.command);
+    const inputStr = stringify(input.input);
+    if (inputStr !== "")
+      dlpParts.push(inputStr);
+    const dlp = scanDlp(dlpParts.join(" "), "tool-input");
     if (!dlp.allowed) {
       const rule = dlp.findings[0]?.rule ?? "secret";
       this.auditDeny(input, `dlp-blocked: ${rule}`);
@@ -897,6 +963,14 @@ function buildGitDiffCommand(params) {
       return ["git", "diff", "--", params.filePath];
   }
 }
+var GIT_REF_RE = /^[A-Za-z0-9][A-Za-z0-9._/@^~-]*$/;
+function validateRef(ref, label) {
+  if (ref === undefined || ref === "")
+    return;
+  if (!GIT_REF_RE.test(ref) || ref.includes("..") || ref.includes("@{")) {
+    throw invalidInput(`invalid ${label}: ${ref}`);
+  }
+}
 function validateInput(params) {
   const issues = validateSchema(SCHEMA, params);
   if (issues.length > 0) {
@@ -909,6 +983,10 @@ function validateInput(params) {
     throw invalidInput("rangeFrom and rangeTo are required for source=range");
   if (p.source === "file-path" && !p.filePath)
     throw invalidInput("filePath is required for source=file-path");
+  validateRef(p.baseBranch, "baseBranch");
+  validateRef(p.commit, "commit");
+  validateRef(p.rangeFrom, "rangeFrom");
+  validateRef(p.rangeTo, "rangeTo");
   return p;
 }
 function parseUnifiedDiff(diff) {
@@ -1103,14 +1181,12 @@ var analyzeTestProjectTool = {
   }
 };
 // src/tools/write-test-file.ts
-var DEFAULT_TEST_ROOTS = ["src/test/java"];
 var SCHEMA2 = {
   type: "object",
   properties: {
     path: { type: "string", minLength: 1 },
     content: { type: "string" },
-    overwrite: { type: "boolean" },
-    testRoots: { type: "array", items: { type: "string" } }
+    overwrite: { type: "boolean" }
   },
   required: ["path", "content"],
   additionalProperties: false
@@ -1127,7 +1203,10 @@ var writeTestFileTool = {
         throw invalidInput(`invalid input: ${issues.map((i) => `${i.path} ${i.message}`).join("; ")}`);
       }
       const input = params;
-      const testRoots = input.testRoots && input.testRoots.length > 0 ? input.testRoots : DEFAULT_TEST_ROOTS;
+      const testRoots = detectTestRoots(ctx.projectRoot);
+      if (testRoots.length === 0) {
+        throw notSupported("no test roots detected (run analyze_test_project first)");
+      }
       const result = writeFileAtomic({
         projectRoot: ctx.projectRoot,
         relPath: input.path,
@@ -1155,13 +1234,11 @@ var SCHEMA3 = {
     testClass: { type: "string" },
     testMethod: { type: "string" },
     profiles: { type: "array", items: { type: "string" } },
-    extraArgs: { type: "array", items: { type: "string" } },
     timeoutSeconds: { type: "integer", minimum: 1 }
   },
   required: ["buildSystem"],
   additionalProperties: false
 };
-var EXTRA_ARG_FORBIDDEN = /[;&|`$<>\\\n]|^(rm|rmdir|sudo|doas|curl|wget|sh|bash|zsh|cmd|powershell|pwsh|nc|netcat|telnet)\b/i;
 function buildCommand(input, root) {
   const isMaven = input.buildSystem === "maven";
   const wrapper = isMaven ? "mvnw" : "gradlew";
@@ -1186,8 +1263,6 @@ function buildCommand(input, root) {
     if (input.testClass)
       argv.push("--tests", input.testMethod ? `${input.testClass}.${input.testMethod}` : input.testClass);
   }
-  if (input.extraArgs)
-    argv.push(...input.extraArgs);
   return argv;
 }
 function parseTestSummary(stdout) {
@@ -1226,13 +1301,6 @@ var runProjectTestTool = {
         throw invalidInput(`invalid input: ${issues.map((i) => `${i.path} ${i.message}`).join("; ")}`);
       }
       const input = params;
-      if (input.extraArgs) {
-        for (const arg of input.extraArgs) {
-          if (EXTRA_ARG_FORBIDDEN.test(arg)) {
-            throw permissionDenied(`extraArg rejected by whitelist: ${arg}`);
-          }
-        }
-      }
       const timeoutMs = Math.min(input.timeoutSeconds ?? DEFAULT_TIMEOUT_SECONDS, MAX_TIMEOUT_SECONDS) * 1000;
       const argv = buildCommand(input, ctx.projectRoot);
       const result = await execCommand(argv, { cwd: ctx.projectRoot, timeoutMs });
@@ -1649,8 +1717,7 @@ var SCHEMA6 = {
   type: "object",
   properties: {
     path: { type: "string", minLength: 1 },
-    content: { type: "string" },
-    docsRoot: { type: "string" }
+    content: { type: "string" }
   },
   required: ["path", "content"],
   additionalProperties: false
@@ -1667,12 +1734,11 @@ var writeDocumentTool = {
         throw invalidInput(`invalid input: ${issues.map((i) => `${i.path} ${i.message}`).join("; ")}`);
       }
       const input = params;
-      const allowedRoots = input.docsRoot ? [input.docsRoot] : DEFAULT_DOCS_ROOTS;
       const result = writeFileAtomic({
         projectRoot: ctx.projectRoot,
         relPath: input.path,
         content: input.content,
-        allowedRoots,
+        allowedRoots: DEFAULT_DOCS_ROOTS,
         overwrite: true
       });
       ctx.guard.after({ sessionId: ctx.sessionId, agent: ctx.agent, tool: this.name, action: "write", projectRoot: ctx.projectRoot, targetPath: input.path, durationMs: Date.now() - started, ok: true });
@@ -1718,6 +1784,7 @@ export {
   err,
   dlpBlocked,
   difyConfigFromEnv,
+  detectTestRoots,
   commandFailed,
   collectReviewContextTool,
   classifyError,
