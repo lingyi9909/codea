@@ -2,7 +2,7 @@
 
 ## Overview
 
-Checkpoint: `9cbd5e64b04b82e494119a08d89376f202f8327f`
+Checkpoint: `8b2e9ce6aaf753feda0227680f22261677475f17`
 
 在 Task 12 的 Plugin 工程与安全基础之上，实现 7 个企业 Custom Tool（代码审查上下文收集 / 测试工程分析 / 测试文件写入 / 测试运行 / API 规范提取 / API 示例校验 / 文档写入），并建立统一 Tool 基础设施（ToolContext / ToolError / ToolResult / 9 类错误分类 / JSON Schema 校验 / 受控 exec / 受控文件系统），配真实 java-maven fixture 与 E2E（3 流程），每个 write/exec tool 配安全负向 Gate。
 
@@ -164,3 +164,13 @@ Checkpoint：`9cbd5e64b04b82e494119a08d89376f202f8327f`（整改后全量 Gate �
 OpenCode Plugin Adapter（跨 Task 12/13）注册上述 7 个 tool + dify-query，见 Task 12 Round 2。
 
 Round 2 Gate 复跑（Task 13 侧）：`bun test` 201 pass、`bun run build` 0.52 MB、`./scripts/check-plugin-bundle.sh` PASS、`./scripts/run-plugin-smoke.sh` PASS、`./scripts/run-real-maven-smoke.sh` PASS、`OPENCODE_BIN=<abs> ./scripts/run-real-plugin-smoke.sh` PASS、`OPENCODE_BIN=<abs> ./scripts/run-real-parity-smoke.sh` 17/17 PASS（v1.18.11）、`GOTOOLCHAIN=local go test ./... -count=1` 22 packages PASS、`-race` PASS、`go vet` clean、`go build` PASS、Windows/darwin 交叉编译 PASS、`./scripts/check-runtime-boundary.sh` PASS、`./scripts/check-execution-state.sh` valid。
+
+## 验收整改（Round 3 — Windows wrapper 真实执行）
+
+人工第二轮「有条件通过」指出的 Blocking 项，本 Task 侧修复：
+
+1. **Windows `.cmd`/`.bat` 真实执行**：此前 `.cmd`/`.bat` 仍走 `execFile()`，Windows 无法直接 spawn 批处理。`src/tools/exec.ts` 新增 `resolveExecArgv(argv, platform)`：`argv[0]` 匹配 `\.(cmd|bat)$` 且 platform 为 `win32` 时，路由为 `cmd.exe /d /s /c <joined>`（argv 数组，非 `shell:true`，不引入 POSIX shell）；`execCommand` 改为先经 `resolveExecArgv` 再 `execFile`。`displayCommand` 负责安全 join 单个命令行参数。
+2. **批处理路径注入防护**：`src/tools/run-project-test.ts` 新增 `UNSAFE_BUILD_ARG = /[\s&|<>^%!"'`();]/` 与 `assertSafeBuildArgs()`，对调用方 `module`/`testClass`/`testMethod`/`profiles` 在 batch 路径生效前拒绝 shell/cmd 元字符，保证 `/c` 命令行参数无活元字符。新增负向测试（`extraArgs` 移除、`testClass`/`module`/`profiles` 元字符 → `INVALID_INPUT`）。
+3. **wrapper 检测补 Windows-only 工程**：`analyze-test-project.ts` 的 `detectWrapper` 与 `run-project-test.ts` 的 `WRAPPERS` 同时识别 `mvnw.cmd`/`gradlew.bat`，`buildCommand()` 对仅有 `.cmd`/`.bat` 的 checkout 也能正确选择批处理 wrapper。新增 `tests/exec.test.ts`（`resolveExecArgv` 路由）与 analyze-test-project/run-project-test 的 wrapper 测试。
+
+Round 3 Gate 复跑（Task 13 侧）：`bun test` 213 pass、`bun run build` 0.52 MB、`./scripts/check-plugin-bundle.sh` PASS、`./scripts/run-plugin-smoke.sh` PASS、`./scripts/run-real-maven-smoke.sh` PASS、`OPENCODE_BIN=<abs> ./scripts/run-real-plugin-smoke.sh` PASS（`/experimental/tool/ids` 断言 8/8）、`OPENCODE_BIN=<abs> ./scripts/run-real-parity-smoke.sh` 17/17 PASS（v1.18.11）、`GOTOOLCHAIN=local go test ./... -count=1` 22 packages PASS、`-race` PASS、`go vet` clean、`go build` PASS、Windows/darwin 交叉编译 PASS、`./scripts/check-runtime-boundary.sh` PASS、`./scripts/check-execution-state.sh` valid、`tests/execution-state/state_validator_test.sh` PASS。

@@ -2,7 +2,7 @@
 
 ## Overview
 
-Checkpoint: `9cbd5e64b04b82e494119a08d89376f202f8327f`
+Checkpoint: `8b2e9ce6aaf753feda0227680f22261677475f17`
 
 建立 `distribution/plugins/` Plugin 工程骨架（TypeScript + Bun + 自包含 ESM bundle，非 npm+esbuild），并实现安全基础：Command Policy（风险分级）、4 层 DLP、路径策略（canonicalize/realpath）、Permissions（General 与 3 个企业 Agent 分离）、Dify 熔断器、审计日志、Runtime Security Guard。
 
@@ -142,3 +142,12 @@ Checkpoint：`9cbd5e64b04b82e494119a08d89376f202f8327f`（整改后全量 Gate �
 新增 Real OpenCode Plugin Smoke：`tests/plugin-smoke.ts` 加载 bundle 的 default export（`readV1Plugin` 契约）→ 调用 `server()` 得到 `Hooks.tool`（`fromPlugin` 契约）→ 驱动 8 个 tool 走完整 Guard 链（path deny / DLP input deny / write permission ask / output DLP block / dify degraded，零公网）。`scripts/run-real-plugin-smoke.sh` 额外用真实 `opencode serve`（v1.18.11）注册插件并断言 health。
 
 Round 2 Gate 复跑（Task 12 侧）：`bun test` 201 pass、`bun run build` 0.52 MB（zod 内联）、`./scripts/check-plugin-bundle.sh` PASS、`./scripts/run-plugin-smoke.sh` PASS、`OPENCODE_BIN=<abs> ./scripts/run-real-plugin-smoke.sh` PASS、`OPENCODE_BIN=<abs> ./scripts/run-real-parity-smoke.sh` 17/17 PASS（v1.18.11）、`GOTOOLCHAIN=local go test ./... -count=1` 22 packages PASS、`-race` PASS、`go vet` clean、`go build` PASS、Windows/darwin 交叉编译 PASS、`./scripts/check-runtime-boundary.sh` PASS、`./scripts/check-execution-state.sh` valid。
+
+## 验收整改（Round 3 — 原生 tool 输出 DLP + 插件运行时注册）
+
+人工第二轮「有条件通过」指出的 Blocking 项，本 Task 侧修复：
+
+1. **原生 Tool 输出 DLP**：此前 `guardOutput` 只包裹 8 个注册 custom tool，未覆盖 OpenCode 原生 `read/grep/glob/bash`。`src/opencode/entry.ts` 新增 `tool.execute.after` 钩子（`src/opencode/types.ts` 补 `tool.execute.after` 契约签名）：对 `NATIVE_OUTPUT_DLP_TOOLS = {read,grep,glob,bash}` 的输出跑 `guardOutput`，layer-1 secret 整体 block、普通敏感值原地 redact，并以 `dlpBlocked/dlpRule` metadata 透传。同时 `tool.execute.before` 对原生 `read/grep/glob` 的 `filePath`/`path` 跑 `findSensitivePath`（`command-policy.ts` 改为 export），绝对路径/traversal/`.env`/`.ssh` 等在文件读取前 deny。
+2. **Runtime 插件注册**：此前 bootstrap 从未把插件 bundle 写进 OpenCode 配置，插件形同未加载。`tui/cmd/codea/main.go` 新增 `pluginBundlePath()`（`CODEA_PLUGIN_BUNDLE` 可覆盖，默认取 `../distribution/plugins/dist/index.js`）与 `writePluginConfig(cfgDir)`：在 skill sync 之后、`bootstrapRuntime` 之前，把 Codea 自有的 `opencode.json`（`"plugin": ["file://…/dist/index.js"]`）写入受控 config dir。bundle 缺失（未构建/覆盖路径失效）时降级 General 模式，绝不注册死插件 URL。`main_test.go` 新增 `TestWritePluginConfigRegistersBundle` / `TestWritePluginConfigMissingBundleNoop`。
+
+Round 3 Gate 复跑（Task 12 侧）：`bun test` 213 pass、`bun run build` 0.52 MB、`./scripts/check-plugin-bundle.sh` PASS、`./scripts/run-plugin-smoke.sh` PASS、`OPENCODE_BIN=<abs> ./scripts/run-real-plugin-smoke.sh` PASS（`/experimental/tool/ids` 断言 8/8 企业 tool 注册）、`OPENCODE_BIN=<abs> ./scripts/run-real-parity-smoke.sh` 17/17 PASS（v1.18.11）、`GOTOOLCHAIN=local go test ./... -count=1` 22 packages PASS、`-race` PASS、`go vet` clean、`go build` PASS、Windows/darwin 交叉编译 PASS、`./scripts/check-runtime-boundary.sh` PASS、`./scripts/check-execution-state.sh` valid、`tests/execution-state/state_validator_test.sh` PASS。
