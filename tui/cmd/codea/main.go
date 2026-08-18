@@ -8,7 +8,9 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 
@@ -48,6 +50,13 @@ func run() error {
 	targetDir := filepath.Join(cfgDir, "skills")
 	if err := skill.SyncEnabled(roots, store, targetDir, policy); err != nil {
 		return fmt.Errorf("sync skills: %w", err)
+	}
+
+	// Register the enterprise plugin bundle in Codea-owned opencode.json BEFORE the
+	// runtime starts, so OpenCode loads the plugin (and its 7 custom tools + DLP)
+	// on first launch. A missing bundle (not yet built) degrades to General mode.
+	if err := writePluginConfig(cfgDir); err != nil {
+		return fmt.Errorf("write plugin config: %w", err)
 	}
 
 	adapter, cleanup, err := bootstrapRuntime(cfgDir, mode)
@@ -117,6 +126,46 @@ func codeaConfigDir() string {
 	}
 	home, _ := os.UserHomeDir()
 	return filepath.Join(home, ".codea", "runtime-config")
+}
+
+// pluginBundlePath returns the path to the self-contained enterprise plugin
+// bundle. CODEA_PLUGIN_BUNDLE overrides the default (the distribution build
+// output relative to the launch directory).
+func pluginBundlePath() string {
+	if p := os.Getenv("CODEA_PLUGIN_BUNDLE"); p != "" {
+		return p
+	}
+	projectDir, _ := os.Getwd()
+	return filepath.Join(projectDir, "..", "distribution", "plugins", "dist", "index.js")
+}
+
+// writePluginConfig materializes a Codea-owned opencode.json into the controlled
+// config dir, registering the enterprise plugin bundle via a file:// URL. This
+// is what makes the plugin (and its 7 custom tools + DLP) actually load in the
+// supervised runtime. It never touches OpenCode's native ~/.config/opencode.
+func writePluginConfig(cfgDir string) error {
+	bundle := pluginBundlePath()
+	if bundle == "" {
+		return nil
+	}
+	// Require the bundle to exist so a stale/missing override degrades to
+	// General mode rather than registering a dead plugin URL.
+	if _, err := os.Stat(bundle); err != nil {
+		return nil
+	}
+	abs, err := filepath.Abs(bundle)
+	if err != nil {
+		return err
+	}
+	u := &url.URL{Scheme: "file", Path: filepath.ToSlash(abs)}
+	cfg := map[string]any{
+		"plugin": []string{u.String()},
+	}
+	data, err := json.MarshalIndent(cfg, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(cfgDir, "opencode.json"), data, 0o644)
 }
 
 // skillRoots returns the filesystem roots Codea scans to display skills. Codea

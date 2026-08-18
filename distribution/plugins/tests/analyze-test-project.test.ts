@@ -28,6 +28,26 @@ describe("analyzeTestProjectTool.execute", () => {
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error.category).toBe("NOT_SUPPORTED");
   });
+
+  test("recognizes a Windows-only mvnw.cmd wrapper", async () => {
+    const root = makeTempRoot("codea-analyze-");
+    fs.writeFileSync(path.join(root, "pom.xml"), "<project/>");
+    fs.writeFileSync(path.join(root, "mvnw.cmd"), "@echo off\n");
+    const ctx = makeContext(root).ctx;
+    const result = await analyzeTestProjectTool.execute({}, ctx);
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.data.wrapperAvailable).toBe(true);
+  });
+
+  test("recognizes a Windows-only gradlew.bat wrapper", async () => {
+    const root = makeTempRoot("codea-analyze-");
+    fs.writeFileSync(path.join(root, "build.gradle"), "");
+    fs.writeFileSync(path.join(root, "gradlew.bat"), "@echo off\n");
+    const ctx = makeContext(root).ctx;
+    const result = await analyzeTestProjectTool.execute({}, ctx);
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.data.wrapperAvailable).toBe(true);
+  });
 });
 
 describe("detectTestRoots — standard layout derivation", () => {

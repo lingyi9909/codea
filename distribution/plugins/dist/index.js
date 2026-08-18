@@ -832,11 +832,20 @@ var DEFAULT_MAX_BUFFER = 10 * 1024 * 1024;
 function displayCommand(argv) {
   return argv.map((a) => /\s/.test(a) ? JSON.stringify(a) : a).join(" ");
 }
+var BATCH_FILE_RE = /\.(cmd|bat)$/i;
+function resolveExecArgv(argv, platform = process.platform) {
+  const file = argv[0] ?? "";
+  if (platform === "win32" && BATCH_FILE_RE.test(file)) {
+    return ["cmd.exe", "/d", "/s", "/c", displayCommand(argv)];
+  }
+  return [...argv];
+}
 function execCommand(argv, opts) {
-  const file = argv[0];
+  const actual = resolveExecArgv(argv);
+  const file = actual[0];
   if (!file)
     throw commandFailed("empty command argv");
-  const args = argv.slice(1);
+  const args = actual.slice(1);
   const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   return new Promise((resolve4) => {
     execFile(file, args, {
@@ -1170,7 +1179,7 @@ function detectTestRoots(root) {
   return roots;
 }
 function detectWrapper(root) {
-  return fileExists(root, "mvnw") || fileExists(root, "gradlew");
+  return fileExists(root, "mvnw") || fileExists(root, "mvnw.cmd") || fileExists(root, "gradlew") || fileExists(root, "gradlew.bat");
 }
 function detectExistingTestPattern(root, testRoots) {
   for (const tr of testRoots) {
@@ -1284,6 +1293,21 @@ var WRAPPERS = {
   maven: ["mvnw", "mvnw.cmd"],
   gradle: ["gradlew", "gradlew.bat"]
 };
+var UNSAFE_BUILD_ARG = /[\s&|<>^%!"'`();]/;
+function assertSafeBuildArgs(input) {
+  for (const field of ["module", "testClass", "testMethod"]) {
+    const v = input[field];
+    if (typeof v === "string" && UNSAFE_BUILD_ARG.test(v)) {
+      throw invalidInput(`unsafe characters in ${field}`);
+    }
+  }
+  if (input.profiles) {
+    for (const p of input.profiles) {
+      if (UNSAFE_BUILD_ARG.test(p))
+        throw invalidInput("unsafe characters in profiles");
+    }
+  }
+}
 function detectWrapper2(root, buildSystem) {
   for (const name of WRAPPERS[buildSystem]) {
     if (fileExists(root, name))
@@ -1352,6 +1376,7 @@ var runProjectTestTool = {
         throw invalidInput(`invalid input: ${issues.map((i) => `${i.path} ${i.message}`).join("; ")}`);
       }
       const input = params;
+      assertSafeBuildArgs(input);
       const timeoutMs = Math.min(input.timeoutSeconds ?? DEFAULT_TIMEOUT_SECONDS, MAX_TIMEOUT_SECONDS) * 1000;
       const argv = buildCommand(input, ctx.projectRoot);
       const result = await execCommand(argv, { cwd: ctx.projectRoot, timeoutMs });
@@ -14191,6 +14216,15 @@ var TOOL_ACTIONS = {
   "dify-query": "read"
 };
 var APPROVAL_ACTIONS = new Set(["write", "execute"]);
+var NATIVE_OUTPUT_DLP_TOOLS = new Set(["read", "grep", "glob", "bash"]);
+var NATIVE_PATH_TOOLS = new Set(["read", "grep", "glob"]);
+function nativePathFor(tool, args) {
+  if (tool === "read")
+    return args?.filePath;
+  if (tool === "grep" || tool === "glob")
+    return args?.path;
+  return;
+}
 var TOOL_ARGS = {
   collect_review_context: {
     source: exports_external.enum(["staged", "unstaged", "base-branch", "commit", "range", "file-path"]),
@@ -14351,21 +14385,41 @@ var plugin = {
     const hooks = {
       tool: tools,
       "tool.execute.before": async (hookInput, output) => {
-        if (hookInput.tool !== "bash")
+        const tool = hookInput.tool;
+        if (tool === "bash") {
+          const command = output.args?.command;
+          if (typeof command !== "string")
+            return;
+          const decision = guard.before({
+            sessionId: hookInput.sessionID,
+            agent: "",
+            tool: "bash",
+            action: "execute",
+            projectRoot: input.directory,
+            command
+          });
+          if (decision.decision === "deny") {
+            throw new Error(decision.reason ?? "command denied");
+          }
           return;
-        const command = output.args?.command;
-        if (typeof command !== "string")
+        }
+        if (NATIVE_PATH_TOOLS.has(tool)) {
+          const targetPath = nativePathFor(tool, output.args);
+          if (typeof targetPath === "string" && targetPath !== "") {
+            const sensitive = findSensitivePath(targetPath);
+            if (sensitive) {
+              throw new Error(`sensitive-path:${sensitive}`);
+            }
+          }
+        }
+      },
+      "tool.execute.after": async (hookInput, output) => {
+        if (!NATIVE_OUTPUT_DLP_TOOLS.has(hookInput.tool))
           return;
-        const decision = guard.before({
-          sessionId: hookInput.sessionID,
-          agent: "",
-          tool: "bash",
-          action: "execute",
-          projectRoot: input.directory,
-          command
-        });
-        if (decision.decision === "deny") {
-          throw new Error(decision.reason ?? "command denied");
+        const dlp = guard.guardOutput(output.output);
+        output.output = dlp.output;
+        if (dlp.blocked) {
+          output.metadata = { ...output.metadata ?? {}, dlpBlocked: true, dlpRule: dlp.rule };
         }
       }
     };
@@ -14403,6 +14457,7 @@ export {
   invalidInput,
   internalError,
   hasBlockingSecret,
+  findSensitivePath,
   extractImports,
   extractApiSpecTool,
   err,

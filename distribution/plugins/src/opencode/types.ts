@@ -63,6 +63,10 @@ export type Hooks = {
     input: { tool: string; sessionID: string; callID: string },
     output: { args: any },
   ) => Promise<void>;
+  "tool.execute.after"?: (
+    input: { tool: string; sessionID: string; callID: string; args: any },
+    output: { title: string; output: string; metadata: any },
+  ) => Promise<void>;
   dispose?: () => Promise<void>;
 };
 

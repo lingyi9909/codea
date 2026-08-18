@@ -122,7 +122,10 @@ function hasDynamicExpansion(command: string): boolean {
 
 // Detects sensitive-path arguments on a read-only command: absolute paths escape
 // the project root, and dotfiles/credential/ssh-key paths are an exfil target.
-function findSensitivePath(command: string): string | null {
+// Exported for the plugin adapter, which applies the same check to native
+// read/grep/glob tool paths (filePath / path) so an enterprise agent cannot
+// `read .env` or `grep` a credential file through a native tool.
+export function findSensitivePath(command: string): string | null {
   if (/(^|[\s'"])\//.test(command)) return "absolute-path";
   if (/(^|[\s'"])~([\\/]|$)/.test(command)) return "home-path";
   if (/(^|[\s'"])[a-zA-Z]:[\\/]/.test(command)) return "windows-absolute";

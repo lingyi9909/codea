@@ -28,10 +28,28 @@ export function displayCommand(argv: readonly string[]): string {
   return argv.map((a) => (/\s/.test(a) ? JSON.stringify(a) : a)).join(" ");
 }
 
+const BATCH_FILE_RE = /\.(cmd|bat)$/i;
+
+// On Windows, .cmd/.bat batch files cannot be spawned directly by execFile — they
+// must run through cmd.exe. Route them via a controlled `cmd.exe /d /s /c`
+// invocation (argv array, never shell:true) so no POSIX shell is introduced. The
+// single command-line argument is joined by displayCommand; callers
+// (run_project_test) reject shell/cmd metacharacters in their args before this
+// point, so the /c command line carries no live metacharacters. On every other
+// platform the argv passes through unchanged.
+export function resolveExecArgv(argv: readonly string[], platform: string = process.platform): string[] {
+  const file = argv[0] ?? "";
+  if (platform === "win32" && BATCH_FILE_RE.test(file)) {
+    return ["cmd.exe", "/d", "/s", "/c", displayCommand(argv)];
+  }
+  return [...argv];
+}
+
 export function execCommand(argv: readonly string[], opts: ExecOptions): Promise<ExecResult> {
-  const file = argv[0];
+  const actual = resolveExecArgv(argv);
+  const file = actual[0];
   if (!file) throw commandFailed("empty command argv");
-  const args = argv.slice(1);
+  const args = actual.slice(1);
   const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
 
   return new Promise<ExecResult>((resolve) => {

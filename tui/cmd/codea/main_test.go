@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -157,5 +159,63 @@ func TestSupervisorConfigMapsStrictToIsolation(t *testing.T) {
 	compat := supervisorConfig(t.TempDir(), skill.SkillModeCompatible)
 	if compat.CodeaSkillsOnly {
 		t.Fatal("compatible mode must not set CodeaSkillsOnly")
+	}
+}
+
+// TestWritePluginConfigRegistersBundle guards the runtime plugin wiring: with a
+// bundle path override, writePluginConfig must materialize a Codea-owned
+// opencode.json whose `plugin` entry is the bundle's file:// URL.
+func TestWritePluginConfigRegistersBundle(t *testing.T) {
+	bundle := filepath.Join(t.TempDir(), "dist", "index.js")
+	if err := os.MkdirAll(filepath.Dir(bundle), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(bundle, []byte("// bundle"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("CODEA_PLUGIN_BUNDLE", bundle)
+
+	cfgDir := t.TempDir()
+	if err := writePluginConfig(cfgDir); err != nil {
+		t.Fatalf("writePluginConfig: %v", err)
+	}
+
+	data, err := os.ReadFile(filepath.Join(cfgDir, "opencode.json"))
+	if err != nil {
+		t.Fatalf("opencode.json not written: %v", err)
+	}
+	var cfg struct {
+		Plugin []string `json:"plugin"`
+	}
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		t.Fatalf("opencode.json invalid: %v", err)
+	}
+	if len(cfg.Plugin) != 1 {
+		t.Fatalf("plugin entries = %d, want 1", len(cfg.Plugin))
+	}
+
+	u, err := url.Parse(cfg.Plugin[0])
+	if err != nil {
+		t.Fatalf("plugin URL invalid: %v", err)
+	}
+	if u.Scheme != "file" {
+		t.Fatalf("plugin scheme = %q, want file", u.Scheme)
+	}
+	abs, _ := filepath.Abs(bundle)
+	if u.Path != filepath.ToSlash(abs) {
+		t.Fatalf("plugin path = %q, want %q", u.Path, filepath.ToSlash(abs))
+	}
+}
+
+// TestWritePluginConfigMissingBundleNoop guards graceful degradation: when the
+// bundle is not built, writePluginConfig must not fabricate a config.
+func TestWritePluginConfigMissingBundleNoop(t *testing.T) {
+	t.Setenv("CODEA_PLUGIN_BUNDLE", filepath.Join(t.TempDir(), "missing", "index.js"))
+	cfgDir := t.TempDir()
+	if err := writePluginConfig(cfgDir); err != nil {
+		t.Fatalf("writePluginConfig: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(cfgDir, "opencode.json")); !os.IsNotExist(err) {
+		t.Fatal("opencode.json must not be written when the bundle is missing")
 	}
 }

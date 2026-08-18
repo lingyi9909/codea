@@ -83,4 +83,25 @@ describe("runProjectTestTool.execute", () => {
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error.category).toBe("INVALID_INPUT");
   });
+
+  test("rejects shell metacharacters in testClass", async () => {
+    const ctx = makeContext(FIXTURE).ctx;
+    const result = await runProjectTestTool.execute({ buildSystem: "maven", testClass: "FooTest & del" }, ctx);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.category).toBe("INVALID_INPUT");
+  });
+
+  test("rejects shell metacharacters in module", async () => {
+    const ctx = makeContext(FIXTURE).ctx;
+    const result = await runProjectTestTool.execute({ buildSystem: "maven", module: "a|b" }, ctx);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.category).toBe("INVALID_INPUT");
+  });
+
+  test("rejects shell metacharacters in profiles", async () => {
+    const ctx = makeContext(FIXTURE).ctx;
+    const result = await runProjectTestTool.execute({ buildSystem: "maven", profiles: ["dev; rm -rf /"] }, ctx);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.category).toBe("INVALID_INPUT");
+  });
 });

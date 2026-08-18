@@ -117,4 +117,35 @@ if payload.get("healthy") is not True or payload.get("version") != "1.18.11":
 print(f"OpenCode healthy: version={payload['version']} (plugin registered)")
 PY
 
-echo "[PASS] real OpenCode v1.18.11 plugin smoke: adapter 8-tool guard chain + runtime serve load"
+# --- 3. Tool registry evidence --------------------------------------------------
+# The /experimental/tool/ids endpoint is workspace-routed, so it must be queried
+# with ?directory=<root> (or an x-opencode-directory header). Assert every one of
+# the 8 enterprise custom tools is registered in the live runtime — this is the
+# same registry OpenCode materializes via fromPlugin at tool-call time.
+tool_ids_file="$run_root/tool-ids.json"
+curl -fsS --max-time 30 -u "$username:$password" \
+  "http://127.0.0.1:$smoke_port/experimental/tool/ids?directory=$run_root" >"$tool_ids_file"
+
+python3 - "$tool_ids_file" <<'PY'
+import json
+import pathlib
+import sys
+
+ids = json.loads(pathlib.Path(sys.argv[1]).read_text())
+expected = [
+    "collect_review_context",
+    "analyze_test_project",
+    "write_test_file",
+    "run_project_test",
+    "extract_api_spec",
+    "validate_api_example",
+    "write_document",
+    "dify-query",
+]
+missing = [name for name in expected if name not in ids]
+if missing:
+    raise SystemExit(f"missing enterprise tools from /experimental/tool/ids: {missing}")
+print(f"enterprise tools registered: {len(expected)}/8 (of {len(ids)} total)")
+PY
+
+echo "[PASS] real OpenCode v1.18.11 plugin smoke: adapter 8-tool guard chain + runtime serve load + tool registry"

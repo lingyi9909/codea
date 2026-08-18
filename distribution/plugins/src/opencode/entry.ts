@@ -3,6 +3,7 @@ import * as path from "node:path";
 import { z } from "zod";
 import { AuditLogger } from "../audit-log";
 import { RuntimeSecurityGuard } from "../runtime-security-guard";
+import { findSensitivePath } from "../security/command-policy";
 import { DifyClient, difyConfigFromEnv } from "../dify-query";
 import { collectReviewContextTool } from "../tools/collect-review-context";
 import { analyzeTestProjectTool } from "../tools/analyze-test-project";
@@ -32,6 +33,21 @@ const TOOL_ACTIONS: Record<string, string> = {
 };
 
 const APPROVAL_ACTIONS = new Set(["write", "execute"]);
+
+// Native OpenCode tools whose output must pass output DLP before reaching the
+// model. Enterprise agents are allowed read/grep/glob/bash, so their raw output
+// (file contents, grep matches, command output) must be scanned for secrets.
+const NATIVE_OUTPUT_DLP_TOOLS = new Set(["read", "grep", "glob", "bash"]);
+
+// Native tools that carry a file/directory path in their args. These get a
+// sensitive-path check before execution (absolute/traversal/.env/.ssh/etc).
+const NATIVE_PATH_TOOLS = new Set(["read", "grep", "glob"]);
+
+function nativePathFor(tool: string, args: any): string | undefined {
+  if (tool === "read") return args?.filePath;
+  if (tool === "grep" || tool === "glob") return args?.path;
+  return undefined;
+}
 
 const TOOL_ARGS: Record<string, z.ZodRawShape> = {
   collect_review_context: {
@@ -229,21 +245,47 @@ export const plugin: PluginModule = {
     const hooks: Hooks = {
       tool: tools,
       "tool.execute.before": async (hookInput, output) => {
+        const tool = hookInput.tool;
         // Intercept the native bash tool: deny dangerous commands. "ask" decisions
         // are handled natively by the bash tool's own permission flow.
-        if (hookInput.tool !== "bash") return;
-        const command = (output.args as any)?.command;
-        if (typeof command !== "string") return;
-        const decision = guard.before({
-          sessionId: hookInput.sessionID,
-          agent: "",
-          tool: "bash",
-          action: "execute",
-          projectRoot: input.directory,
-          command,
-        });
-        if (decision.decision === "deny") {
-          throw new Error(decision.reason ?? "command denied");
+        if (tool === "bash") {
+          const command = (output.args as any)?.command;
+          if (typeof command !== "string") return;
+          const decision = guard.before({
+            sessionId: hookInput.sessionID,
+            agent: "",
+            tool: "bash",
+            action: "execute",
+            projectRoot: input.directory,
+            command,
+          });
+          if (decision.decision === "deny") {
+            throw new Error(decision.reason ?? "command denied");
+          }
+          return;
+        }
+
+        // Native read/grep/glob carry a path that must not point at a sensitive
+        // file or escape the project root. Deny before the file is even read.
+        if (NATIVE_PATH_TOOLS.has(tool)) {
+          const targetPath = nativePathFor(tool, output.args);
+          if (typeof targetPath === "string" && targetPath !== "") {
+            const sensitive = findSensitivePath(targetPath);
+            if (sensitive) {
+              throw new Error(`sensitive-path:${sensitive}`);
+            }
+          }
+        }
+      },
+      "tool.execute.after": async (hookInput, output) => {
+        // Native tool output (file contents / grep matches / command output) must
+        // pass output DLP before it reaches the model. Layer-1 secrets block the
+        // whole output; ordinary sensitive values are redacted in place.
+        if (!NATIVE_OUTPUT_DLP_TOOLS.has(hookInput.tool)) return;
+        const dlp = guard.guardOutput(output.output);
+        output.output = dlp.output;
+        if (dlp.blocked) {
+          output.metadata = { ...(output.metadata ?? {}), dlpBlocked: true, dlpRule: dlp.rule };
         }
       },
     };

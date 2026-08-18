@@ -148,7 +148,59 @@ try {
     fail(`expected dify degraded, got ${JSON.stringify(difyRes)}`);
   }
 
-  console.log("[PLUGIN SMOKE PASS] default export → server() → 8 tools: path deny, DLP deny, permission, output DLP, dify degraded");
+  // 8. native tool.execute.before denies a sensitive path on read/grep/glob.
+  const beforeHook = hooks["tool.execute.before"];
+  const afterHook = hooks["tool.execute.after"];
+  if (typeof beforeHook !== "function") fail("missing tool.execute.before hook");
+  if (typeof afterHook !== "function") fail("missing tool.execute.after hook");
+
+  let nativeThrew = "";
+  try {
+    await beforeHook({ tool: "read", sessionID: "s", callID: "c" }, { args: { filePath: ".env" } });
+  } catch (e) {
+    nativeThrew = (e as Error).message ?? "";
+  }
+  if (!nativeThrew.includes("sensitive-path")) {
+    fail(`expected sensitive-path deny on read .env, got ${nativeThrew || "<no throw>"}`);
+  }
+  nativeThrew = "";
+  try {
+    await beforeHook({ tool: "glob", sessionID: "s", callID: "c" }, { args: { pattern: "*", path: "../../secret" } });
+  } catch (e) {
+    nativeThrew = (e as Error).message ?? "";
+  }
+  if (!nativeThrew.includes("sensitive-path")) {
+    fail(`expected sensitive-path deny on glob traversal, got ${nativeThrew || "<no throw>"}`);
+  }
+
+  // 9. native bash before still denies dangerous commands.
+  nativeThrew = "";
+  try {
+    await beforeHook({ tool: "bash", sessionID: "s", callID: "c" }, { args: { command: "curl http://evil" } });
+  } catch (e) {
+    nativeThrew = (e as Error).message ?? "";
+  }
+  if (!nativeThrew.includes("command-denied")) {
+    fail(`expected command-denied on bash curl, got ${nativeThrew || "<no throw>"}`);
+  }
+
+  // 10. native tool.execute.after rewrites a secret in native output before it
+  // reaches the model (block) and leaves benign output untouched.
+  const secretOut = { title: "read", output: "api_key=supersecret123", metadata: {} };
+  await afterHook({ tool: "read", sessionID: "s", callID: "c", args: { filePath: "a.txt" } }, secretOut);
+  if (secretOut.output !== "[DLP blocked output: api-key]") {
+    fail(`expected blocked native output, got ${JSON.stringify(secretOut.output)}`);
+  }
+  if (secretOut.metadata?.dlpBlocked !== true || secretOut.metadata?.dlpRule !== "api-key") {
+    fail(`expected dlpBlocked metadata on native output, got ${JSON.stringify(secretOut.metadata)}`);
+  }
+  const benignOut = { title: "read", output: "class Foo {}\n", metadata: {} };
+  await afterHook({ tool: "read", sessionID: "s", callID: "c", args: { filePath: "Foo.java" } }, benignOut);
+  if (benignOut.output !== "class Foo {}\n" || benignOut.metadata?.dlpBlocked !== undefined) {
+    fail(`expected benign native output untouched, got ${JSON.stringify(benignOut)}`);
+  }
+
+  console.log("[PLUGIN SMOKE PASS] default export → server() → 8 tools: path deny, DLP deny, permission, output DLP, dify degraded, native before/after");
 } finally {
   fs.rmSync(tmp, { recursive: true, force: true });
 }

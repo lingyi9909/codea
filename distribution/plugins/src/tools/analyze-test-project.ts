@@ -68,7 +68,15 @@ export function detectTestRoots(root: string): string[] {
 }
 
 function detectWrapper(root: string): boolean {
-  return fileExists(root, "mvnw") || fileExists(root, "gradlew");
+  // Recognize both the Unix wrappers (mvnw/gradlew) and the Windows batch
+  // wrappers (mvnw.cmd/gradlew.bat) so wrapperAvailable is accurate on a
+  // Windows-only checkout.
+  return (
+    fileExists(root, "mvnw") ||
+    fileExists(root, "mvnw.cmd") ||
+    fileExists(root, "gradlew") ||
+    fileExists(root, "gradlew.bat")
+  );
 }
 
 function detectExistingTestPattern(root: string, testRoots: string[]): string {

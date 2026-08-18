@@ -54,6 +54,26 @@ const WRAPPERS: Record<"maven" | "gradle", string[]> = {
   gradle: ["gradlew", "gradlew.bat"],
 };
 
+// Shell/cmd metacharacters forbidden in caller-supplied build args. On Unix the
+// argv is passed to execFile (no shell), but on Windows the .cmd/.bat wrapper is
+// routed through `cmd.exe /c`, where these become live. Rejecting them up front
+// keeps the batch path injection-free for every platform.
+const UNSAFE_BUILD_ARG = /[\s&|<>^%!"'`();]/;
+
+function assertSafeBuildArgs(input: RunProjectTestInput): void {
+  for (const field of ["module", "testClass", "testMethod"] as const) {
+    const v = input[field];
+    if (typeof v === "string" && UNSAFE_BUILD_ARG.test(v)) {
+      throw invalidInput(`unsafe characters in ${field}`);
+    }
+  }
+  if (input.profiles) {
+    for (const p of input.profiles) {
+      if (UNSAFE_BUILD_ARG.test(p)) throw invalidInput("unsafe characters in profiles");
+    }
+  }
+}
+
 function detectWrapper(root: string, buildSystem: "maven" | "gradle"): string | null {
   for (const name of WRAPPERS[buildSystem]) {
     if (fileExists(root, name)) return name;
@@ -130,6 +150,7 @@ export const runProjectTestTool = {
         throw invalidInput(`invalid input: ${issues.map((i) => `${i.path} ${i.message}`).join("; ")}`);
       }
       const input = params as RunProjectTestInput;
+      assertSafeBuildArgs(input);
 
       const timeoutMs = Math.min(input.timeoutSeconds ?? DEFAULT_TIMEOUT_SECONDS, MAX_TIMEOUT_SECONDS) * 1000;
       const argv = buildCommand(input, ctx.projectRoot);
