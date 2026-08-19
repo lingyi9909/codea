@@ -5,11 +5,11 @@ taskOrder: ["0", "1", "2", "2A", "3", "4", "5", "6", "7", "8", "9", "10", "11", 
 current:
   task: "14"
   step: 1
-  status: pending
-  nextAction: Task 13 人工验收已通过并完成纯状态收口；运行 validator 后启动 Task 14
+  status: in_progress
+  nextAction: 按 Batch 14-15 计划执行 Task 14 Code Reviewer Agent；Task 15 保持 pending
 checkpoint:
-  commit: d2de0203be9f6d06a410e83c51733ab7db4781f4
-  updatedAt: "2026-08-19T06:09:53Z"
+  commit: 91baf1615221f67c4c6c5c21937af1b4c4a36ec6
+  updatedAt: "2026-08-19T07:35:00Z"
 verification:
   status: not_run
   commands: []
@@ -36,7 +36,7 @@ tasks:
   "11": {status: completed, completedSteps: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: a77cd96448894b515eb9ec5530659cd922b8b839, report: docs/task-reports/task-11.md}
   "12": {status: completed, completedSteps: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: d2de0203be9f6d06a410e83c51733ab7db4781f4, report: docs/task-reports/task-12.md}
   "13": {status: completed, completedSteps: [], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: d2de0203be9f6d06a410e83c51733ab7db4781f4, report: docs/task-reports/task-13.md}
-  "14": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-14.md}
+  "14": {status: in_progress, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: 91baf1615221f67c4c6c5c21937af1b4c4a36ec6, report: docs/task-reports/task-14.md}
   "15": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-15.md}
   "16": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-16.md}
   "17": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-17.md}
