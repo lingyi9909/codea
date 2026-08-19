@@ -6,10 +6,10 @@ current:
   task: "12"
   step: 1
   status: awaiting_acceptance
-  nextAction: Task 12 + Task 13 验收整改 Round 5（Windows 相对路径 + symlink/junction realpath + 敏感文件名大小写不敏感）已完成并重新跑全量 Gate，重新提交 Batch Human Review；等待人工验收后按 validator 顺序纯状态收口（Task 12 completed → Task 13 awaiting_acceptance → Task 13 completed）
+  nextAction: Task 12 + Task 13 验收整改 Round 6（realTarget sensitive check 封堵项目内 symlink 别名绕过）已完成并重新跑全量 Gate，重新提交 Batch Human Review；等待人工验收后按 validator 顺序纯状态收口（Task 12 completed → Task 13 awaiting_acceptance → Task 13 completed）
 checkpoint:
-  commit: be133eda923c104aa924b617c4b6e54136bc01da
-  updatedAt: "2026-08-19T05:32:31Z"
+  commit: d2de0203be9f6d06a410e83c51733ab7db4781f4
+  updatedAt: "2026-08-19T06:09:53Z"
 verification:
   status: pass
   commands:
@@ -54,8 +54,8 @@ tasks:
   "9": {status: completed, completedSteps: [1, 2, 3, 4, 5], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: ac9392c1a6ffe5ca773455b6240a8149010bfe42, report: docs/task-reports/task-09.md}
   "10": {status: completed, completedSteps: [1, 2, 3, 4, 5, 6, 7], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: eb5359dc26e322b777feaf6ddf6cbfdbbccbc685, report: docs/task-reports/task-10.md}
   "11": {status: completed, completedSteps: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: a77cd96448894b515eb9ec5530659cd922b8b839, report: docs/task-reports/task-11.md}
-  "12": {status: awaiting_acceptance, completedSteps: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], verificationStatus: pass, taskGateStatus: pass, humanAccepted: false, checkpoint: be133eda923c104aa924b617c4b6e54136bc01da, report: docs/task-reports/task-12.md}
-  "13": {status: pending, completedSteps: [], verificationStatus: pass, taskGateStatus: pass, humanAccepted: false, checkpoint: be133eda923c104aa924b617c4b6e54136bc01da, report: docs/task-reports/task-13.md}
+  "12": {status: awaiting_acceptance, completedSteps: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], verificationStatus: pass, taskGateStatus: pass, humanAccepted: false, checkpoint: d2de0203be9f6d06a410e83c51733ab7db4781f4, report: docs/task-reports/task-12.md}
+  "13": {status: pending, completedSteps: [], verificationStatus: pass, taskGateStatus: pass, humanAccepted: false, checkpoint: d2de0203be9f6d06a410e83c51733ab7db4781f4, report: docs/task-reports/task-13.md}
   "14": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-14.md}
   "15": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-15.md}
   "16": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-16.md}
