@@ -161,3 +161,17 @@ Round 3 Gate 复跑（Task 12 侧）：`bun test` 213 pass、`bun run build` 0.5
 2. **测试**：`path-policy.test.ts` 新增 `validateNativeReadPath` 单元测试（绝对路径在项目内 → allow、项目外 → deny、相对路径、空路径、`.env`/`.env.production`/`.ssh`/credentials/id_rsa 敏感目标、symlink escape、Windows drive/UNC/前向斜杠/不同盘符/大小写不敏感 containment）；`opencode-entry.test.ts` 新增「绝对路径在项目内 → allow、项目外 → deny、Windows 覆盖」集成断言；`tests/plugin-smoke.ts` 补绝对路径在项目内 allow + 项目外 deny 断言。
 
 Round 4 Gate 复跑（Task 12 侧）：`bun test` 234 pass、`bun run build` 0.52 MB、`./scripts/check-plugin-bundle.sh` PASS、`./scripts/run-plugin-smoke.sh` PASS、`OPENCODE_BIN=<abs> ./scripts/run-real-plugin-smoke.sh` PASS（`/experimental/tool/ids` 断言 8/8 企业 tool 注册）、`OPENCODE_BIN=<abs> ./scripts/run-real-parity-smoke.sh` 17/17 PASS（v1.18.11）、`GOTOOLCHAIN=local go test ./... -count=1` 22 packages PASS、`-race` PASS、`go vet` clean、`go build` PASS、Windows/darwin 交叉编译 PASS、`./scripts/check-runtime-boundary.sh` PASS、`./scripts/check-execution-state.sh` valid、`tests/execution-state/state_validator_test.sh` PASS。
+
+## 验收整改（Round 5 — Windows 相对路径 + symlink/junction realpath + 敏感文件名大小写）
+
+人工第四轮「有条件通过」指出的 1 个 Windows path-policy Blocking，本 Task 侧（Path Policy）修复：
+
+1. **Windows 路径风格不再只看 targetPath**：此前 `validateNativeReadPath` 用 `WINDOWS_DRIVE.test(targetPath) || WINDOWS_UNC.test(targetPath)` 决定 Windows 模式，导致 `root=C:\code\project` + `targetPath=src/main/java`（OpenCode `grep`/`glob` 合法允许的相对 `path`）落入 `path.posix` 分支。现改为 `windowsStyle = process.platform === "win32" || isWindowsPath(root) || isWindowsPath(targetPath)`；Windows root + 相对 target → `path.win32.resolve(root, target)`。新增 `isWindowsPath()` 复用 `WINDOWS_DRIVE`/`WINDOWS_UNC`。
+
+2. **路径风格与「当前主机是否可 realpath」分离**：此前只对 `!windows` 做 `realpathSync`，真实 Windows 主机上 Windows 绝对路径仅有 lexical containment，项目内 symlink/junction 指向外部不会被真实路径检查拦截。现改为 `canRealpath = (process.platform === "win32") === windowsStyle`：POSIX 主机 + POSIX path、Windows 主机 + Windows path 都执行 `fs.realpath` 的 symlink/junction escape 检测；POSIX 主机上模拟的 `C:\...`（单测）仅做 lexical containment（主机文件系统无法解析，跳过 realpath）。realpath 结果比较同样做大小写折叠。
+
+3. **敏感文件名大小写不敏感**：`sensitiveSegment` 的 `base` 统一 `toLowerCase()`，`credentials`/`.git-credentials`/`.npmrc`/`.netrc`/`id_rsa`/`id_ed25519`/`id_ecdsa`/`id_dsa` 命中 `Credentials`/`ID_RSA` 等（Windows 文件系统通常大小写不敏感）。
+
+4. **测试**：`path-policy.test.ts` 新增 Windows root + 相对路径在项目内 → allow、Windows root + 相对 traversal → deny（`..\..` 与 `../..` 两种分隔符）、Windows 大小写不敏感敏感文件名 → deny。真实 Windows 主机 junction/symlink escape（需 `process.platform === "win32"` 下对 `C:\...` 跑 `fs.realpath`）无法在 POSIX 测试主机上执行，该分支代码已就位（与 POSIX symlink escape 同构），真实 Windows junction 测试按 Windows wrapper 同样延后至发行验收（Task 17/18 / Task 21）。
+
+Round 5 Gate 复跑（Task 12 侧）：`bun test` 239 pass、`bun run build` 0.52 MB、`./scripts/check-plugin-bundle.sh` PASS、`./scripts/run-plugin-smoke.sh` PASS、`OPENCODE_BIN=<abs> ./scripts/run-real-plugin-smoke.sh` PASS（`/experimental/tool/ids` 断言 8/8 企业 tool 注册）、`OPENCODE_BIN=<abs> ./scripts/run-real-parity-smoke.sh` 17/17 PASS（v1.18.11）、`GOTOOLCHAIN=local go test ./... -count=1` 22 packages PASS、`-race` PASS、`go vet` clean、`go build` PASS、Windows/darwin 交叉编译 PASS、`./scripts/check-runtime-boundary.sh` PASS、`./scripts/check-execution-state.sh` valid、`tests/execution-state/state_validator_test.sh` PASS。

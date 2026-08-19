@@ -16,6 +16,10 @@ export class PathViolationError extends Error {
 const WINDOWS_DRIVE = /^[a-zA-Z]:[\\/]/;
 const WINDOWS_UNC = /^\\\\/;
 
+function isWindowsPath(p: string): boolean {
+  return WINDOWS_DRIVE.test(p) || WINDOWS_UNC.test(p);
+}
+
 function normalizeSeparators(p: string): string {
   return p.replace(/\\/g, "/");
 }
@@ -43,11 +47,13 @@ const PEM_FILE_RE = /\.pem$/i;
 // Detects a sensitive file/dir target anywhere in a (already separator-normalised)
 // path. Applied only after containment is confirmed, so this never broadens the
 // boundary — it only denies sensitive destinations that sit inside the root.
+// Filenames are matched case-insensitively: Windows filesystems are usually
+// case-insensitive, so "Credentials" / "ID_RSA" are equally sensitive targets.
 function sensitiveSegment(targetPath: string): string | null {
   const norm = normalizeSeparators(targetPath);
   const segments = norm.split("/").filter((s) => s.length > 0);
   if (segments.length === 0) return null;
-  const base = segments[segments.length - 1];
+  const base = segments[segments.length - 1].toLowerCase();
   if (ENV_FILE_RE.test(base)) return "sensitive-file:.env";
   if (PEM_FILE_RE.test(base)) return "sensitive-file:.pem";
   if (SSH_KEY_FILES.has(base)) return "sensitive-file:ssh-key";
@@ -142,17 +148,25 @@ export function toRelativePath(root: string, p: string): string {
 //     |-- no  -> deny (outside-project / symlink-escape / unresolvable)
 //     `-- yes -> check .env/.ssh/.aws/credentials/etc -> allow or deny
 //
-// Windows drive/UNC absolutes are resolved lexically with path.win32 (they cannot
-// be realpaths on a POSIX host, and vice versa) so the containment rule stays
-// identical on macOS and Windows. Returns a short deny reason, or null to allow.
+// Path STYLE (Windows drive/UNC vs POSIX) is decided by the root, the target, or
+// the host platform — NOT by the target alone. A Windows project root with a
+// relative target (e.g. root=C:\code\project, target=src/main/java, which
+// OpenCode's grep/glob legitimately send) must still resolve with path.win32.
+// Windows paths are folded case-insensitively for containment.
+//
+// Symlink/junction realpath is only run when the path style matches the host
+// filesystem (POSIX host + POSIX path, or Windows host + Windows path). A
+// Windows-style path simulated on a POSIX host (unit tests) cannot be realpath'd,
+// so it is judged lexically only. Returns a short deny reason, or null to allow.
 export function validateNativeReadPath(root: string, targetPath: string): string | null {
   if (typeof targetPath !== "string" || targetPath.length === 0) {
     return "empty-path";
   }
 
-  const windows = WINDOWS_DRIVE.test(targetPath) || WINDOWS_UNC.test(targetPath);
-  const pathImpl = windows ? path.win32 : path.posix;
-  const caseFold = (p: string): string => (windows ? p.toLowerCase() : p);
+  const hostIsWindows = process.platform === "win32";
+  const windowsStyle = hostIsWindows || isWindowsPath(root) || isWindowsPath(targetPath);
+  const pathImpl = windowsStyle ? path.win32 : path.posix;
+  const caseFold = (p: string): string => (windowsStyle ? p.toLowerCase() : p);
 
   const rootResolved = pathImpl.resolve(normalizeSeparators(root));
   const targetResolved = pathImpl.isAbsolute(targetPath)
@@ -168,13 +182,16 @@ export function validateNativeReadPath(root: string, targetPath: string): string
   const sensitive = sensitiveSegment(targetPath);
   if (sensitive) return sensitive;
 
-  // Symlink escape is only meaningful on host-resolvable (POSIX) paths. Windows
-  // absolutes are judged lexically above and cannot be realpath'd on a POSIX host.
-  if (!windows) {
+  // Realpath the symlink/junction escape check only when the path style matches
+  // the host filesystem. On a Windows host this covers junction/symlink escapes;
+  // on a POSIX host it covers symlink escapes. Mismatched (simulated) paths are
+  // lexical-only because the host filesystem cannot resolve them.
+  const canRealpath = hostIsWindows === windowsStyle;
+  if (canRealpath) {
     try {
       const realRoot = fs.realpathSync(rootResolved);
       const realTarget = realpathExisting(targetResolved);
-      if (!isWithinNormalized(normalizeSeparators(realRoot), normalizeSeparators(realTarget))) {
+      if (!isWithinNormalized(caseFold(normalizeSeparators(realRoot)), caseFold(normalizeSeparators(realTarget)))) {
         return "symlink-escape";
       }
     } catch {

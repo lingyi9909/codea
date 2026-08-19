@@ -245,6 +245,9 @@ class PathViolationError extends Error {
 }
 var WINDOWS_DRIVE = /^[a-zA-Z]:[\\/]/;
 var WINDOWS_UNC = /^\\\\/;
+function isWindowsPath(p) {
+  return WINDOWS_DRIVE.test(p) || WINDOWS_UNC.test(p);
+}
 function normalizeSeparators(p) {
   return p.replace(/\\/g, "/");
 }
@@ -270,7 +273,7 @@ function sensitiveSegment(targetPath) {
   const segments = norm.split("/").filter((s) => s.length > 0);
   if (segments.length === 0)
     return null;
-  const base = segments[segments.length - 1];
+  const base = segments[segments.length - 1].toLowerCase();
   if (ENV_FILE_RE.test(base))
     return "sensitive-file:.env";
   if (PEM_FILE_RE.test(base))
@@ -354,9 +357,10 @@ function validateNativeReadPath(root, targetPath) {
   if (typeof targetPath !== "string" || targetPath.length === 0) {
     return "empty-path";
   }
-  const windows = WINDOWS_DRIVE.test(targetPath) || WINDOWS_UNC.test(targetPath);
-  const pathImpl = windows ? path.win32 : path.posix;
-  const caseFold = (p) => windows ? p.toLowerCase() : p;
+  const hostIsWindows = process.platform === "win32";
+  const windowsStyle = hostIsWindows || isWindowsPath(root) || isWindowsPath(targetPath);
+  const pathImpl = windowsStyle ? path.win32 : path.posix;
+  const caseFold = (p) => windowsStyle ? p.toLowerCase() : p;
   const rootResolved = pathImpl.resolve(normalizeSeparators(root));
   const targetResolved = pathImpl.isAbsolute(targetPath) ? pathImpl.resolve(normalizeSeparators(targetPath)) : pathImpl.resolve(rootResolved, normalizeSeparators(targetPath));
   const rootKey = caseFold(normalizeSeparators(rootResolved));
@@ -367,11 +371,12 @@ function validateNativeReadPath(root, targetPath) {
   const sensitive = sensitiveSegment(targetPath);
   if (sensitive)
     return sensitive;
-  if (!windows) {
+  const canRealpath = hostIsWindows === windowsStyle;
+  if (canRealpath) {
     try {
       const realRoot = fs.realpathSync(rootResolved);
       const realTarget = realpathExisting(targetResolved);
-      if (!isWithinNormalized(normalizeSeparators(realRoot), normalizeSeparators(realTarget))) {
+      if (!isWithinNormalized(caseFold(normalizeSeparators(realRoot)), caseFold(normalizeSeparators(realTarget)))) {
         return "symlink-escape";
       }
     } catch {

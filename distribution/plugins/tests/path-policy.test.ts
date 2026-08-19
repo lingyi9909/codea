@@ -164,4 +164,25 @@ describe("validateNativeReadPath — windows paths", () => {
   test("case-insensitive windows containment allows different-cased drive/segments", () => {
     expect(validateNativeReadPath(winRoot, "c:\\CODE\\Project\\src\\Foo.java")).toBeNull();
   });
+  test("windows root + relative in-root path is allowed (grep/glob relative path)", () => {
+    expect(validateNativeReadPath(winRoot, "src/main/java")).toBeNull();
+  });
+  test("windows root + forward-slash relative in-root path is allowed", () => {
+    expect(validateNativeReadPath(winRoot, "src\\main\\java\\Foo.java")).toBeNull();
+  });
+  test("windows root + relative traversal is denied", () => {
+    expect(validateNativeReadPath(winRoot, "..\\..\\secret.txt")).toBe("outside-project");
+  });
+  test("windows root + forward-slash relative traversal is denied", () => {
+    expect(validateNativeReadPath(winRoot, "../../secret.txt")).toBe("outside-project");
+  });
+  test("windows case-insensitive sensitive filename is denied", () => {
+    expect(validateNativeReadPath(winRoot, "C:\\code\\project\\Credentials")).toBe("sensitive-file:credentials");
+    expect(validateNativeReadPath(winRoot, "C:\\code\\project\\ID_RSA")).toBe("sensitive-file:ssh-key");
+  });
+  // NOTE: real Windows host junction/symlink escape (fs.realpath of C:\... under
+  // process.platform === "win32") cannot be exercised on a POSIX test host, where
+  // such paths are judged lexically only. The code branch is exercised by the
+  // POSIX symlink-escape test above; a real Windows junction test is deferred to
+  // the Windows release gate (Task 17/18 / Task 21).
 });
