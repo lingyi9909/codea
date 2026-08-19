@@ -1,0 +1,22 @@
+name: code-reviewer
+version: 1.0.0
+displayName: Code Reviewer
+mode: enterprise-controlled
+requiredSkills:
+  - code-review
+optionalSkills:
+  - java-review
+  - security-review
+tools:
+  read: allow
+  grep: allow
+  glob: allow
+  collect_review_context: allow
+  dify-query: allow
+  write: deny
+  edit: deny
+  bash: deny
+constraints:
+  maxCallChainDepth: 3
+  minimumFindingConfidence: 0.80
+  readOnly: true
