@@ -1,0 +1,20 @@
+name: unit-test-generator
+version: 1.0.0
+displayName: Unit Test Generator
+mode: enterprise-controlled
+requiredSkills:
+  - unit-test
+tools:
+  read: allow
+  grep: allow
+  glob: allow
+  analyze_test_project: allow
+  write_test_file: allow
+  run_project_test: allow
+  dify-query: allow
+  write: deny
+  edit: deny
+  bash: deny
+constraints:
+  maxRepairAttempts: 3
+  neverOverwriteExisting: true
