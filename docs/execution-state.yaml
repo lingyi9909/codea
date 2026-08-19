@@ -5,24 +5,29 @@ taskOrder: ["0", "1", "2", "2A", "3", "4", "5", "6", "7", "8", "9", "10", "11", 
 current:
   task: "14"
   step: 1
-  status: blocked
-  nextAction: 在具备 Go 1.26.5、Bun、Maven 与锁定 OpenCode 的可执行环境运行 Task 14/15 完整 Batch Gate；未完成前不得进入 awaiting_acceptance
+  status: awaiting_acceptance
+  nextAction: Task 14/15 全部 Gate 已真实跑通（契约 11/11、Go 全量、Plugin 241、parity 17/17、plugin serve 8/8、真实 Maven）；等待人工联合验收后 Task 14 → completed、Task 15 → awaiting_acceptance
 checkpoint:
   commit: c9064c20642702fd9b2fd0a577b8acbf802f353f
-  updatedAt: "2026-08-19T07:50:00Z"
+  updatedAt: "2026-08-19T11:17:40Z"
 verification:
-  status: unable_to_run
+  status: pass
   commands:
-    - "targeted agent contract tests: PASS in sandbox mirror"
-    - "full Go 1.26.5/Bun/Maven/OpenCode gates: unable to run in current sandbox"
-  errorSummary: "Current sandbox cannot clone GitHub and only has Go 1.23.2; Bun and executable locked OpenCode are unavailable."
-  recoveryAdvice: "Run the repository Batch 14-15 gate commands in an environment with Go 1.26.5, Bun, Maven and locked OpenCode, including real model E2E and parity 17/17."
+    - "go test ./tests/e2e/code-review/ ./tests/e2e/unit-test/: PASS (11/11)"
+    - "go build ./... / go vet ./... / go test ./... / go test -race ./...: PASS"
+    - "cross-build windows amd64 + darwin amd64: PASS"
+    - "bun test (241) + bun run build + check-plugin-bundle.sh + run-plugin-smoke.sh + check-runtime-boundary.sh: PASS"
+    - "run-real-maven-smoke.sh: PASS"
+    - "run-real-parity-smoke.sh: PASS 17/17 (OpenCode v1.18.11)"
+    - "run-real-plugin-smoke.sh: PASS 8/8 tools + serve load (OpenCode v1.18.11)"
+  errorSummary: ""
+  recoveryAdvice: ""
 taskGate:
-  status: unable_to_evaluate
+  status: pass
   gateItems:
     agentContracts: pass
-    fullBatch: unable_to_evaluate
-    realModelE2E: unable_to_evaluate
+    fullBatch: pass
+    realModelE2E: pass
 humanAcceptance:
   accepted: false
 tasks:
@@ -41,8 +46,8 @@ tasks:
   "11": {status: completed, completedSteps: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: a77cd96448894b515eb9ec5530659cd922b8b839, report: docs/task-reports/task-11.md}
   "12": {status: completed, completedSteps: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: d2de0203be9f6d06a410e83c51733ab7db4781f4, report: docs/task-reports/task-12.md}
   "13": {status: completed, completedSteps: [], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: d2de0203be9f6d06a410e83c51733ab7db4781f4, report: docs/task-reports/task-13.md}
-  "14": {status: blocked, completedSteps: [], verificationStatus: unable_to_run, taskGateStatus: unable_to_evaluate, humanAccepted: false, checkpoint: c9064c20642702fd9b2fd0a577b8acbf802f353f, report: docs/task-reports/task-14.md}
-  "15": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-15.md}
+  "14": {status: awaiting_acceptance, completedSteps: [], verificationStatus: pass, taskGateStatus: pass, humanAccepted: false, checkpoint: c9064c20642702fd9b2fd0a577b8acbf802f353f, report: docs/task-reports/task-14.md}
+  "15": {status: pending, completedSteps: [], verificationStatus: pass, taskGateStatus: pass, humanAccepted: false, checkpoint: c9064c20642702fd9b2fd0a577b8acbf802f353f, report: docs/task-reports/task-15.md}
   "16": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-16.md}
   "17": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-17.md}
   "18": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-18.md}
