@@ -1,0 +1,12 @@
+schemaVersion: 1
+categories:
+  COMPILE_ERROR: {repairable: true, description: Generated test does not compile}
+  DEPENDENCY_ERROR: {repairable: false, description: Required dependency or framework is unavailable}
+  TEST_FAILURE: {repairable: true, description: Generated test fails}
+  ASSERTION_FAILURE: {repairable: true, description: Generated assertion is incorrect after evidence review}
+  MOCK_CONFIGURATION: {repairable: true, description: Generated mock setup is invalid}
+  TEST_RUNTIME_ERROR: {repairable: false, description: Runtime error not proven to be generated-test logic}
+  TIMEOUT: {repairable: false, description: Test execution timed out unless clearly caused by generated-test logic}
+  INFRASTRUCTURE_ERROR: {repairable: false, description: Environment or build infrastructure failure}
+terminalOutcomes:
+  PRODUCT_CODE_DEFECT_SUSPECTED: stop
