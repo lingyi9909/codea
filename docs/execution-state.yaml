@@ -5,8 +5,8 @@ taskOrder: ["0", "1", "2", "2A", "3", "4", "5", "6", "7", "8", "9", "10", "11", 
 current:
   task: "13"
   step: 1
-  status: pending
-  nextAction: Task 12 人工验收已通过；按 Batch 纯状态收口，下一步将 Task 13 切换 awaiting_acceptance 并运行 validator
+  status: awaiting_acceptance
+  nextAction: Task 13 已进入 awaiting_acceptance；运行 validator 通过后按人工验收结果收口为 completed
 checkpoint:
   commit: d2de0203be9f6d06a410e83c51733ab7db4781f4
   updatedAt: "2026-08-19T06:09:53Z"
@@ -55,7 +55,7 @@ tasks:
   "10": {status: completed, completedSteps: [1, 2, 3, 4, 5, 6, 7], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: eb5359dc26e322b777feaf6ddf6cbfdbbccbc685, report: docs/task-reports/task-10.md}
   "11": {status: completed, completedSteps: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: a77cd96448894b515eb9ec5530659cd922b8b839, report: docs/task-reports/task-11.md}
   "12": {status: completed, completedSteps: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: d2de0203be9f6d06a410e83c51733ab7db4781f4, report: docs/task-reports/task-12.md}
-  "13": {status: pending, completedSteps: [], verificationStatus: pass, taskGateStatus: pass, humanAccepted: false, checkpoint: d2de0203be9f6d06a410e83c51733ab7db4781f4, report: docs/task-reports/task-13.md}
+  "13": {status: awaiting_acceptance, completedSteps: [], verificationStatus: pass, taskGateStatus: pass, humanAccepted: false, checkpoint: d2de0203be9f6d06a410e83c51733ab7db4781f4, report: docs/task-reports/task-13.md}
   "14": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-14.md}
   "15": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-15.md}
   "16": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-16.md}
