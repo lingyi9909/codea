@@ -2,7 +2,7 @@
 
 ## Overview
 
-Checkpoint: `1968d78c4120ccb781eb9672639f0a761e7b0b59`
+Checkpoint: `be133eda923c104aa924b617c4b6e54136bc01da`
 
 在 Task 12 的 Plugin 工程与安全基础之上，实现 7 个企业 Custom Tool（代码审查上下文收集 / 测试工程分析 / 测试文件写入 / 测试运行 / API 规范提取 / API 示例校验 / 文档写入），并建立统一 Tool 基础设施（ToolContext / ToolError / ToolResult / 9 类错误分类 / JSON Schema 校验 / 受控 exec / 受控文件系统），配真实 java-maven fixture 与 E2E（3 流程），每个 write/exec tool 配安全负向 Gate。
 
