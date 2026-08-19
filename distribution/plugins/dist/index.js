@@ -379,6 +379,9 @@ function validateNativeReadPath(root, targetPath) {
       if (!isWithinNormalized(caseFold(normalizeSeparators(realRoot)), caseFold(normalizeSeparators(realTarget)))) {
         return "symlink-escape";
       }
+      const realSensitive = sensitiveSegment(realTarget);
+      if (realSensitive)
+        return realSensitive;
     } catch {
       return "unresolvable";
     }

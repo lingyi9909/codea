@@ -175,3 +175,13 @@ Round 4 Gate 复跑（Task 12 侧）：`bun test` 234 pass、`bun run build` 0.5
 4. **测试**：`path-policy.test.ts` 新增 Windows root + 相对路径在项目内 → allow、Windows root + 相对 traversal → deny（`..\..` 与 `../..` 两种分隔符）、Windows 大小写不敏感敏感文件名 → deny。真实 Windows 主机 junction/symlink escape（需 `process.platform === "win32"` 下对 `C:\...` 跑 `fs.realpath`）无法在 POSIX 测试主机上执行，该分支代码已就位（与 POSIX symlink escape 同构），真实 Windows junction 测试按 Windows wrapper 同样延后至发行验收（Task 17/18 / Task 21）。
 
 Round 5 Gate 复跑（Task 12 侧）：`bun test` 239 pass、`bun run build` 0.52 MB、`./scripts/check-plugin-bundle.sh` PASS、`./scripts/run-plugin-smoke.sh` PASS、`OPENCODE_BIN=<abs> ./scripts/run-real-plugin-smoke.sh` PASS（`/experimental/tool/ids` 断言 8/8 企业 tool 注册）、`OPENCODE_BIN=<abs> ./scripts/run-real-parity-smoke.sh` 17/17 PASS（v1.18.11）、`GOTOOLCHAIN=local go test ./... -count=1` 22 packages PASS、`-race` PASS、`go vet` clean、`go build` PASS、Windows/darwin 交叉编译 PASS、`./scripts/check-runtime-boundary.sh` PASS、`./scripts/check-execution-state.sh` valid、`tests/execution-state/state_validator_test.sh` PASS。
+
+## 验收整改（Round 6 — realTarget sensitive check 封堵项目内 symlink 别名绕过）
+
+人工第五轮「有条件通过」指出的 1 个安全 Blocking，本 Task 侧（Path Policy）修复：
+
+1. **项目内 symlink → 项目内敏感文件绕过**：此前顺序为「lexical containment → 原始路径 sensitive → realpath → realpath containment」，`sensitiveSegment` 只作用于用户传入的原始路径，`read config-link`（`config-link -> .env`，二者都在项目内）时原始路径不敏感、realpath 结果仍在项目内，最终被放行，`.env`/`credentials` 禁读策略被项目内 symlink 别名绕过。现固定顺序为 `resolve → lexical containment → 原始路径 sensitive → realpath → realpath containment → realTarget sensitive → allow`：realpath 后对真实目标 `realTarget` 再跑一次 `sensitiveSegment`，命中即返回 `sensitive-file:*`/`sensitive-dir`。输出 DLP 不兜底（`.env` 普通配置/账号/地址不一定命中 secret regex），此检查在文件读取前直接 deny。
+
+2. **测试**：`path-policy.test.ts` 新增「symlink inside root → in-root `.env` → `sensitive-file:.env`」「symlink inside root → in-root `credentials` → `sensitive-file:credentials`」两个负向测试。Windows junction 指向项目内 `.env` 的实机测试继续延后至发行验收（Task 17/18 / Task 21），本轮不阻塞。
+
+Round 6 Gate 复跑（Task 12 侧）：`bun test` 241 pass、`bun run build` 0.52 MB、`./scripts/check-plugin-bundle.sh` PASS、`./scripts/run-plugin-smoke.sh` PASS、`OPENCODE_BIN=<abs> ./scripts/run-real-plugin-smoke.sh` PASS（`/experimental/tool/ids` 断言 8/8 企业 tool 注册）、`OPENCODE_BIN=<abs> ./scripts/run-real-parity-smoke.sh` 17/17 PASS（v1.18.11）、`GOTOOLCHAIN=local go test ./... -count=1` 22 packages PASS、`-race` PASS、`go vet` clean、`go build` PASS、Windows/darwin 交叉编译 PASS、`./scripts/check-runtime-boundary.sh` PASS、`./scripts/check-execution-state.sh` valid、`tests/execution-state/state_validator_test.sh` PASS。

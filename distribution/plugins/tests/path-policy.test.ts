@@ -139,6 +139,30 @@ describe("validateNativeReadPath — symlink escape", () => {
       fs.rmSync(link, { force: true });
     }
   });
+  test("symlink inside root pointing at in-root .env is denied", () => {
+    const envFile = path.join(root, ".env");
+    fs.writeFileSync(envFile, "KEY=value\n");
+    const link = path.join(root, "config-link");
+    fs.symlinkSync(".env", link);
+    try {
+      expect(validateNativeReadPath(root, link)).toBe("sensitive-file:.env");
+    } finally {
+      fs.rmSync(link, { force: true });
+      fs.rmSync(envFile, { force: true });
+    }
+  });
+  test("symlink inside root pointing at in-root credentials is denied", () => {
+    const credFile = path.join(root, "credentials");
+    fs.writeFileSync(credFile, "x\n");
+    const link = path.join(root, "creds-link");
+    fs.symlinkSync("credentials", link);
+    try {
+      expect(validateNativeReadPath(root, link)).toBe("sensitive-file:credentials");
+    } finally {
+      fs.rmSync(link, { force: true });
+      fs.rmSync(credFile, { force: true });
+    }
+  });
 });
 
 describe("validateNativeReadPath — windows paths", () => {

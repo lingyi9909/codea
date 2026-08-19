@@ -194,6 +194,11 @@ export function validateNativeReadPath(root: string, targetPath: string): string
       if (!isWithinNormalized(caseFold(normalizeSeparators(realRoot)), caseFold(normalizeSeparators(realTarget)))) {
         return "symlink-escape";
       }
+      // The original path may be an innocuous alias (e.g. config-link -> .env)
+      // that stays inside the root; re-run the sensitive check on the resolved
+      // target so an in-root symlink cannot bypass the .env/credentials rule.
+      const realSensitive = sensitiveSegment(realTarget);
+      if (realSensitive) return realSensitive;
     } catch {
       return "unresolvable";
     }
