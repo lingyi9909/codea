@@ -3,7 +3,7 @@ import * as path from "node:path";
 import { z } from "zod";
 import { AuditLogger } from "../audit-log";
 import { RuntimeSecurityGuard } from "../runtime-security-guard";
-import { findSensitivePath } from "../security/command-policy";
+import { validateNativeReadPath } from "../security/path-policy";
 import { DifyClient, difyConfigFromEnv } from "../dify-query";
 import { collectReviewContextTool } from "../tools/collect-review-context";
 import { analyzeTestProjectTool } from "../tools/analyze-test-project";
@@ -265,14 +265,16 @@ export const plugin: PluginModule = {
           return;
         }
 
-        // Native read/grep/glob carry a path that must not point at a sensitive
-        // file or escape the project root. Deny before the file is even read.
+        // Native read/grep/glob carry a path that must stay inside the project
+        // root and not point at a sensitive file. Absolute in-root paths are
+        // allowed (OpenCode defines read.filePath as absolute); only escapes and
+        // sensitive targets are denied, before the file is even read.
         if (NATIVE_PATH_TOOLS.has(tool)) {
           const targetPath = nativePathFor(tool, output.args);
           if (typeof targetPath === "string" && targetPath !== "") {
-            const sensitive = findSensitivePath(targetPath);
-            if (sensitive) {
-              throw new Error(`sensitive-path:${sensitive}`);
+            const reason = validateNativeReadPath(input.directory, targetPath);
+            if (reason) {
+              throw new Error(`native-path:${reason}`);
             }
           }
         }

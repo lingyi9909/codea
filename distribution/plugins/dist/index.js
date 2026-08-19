@@ -254,6 +254,37 @@ function isWithin(root, target) {
   const prefix = root.endsWith(path.sep) ? root : root + path.sep;
   return target.startsWith(prefix);
 }
+function isWithinNormalized(root, target) {
+  if (target === root)
+    return true;
+  const prefix = root.endsWith("/") ? root : root + "/";
+  return target.startsWith(prefix);
+}
+var SENSITIVE_DIRS = new Set([".ssh", ".aws", ".gnupg"]);
+var SENSITIVE_FILES = new Set(["credentials", ".git-credentials", ".npmrc", ".netrc"]);
+var SSH_KEY_FILES = new Set(["id_rsa", "id_ed25519", "id_ecdsa", "id_dsa"]);
+var ENV_FILE_RE = /^\.env(\.[\w-]+)?$/i;
+var PEM_FILE_RE = /\.pem$/i;
+function sensitiveSegment(targetPath) {
+  const norm = normalizeSeparators(targetPath);
+  const segments = norm.split("/").filter((s) => s.length > 0);
+  if (segments.length === 0)
+    return null;
+  const base = segments[segments.length - 1];
+  if (ENV_FILE_RE.test(base))
+    return "sensitive-file:.env";
+  if (PEM_FILE_RE.test(base))
+    return "sensitive-file:.pem";
+  if (SSH_KEY_FILES.has(base))
+    return "sensitive-file:ssh-key";
+  if (SENSITIVE_FILES.has(base))
+    return "sensitive-file:credentials";
+  for (const seg of segments) {
+    if (SENSITIVE_DIRS.has(seg.toLowerCase()))
+      return "sensitive-dir";
+  }
+  return null;
+}
 function realpathExisting(p) {
   let cur = path.resolve(p);
   const suffix = [];
@@ -318,6 +349,36 @@ function toRelativePath(root, p) {
   const target = path.resolve(rootAbs, normalizeSeparators(p));
   const rel = path.relative(rootAbs, target);
   return normalizeSeparators(rel === "" ? "." : rel);
+}
+function validateNativeReadPath(root, targetPath) {
+  if (typeof targetPath !== "string" || targetPath.length === 0) {
+    return "empty-path";
+  }
+  const windows = WINDOWS_DRIVE.test(targetPath) || WINDOWS_UNC.test(targetPath);
+  const pathImpl = windows ? path.win32 : path.posix;
+  const caseFold = (p) => windows ? p.toLowerCase() : p;
+  const rootResolved = pathImpl.resolve(normalizeSeparators(root));
+  const targetResolved = pathImpl.isAbsolute(targetPath) ? pathImpl.resolve(normalizeSeparators(targetPath)) : pathImpl.resolve(rootResolved, normalizeSeparators(targetPath));
+  const rootKey = caseFold(normalizeSeparators(rootResolved));
+  const targetKey = caseFold(normalizeSeparators(targetResolved));
+  if (!isWithinNormalized(rootKey, targetKey)) {
+    return "outside-project";
+  }
+  const sensitive = sensitiveSegment(targetPath);
+  if (sensitive)
+    return sensitive;
+  if (!windows) {
+    try {
+      const realRoot = fs.realpathSync(rootResolved);
+      const realTarget = realpathExisting(targetResolved);
+      if (!isWithinNormalized(normalizeSeparators(realRoot), normalizeSeparators(realTarget))) {
+        return "symlink-escape";
+      }
+    } catch {
+      return "unresolvable";
+    }
+  }
+  return null;
 }
 // src/dify-query.ts
 class CircuitOpenError extends Error {
@@ -14406,9 +14467,9 @@ var plugin = {
         if (NATIVE_PATH_TOOLS.has(tool)) {
           const targetPath = nativePathFor(tool, output.args);
           if (typeof targetPath === "string" && targetPath !== "") {
-            const sensitive = findSensitivePath(targetPath);
-            if (sensitive) {
-              throw new Error(`sensitive-path:${sensitive}`);
+            const reason = validateNativeReadPath(input.directory, targetPath);
+            if (reason) {
+              throw new Error(`native-path:${reason}`);
             }
           }
         }
@@ -14430,6 +14491,7 @@ export {
   writeTestFileTool,
   writeDocumentTool,
   validatePermissions,
+  validateNativeReadPath,
   validateExample,
   validateApiExampleTool,
   toToolError,
@@ -14457,7 +14519,6 @@ export {
   invalidInput,
   internalError,
   hasBlockingSecret,
-  findSensitivePath,
   extractImports,
   extractApiSpecTool,
   err,

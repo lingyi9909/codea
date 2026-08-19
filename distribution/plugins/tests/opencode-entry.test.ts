@@ -18,7 +18,7 @@ function makeInput(root: string): PluginInput {
 }
 
 describe("OpenCode entry — native tool hooks", () => {
-  test("tool.execute.before denies sensitive paths on read/grep/glob", async () => {
+  test("tool.execute.before denies sensitive and out-of-root paths on read/grep/glob", async () => {
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "codea-entry-"));
     const root = path.join(tmp, "project");
     fs.mkdirSync(root, { recursive: true });
@@ -29,20 +29,55 @@ describe("OpenCode entry — native tool hooks", () => {
 
       await expect(
         before!({ tool: "read", sessionID: "s", callID: "c" }, { args: { filePath: ".env" } }),
-      ).rejects.toThrow(/sensitive-path/);
+      ).rejects.toThrow(/native-path:sensitive-file:\.env/);
 
       await expect(
         before!({ tool: "grep", sessionID: "s", callID: "c" }, { args: { pattern: "x", path: "/etc" } }),
-      ).rejects.toThrow(/sensitive-path/);
+      ).rejects.toThrow(/native-path:outside-project/);
 
       await expect(
         before!({ tool: "glob", sessionID: "s", callID: "c" }, { args: { pattern: "*", path: "../../secret" } }),
-      ).rejects.toThrow(/sensitive-path/);
+      ).rejects.toThrow(/native-path:outside-project/);
 
-      // benign path passes.
+      // benign relative path passes.
       await expect(
         before!({ tool: "read", sessionID: "s", callID: "c" }, { args: { filePath: "src/main/Foo.java" } }),
       ).resolves.toBeUndefined();
+    } finally {
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  test("tool.execute.before allows absolute in-root paths (OpenCode read.filePath contract)", async () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "codea-entry-"));
+    const root = path.join(tmp, "project");
+    fs.mkdirSync(path.join(root, "src", "main", "java"), { recursive: true });
+    try {
+      const hooks = await plugin.server(makeInput(root), { auditLog: path.join(tmp, "audit.log") });
+      const before = hooks["tool.execute.before"];
+
+      // absolute path inside project -> allow (not misclassified as sensitive)
+      const absInside = path.join(root, "src/main/java/Foo.java");
+      await expect(
+        before!({ tool: "read", sessionID: "s", callID: "c" }, { args: { filePath: absInside } }),
+      ).resolves.toBeUndefined();
+
+      // absolute path outside project -> deny
+      const absOutside = path.join(tmp, "outside-secret.txt");
+      await expect(
+        before!({ tool: "read", sessionID: "s", callID: "c" }, { args: { filePath: absOutside } }),
+      ).rejects.toThrow(/native-path:outside-project/);
+
+      // windows absolute inside project -> allow; outside -> deny (coverage)
+      const winRoot = "C:\\code\\project";
+      const hooksWin = await plugin.server(makeInput(winRoot), { auditLog: path.join(tmp, "audit.log") });
+      const beforeWin = hooksWin["tool.execute.before"];
+      await expect(
+        beforeWin!({ tool: "read", sessionID: "s", callID: "c" }, { args: { filePath: "C:\\code\\project\\src\\Foo.java" } }),
+      ).resolves.toBeUndefined();
+      await expect(
+        beforeWin!({ tool: "read", sessionID: "s", callID: "c" }, { args: { filePath: "C:\\Windows\\System32\\config" } }),
+      ).rejects.toThrow(/native-path:outside-project/);
     } finally {
       fs.rmSync(tmp, { recursive: true, force: true });
     }

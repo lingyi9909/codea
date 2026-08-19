@@ -148,7 +148,9 @@ try {
     fail(`expected dify degraded, got ${JSON.stringify(difyRes)}`);
   }
 
-  // 8. native tool.execute.before denies a sensitive path on read/grep/glob.
+  // 8. native tool.execute.before denies a sensitive/out-of-root path on
+  // read/grep/glob, but allows an absolute in-root path (OpenCode read.filePath
+  // is absolute by contract, so it must not read as "dangerous").
   const beforeHook = hooks["tool.execute.before"];
   const afterHook = hooks["tool.execute.after"];
   if (typeof beforeHook !== "function") fail("missing tool.execute.before hook");
@@ -160,8 +162,8 @@ try {
   } catch (e) {
     nativeThrew = (e as Error).message ?? "";
   }
-  if (!nativeThrew.includes("sensitive-path")) {
-    fail(`expected sensitive-path deny on read .env, got ${nativeThrew || "<no throw>"}`);
+  if (!nativeThrew.includes("native-path:sensitive-file:.env")) {
+    fail(`expected sensitive-file deny on read .env, got ${nativeThrew || "<no throw>"}`);
   }
   nativeThrew = "";
   try {
@@ -169,8 +171,25 @@ try {
   } catch (e) {
     nativeThrew = (e as Error).message ?? "";
   }
-  if (!nativeThrew.includes("sensitive-path")) {
-    fail(`expected sensitive-path deny on glob traversal, got ${nativeThrew || "<no throw>"}`);
+  if (!nativeThrew.includes("native-path:outside-project")) {
+    fail(`expected outside-project deny on glob traversal, got ${nativeThrew || "<no throw>"}`);
+  }
+  // absolute in-root path must be allowed (not misclassified as sensitive).
+  const absInside = path.join(root, "src", "main", "Foo.java");
+  try {
+    await beforeHook({ tool: "read", sessionID: "s", callID: "c" }, { args: { filePath: absInside } });
+  } catch (e) {
+    fail(`expected absolute in-root read to be allowed, got ${(e as Error).message}`);
+  }
+  // absolute out-of-root path must be denied.
+  nativeThrew = "";
+  try {
+    await beforeHook({ tool: "read", sessionID: "s", callID: "c" }, { args: { filePath: path.join(root, "..", "secret.txt") } });
+  } catch (e) {
+    nativeThrew = (e as Error).message ?? "";
+  }
+  if (!nativeThrew.includes("native-path:outside-project")) {
+    fail(`expected outside-project deny on absolute out-of-root read, got ${nativeThrew || "<no throw>"}`);
   }
 
   // 9. native bash before still denies dangerous commands.

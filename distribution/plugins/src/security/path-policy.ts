@@ -26,6 +26,38 @@ function isWithin(root: string, target: string): boolean {
   return target.startsWith(prefix);
 }
 
+// Separator-agnostic containment: both inputs are already separator-normalised,
+// so prefix-match against a single "/" is correct on every host platform.
+function isWithinNormalized(root: string, target: string): boolean {
+  if (target === root) return true;
+  const prefix = root.endsWith("/") ? root : root + "/";
+  return target.startsWith(prefix);
+}
+
+const SENSITIVE_DIRS = new Set([".ssh", ".aws", ".gnupg"]);
+const SENSITIVE_FILES = new Set(["credentials", ".git-credentials", ".npmrc", ".netrc"]);
+const SSH_KEY_FILES = new Set(["id_rsa", "id_ed25519", "id_ecdsa", "id_dsa"]);
+const ENV_FILE_RE = /^\.env(\.[\w-]+)?$/i;
+const PEM_FILE_RE = /\.pem$/i;
+
+// Detects a sensitive file/dir target anywhere in a (already separator-normalised)
+// path. Applied only after containment is confirmed, so this never broadens the
+// boundary — it only denies sensitive destinations that sit inside the root.
+function sensitiveSegment(targetPath: string): string | null {
+  const norm = normalizeSeparators(targetPath);
+  const segments = norm.split("/").filter((s) => s.length > 0);
+  if (segments.length === 0) return null;
+  const base = segments[segments.length - 1];
+  if (ENV_FILE_RE.test(base)) return "sensitive-file:.env";
+  if (PEM_FILE_RE.test(base)) return "sensitive-file:.pem";
+  if (SSH_KEY_FILES.has(base)) return "sensitive-file:ssh-key";
+  if (SENSITIVE_FILES.has(base)) return "sensitive-file:credentials";
+  for (const seg of segments) {
+    if (SENSITIVE_DIRS.has(seg.toLowerCase())) return "sensitive-dir";
+  }
+  return null;
+}
+
 // Resolve symlinks on the deepest existing ancestor, re-appending any
 // not-yet-existing trailing segments. Needed because tools may write new files
 // whose parent chain is only partially materialised.
@@ -99,4 +131,56 @@ export function toRelativePath(root: string, p: string): string {
   const target = path.resolve(rootAbs, normalizeSeparators(p));
   const rel = path.relative(rootAbs, target);
   return normalizeSeparators(rel === "" ? "." : rel);
+}
+
+// Validates a path that a native OpenCode tool (read/grep/glob) is about to touch.
+// Unlike findSensitivePath, an absolute path is NOT dangerous by itself: OpenCode
+// defines read.filePath as an absolute path, so /project/src/Foo.java is a normal,
+// in-root read. The policy is instead:
+//
+//   original path -> canonicalize/realpath -> still inside projectRoot?
+//     |-- no  -> deny (outside-project / symlink-escape / unresolvable)
+//     `-- yes -> check .env/.ssh/.aws/credentials/etc -> allow or deny
+//
+// Windows drive/UNC absolutes are resolved lexically with path.win32 (they cannot
+// be realpaths on a POSIX host, and vice versa) so the containment rule stays
+// identical on macOS and Windows. Returns a short deny reason, or null to allow.
+export function validateNativeReadPath(root: string, targetPath: string): string | null {
+  if (typeof targetPath !== "string" || targetPath.length === 0) {
+    return "empty-path";
+  }
+
+  const windows = WINDOWS_DRIVE.test(targetPath) || WINDOWS_UNC.test(targetPath);
+  const pathImpl = windows ? path.win32 : path.posix;
+  const caseFold = (p: string): string => (windows ? p.toLowerCase() : p);
+
+  const rootResolved = pathImpl.resolve(normalizeSeparators(root));
+  const targetResolved = pathImpl.isAbsolute(targetPath)
+    ? pathImpl.resolve(normalizeSeparators(targetPath))
+    : pathImpl.resolve(rootResolved, normalizeSeparators(targetPath));
+
+  const rootKey = caseFold(normalizeSeparators(rootResolved));
+  const targetKey = caseFold(normalizeSeparators(targetResolved));
+  if (!isWithinNormalized(rootKey, targetKey)) {
+    return "outside-project";
+  }
+
+  const sensitive = sensitiveSegment(targetPath);
+  if (sensitive) return sensitive;
+
+  // Symlink escape is only meaningful on host-resolvable (POSIX) paths. Windows
+  // absolutes are judged lexically above and cannot be realpath'd on a POSIX host.
+  if (!windows) {
+    try {
+      const realRoot = fs.realpathSync(rootResolved);
+      const realTarget = realpathExisting(targetResolved);
+      if (!isWithinNormalized(normalizeSeparators(realRoot), normalizeSeparators(realTarget))) {
+        return "symlink-escape";
+      }
+    } catch {
+      return "unresolvable";
+    }
+  }
+
+  return null;
 }
