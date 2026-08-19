@@ -2,7 +2,7 @@
 
 ## Overview
 
-Checkpoint: `8b2e9ce6aaf753feda0227680f22261677475f17`
+Checkpoint: `1968d78c4120ccb781eb9672639f0a761e7b0b59`
 
 建立 `distribution/plugins/` Plugin 工程骨架（TypeScript + Bun + 自包含 ESM bundle，非 npm+esbuild），并实现安全基础：Command Policy（风险分级）、4 层 DLP、路径策略（canonicalize/realpath）、Permissions（General 与 3 个企业 Agent 分离）、Dify 熔断器、审计日志、Runtime Security Guard。
 
