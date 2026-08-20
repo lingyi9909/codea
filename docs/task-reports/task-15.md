@@ -2,7 +2,7 @@
 
 ## Overview
 
-Checkpoint: `27e5ef91cc19e9a028b8dc87325ff0ae24e3b661`
+Checkpoint: `d4333bccf09a1c397d59d69e9776cf1d66755943`
 
 在 Task 13 的 `analyze_test_project` / `write_test_file` / `run_project_test` / failure-classifier 之上，交付企业级 Unit Test Generator Agent（enterprise-controlled），实现 JUnit 5 测试生成与受控自动修复。原生 `write`/`edit`/`bash` 全部 deny，写与执行能力只经 `write_test_file` / `run_project_test` 通道。
 
@@ -61,7 +61,7 @@ Checkpoint: `27e5ef91cc19e9a028b8dc87325ff0ae24e3b661`
 
 - **成功链路**：`analyze_test_project → write_test_file(GeneratedFlowTest.java) → run_project_test(真实 mvn test)`，断言 `GeneratedFlowTest.java` 落盘、Surefire 逐类报告存在（证明被真实编译执行）、exitCode=0、Tests run≥1、Failures=0、Errors=0。
 - **最终结论来自 run_project_test**：fake model 读取 `run_project_test` 的 Tool Result（`category`/`exitCode`/`passed`/`failed`/`errors`）生成结论，不再硬编码 `"UT workflow complete"`。
-- **确定性失败链路**：`UTFLOWFAIL` 写入故意失败的 JUnit，`run_project_test` 返回 exitCode≠0，Agent 最终结论必须 FAIL（不得输出 PASS）。
+- **确定性失败链路**：`UTFLOW_FAIL` 写入故意失败的 JUnit，`run_project_test` 返回 exitCode≠0，Agent 最终结论必须 FAIL（不得输出 PASS）。
 
 ## Full Gate Verification
 

@@ -8,7 +8,7 @@ current:
   status: awaiting_acceptance
   nextAction: Task 14/15 全部 Gate 已真实跑通（契约 12/12、Go 全量、Plugin 245、parity 17/17、plugin serve 8/8、真实 Maven、真实 agent 15/15 含 Tool 白名单 fail-closed cross-tool deny、Reviewer 工作流 E2E、UT 工作流用真实 Maven 且结论来自 run 结果 + 失败链路）；等待人工联合验收后 Task 14 → completed、Task 15 → awaiting_acceptance
 checkpoint:
-  commit: 27e5ef91cc19e9a028b8dc87325ff0ae24e3b661
+  commit: d4333bccf09a1c397d59d69e9776cf1d66755943
   updatedAt: "2026-08-20T14:51:09Z"
 verification:
   status: pass
@@ -47,8 +47,8 @@ tasks:
   "11": {status: completed, completedSteps: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: a77cd96448894b515eb9ec5530659cd922b8b839, report: docs/task-reports/task-11.md}
   "12": {status: completed, completedSteps: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: d2de0203be9f6d06a410e83c51733ab7db4781f4, report: docs/task-reports/task-12.md}
   "13": {status: completed, completedSteps: [], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: d2de0203be9f6d06a410e83c51733ab7db4781f4, report: docs/task-reports/task-13.md}
-  "14": {status: awaiting_acceptance, completedSteps: [], verificationStatus: pass, taskGateStatus: pass, humanAccepted: false, checkpoint: 27e5ef91cc19e9a028b8dc87325ff0ae24e3b661, report: docs/task-reports/task-14.md}
-  "15": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: 27e5ef91cc19e9a028b8dc87325ff0ae24e3b661, report: docs/task-reports/task-15.md}
+  "14": {status: awaiting_acceptance, completedSteps: [], verificationStatus: pass, taskGateStatus: pass, humanAccepted: false, checkpoint: d4333bccf09a1c397d59d69e9776cf1d66755943, report: docs/task-reports/task-14.md}
+  "15": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: d4333bccf09a1c397d59d69e9776cf1d66755943, report: docs/task-reports/task-15.md}
   "16": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-16.md}
   "17": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-17.md}
   "18": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-18.md}

@@ -2,7 +2,7 @@
 
 ## Overview
 
-Checkpoint: `27e5ef91cc19e9a028b8dc87325ff0ae24e3b661`
+Checkpoint: `d4333bccf09a1c397d59d69e9776cf1d66755943`
 
 在 Task 13 的 `collect_review_context` Tool 之上，交付企业级 Code Reviewer Agent（enterprise-controlled），以 Manifest + Prompt + JSON Schema 定义结构化、可追溯、只读的代码审查。原生 `write`/`edit`/`bash` 在 permissions 中 deny，审查证据只能来自 `collect_review_context` 与受限仓库读取。
 
