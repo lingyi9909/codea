@@ -27,8 +27,13 @@ const OpenCodeMode = "all"
 type Manifest struct {
 	Name        string
 	DisplayName string
-	// DenyTools are native OpenCode tools (write/edit/bash) the manifest marks
-	// deny. They become `permission: <tool>: deny` in the OpenCode agent config.
+	// AllowTools are the tools the manifest whitelists (tools map value "allow").
+	// They become the only tools the runtime permits, behind a fail-closed
+	// `"*": deny` entry, so an unlisted tool is denied rather than allowed.
+	AllowTools []string
+	// DenyTools are tools the manifest explicitly marks deny. With the fail-closed
+	// wildcard they are redundant for enforcement, but are retained so callers can
+	// assert the manifest's declared intent (e.g. write/edit/bash never permitted).
 	DenyTools []string
 }
 
@@ -38,6 +43,7 @@ type Manifest struct {
 // with no `name` is invalid.
 func ParseManifest(body []byte) (Manifest, error) {
 	var m Manifest
+	allow := map[string]bool{}
 	deny := map[string]bool{}
 	inTools := false
 
@@ -59,7 +65,10 @@ func ParseManifest(body []byte) (Manifest, error) {
 			continue
 		}
 		if inTools && indented && value != "" {
-			if value == "deny" {
+			switch value {
+			case "allow":
+				allow[key] = true
+			case "deny":
 				deny[key] = true
 			}
 			continue
@@ -82,24 +91,31 @@ func ParseManifest(body []byte) (Manifest, error) {
 	if m.DisplayName == "" {
 		m.DisplayName = m.Name
 	}
+	for t := range allow {
+		m.AllowTools = append(m.AllowTools, t)
+	}
 	for t := range deny {
 		m.DenyTools = append(m.DenyTools, t)
 	}
+	sort.Strings(m.AllowTools)
 	sort.Strings(m.DenyTools)
 	return m, nil
 }
 
 // Render produces the OpenCode markdown agent file for a manifest and system
 // prompt. The prompt is the agent.md body verbatim; the frontmatter carries the
-// description, mode and deny permissions the runtime enforces server-side.
+// description, mode and a fail-closed permission map: `"*": deny` first, then
+// each whitelisted tool as `allow`. Unlisted tools therefore inherit deny rather
+// than OpenCode's custom-agent default of `"*": allow`.
 func Render(m Manifest, prompt string) []byte {
 	var b strings.Builder
 	b.WriteString("---\n")
 	fmt.Fprintf(&b, "description: %s\n", m.DisplayName)
 	fmt.Fprintf(&b, "mode: %s\n", OpenCodeMode)
 	b.WriteString("permission:\n")
-	for _, t := range m.DenyTools {
-		fmt.Fprintf(&b, "  %s: deny\n", t)
+	b.WriteString("  \"*\": deny\n")
+	for _, t := range m.AllowTools {
+		fmt.Fprintf(&b, "  %s: allow\n", t)
 	}
 	b.WriteString("---\n")
 	if prompt != "" {

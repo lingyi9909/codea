@@ -46,7 +46,7 @@ if [ ! -f "$fixture_dir/fake_model.py" ] || [ ! -f "$fixture_dir/opencode.json" 
   echo "real-parity fixture missing under $fixture_dir" >&2
   exit 2
 fi
-for cmd in python3 curl; do
+for cmd in python3 curl git; do
   command -v "$cmd" >/dev/null 2>&1 || { echo "$cmd is required" >&2; exit 2; }
 done
 
@@ -54,8 +54,49 @@ done
 config_dir="$run_root/config"
 smoke_dir="$run_root/smoke-dir"
 mkdir -p "$config_dir" "$smoke_dir"
-cp "$fixture_dir/opencode.json" "$config_dir/opencode.json"
+
+# Register the enterprise plugin bundle in the smoke config so the 8 custom
+# tools (collect_review_context, write_test_file, run_project_test, ...) are
+# actually loaded by the runtime — the whitelist + workflow gates depend on them.
+bundle_abs="$(cd "$repo_root/distribution/plugins" && pwd)/dist/index.js"
+if [ ! -f "$bundle_abs" ]; then
+  echo "plugin bundle missing at $bundle_abs; run bun run build first" >&2
+  exit 2
+fi
+python3 - "$fixture_dir/opencode.json" "$config_dir/opencode.json" "$bundle_abs" <<'PY'
+import json
+import pathlib
+import sys
+
+cfg = json.loads(pathlib.Path(sys.argv[1]).read_text())
+cfg["plugin"] = ["file://" + sys.argv[3]]
+pathlib.Path(sys.argv[2]).write_text(json.dumps(cfg, indent=2))
+PY
+
+# The smoke dir is the agent project root. Make it a git repo with a staged
+# change (so code-reviewer's collect_review_context source=staged returns a real
+# diff) and lay down the Maven fixture (so unit-test-generator's
+# analyze_test_project / write_test_file / run_project_test run offline via the
+# deterministic mvnw stub).
+maven_fixture="$repo_root/tui/tests/e2e/fixtures/java-maven-project"
+if [ ! -f "$maven_fixture/pom.xml" ] || [ ! -f "$maven_fixture/mvnw" ]; then
+  echo "java-maven-project fixture missing under $maven_fixture" >&2
+  exit 2
+fi
+cp -R "$maven_fixture/." "$smoke_dir/"
 printf 'hello read me\n' > "$smoke_dir/read-me.txt"
+
+(
+  cd "$smoke_dir"
+  git init -q
+  git config user.email smoke@codea.local
+  git config user.name smoke
+  git add -A
+  git commit -qm "fixture baseline"
+  # Stage a change so collect_review_context (source=staged) yields a non-empty diff.
+  printf 'hello read me (v2)\n' > "$smoke_dir/read-me.txt"
+  git add "$smoke_dir/read-me.txt"
+)
 
 # Materialize the enterprise agents using the real Codea materialization code,
 # so the smoke exercises the exact path main.go runs at cold start.

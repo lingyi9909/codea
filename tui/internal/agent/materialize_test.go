@@ -41,13 +41,22 @@ constraints:
 	if m.DisplayName != "Code Reviewer" {
 		t.Errorf("displayName = %q, want Code Reviewer", m.DisplayName)
 	}
-	want := []string{"bash", "edit", "write"}
-	if len(m.DenyTools) != len(want) {
-		t.Fatalf("denyTools = %v, want %v", m.DenyTools, want)
+	wantDeny := []string{"bash", "edit", "write"}
+	if len(m.DenyTools) != len(wantDeny) {
+		t.Fatalf("denyTools = %v, want %v", m.DenyTools, wantDeny)
 	}
-	for i := range want {
-		if m.DenyTools[i] != want[i] {
-			t.Errorf("denyTools[%d] = %q, want %q", i, m.DenyTools[i], want[i])
+	for i := range wantDeny {
+		if m.DenyTools[i] != wantDeny[i] {
+			t.Errorf("denyTools[%d] = %q, want %q", i, m.DenyTools[i], wantDeny[i])
+		}
+	}
+	wantAllow := []string{"collect_review_context", "dify-query", "glob", "grep", "read"}
+	if len(m.AllowTools) != len(wantAllow) {
+		t.Fatalf("allowTools = %v, want %v", m.AllowTools, wantAllow)
+	}
+	for i := range wantAllow {
+		if m.AllowTools[i] != wantAllow[i] {
+			t.Errorf("allowTools[%d] = %q, want %q", i, m.AllowTools[i], wantAllow[i])
 		}
 	}
 }
@@ -59,7 +68,12 @@ func TestParseManifestRequiresName(t *testing.T) {
 }
 
 func TestRenderProducesOpenCodeFrontmatter(t *testing.T) {
-	m := Manifest{Name: "code-reviewer", DisplayName: "Code Reviewer", DenyTools: []string{"bash", "edit", "write"}}
+	m := Manifest{
+		Name:        "code-reviewer",
+		DisplayName: "Code Reviewer",
+		AllowTools:  []string{"collect_review_context", "dify-query", "glob", "grep", "read"},
+		DenyTools:   []string{"bash", "edit", "write"},
+	}
 	out := string(Render(m, "You are the reviewer.\n"))
 
 	for _, want := range []string{
@@ -67,9 +81,12 @@ func TestRenderProducesOpenCodeFrontmatter(t *testing.T) {
 		"description: Code Reviewer\n",
 		"mode: all\n",
 		"permission:\n",
-		"  write: deny\n",
-		"  edit: deny\n",
-		"  bash: deny\n",
+		"  \"*\": deny\n",
+		"  collect_review_context: allow\n",
+		"  dify-query: allow\n",
+		"  glob: allow\n",
+		"  grep: allow\n",
+		"  read: allow\n",
 		"---\n",
 		"You are the reviewer.\n",
 	} {
@@ -77,16 +94,24 @@ func TestRenderProducesOpenCodeFrontmatter(t *testing.T) {
 			t.Errorf("rendered agent missing %q in:\n%s", want, out)
 		}
 	}
+	// Fail-closed: deny tools are covered by the wildcard and must not be
+	// re-emitted as an explicit deny entry.
+	if strings.Contains(out, "write: deny") {
+		t.Errorf("must not emit an explicit deny entry behind \"*\": deny, got:\n%s", out)
+	}
 }
 
-func TestRenderNoDenyToolsOmitsPermissionBlock(t *testing.T) {
+func TestRenderNoAllowToolsIsFailClosed(t *testing.T) {
 	m := Manifest{Name: "api-documentation", DisplayName: "API Docs"}
 	out := string(Render(m, "prompt"))
 	if !strings.Contains(out, "permission:\n") {
-		t.Errorf("expected an (empty) permission block to be emitted, got:\n%s", out)
+		t.Errorf("expected a permission block to be emitted, got:\n%s", out)
+	}
+	if !strings.Contains(out, "  \"*\": deny\n") {
+		t.Errorf("expected a fail-closed \"*\": deny entry even with no allow tools, got:\n%s", out)
 	}
 	if strings.Contains(out, "write: deny") {
-		t.Errorf("must not emit denies for an agent with none, got:\n%s", out)
+		t.Errorf("must not emit an explicit deny entry, got:\n%s", out)
 	}
 }
 
@@ -118,7 +143,7 @@ func TestMaterializeWritesAgentMarkdownAndClearsStale(t *testing.T) {
 		t.Fatalf("expected code-reviewer.md: %v", err)
 	}
 	s := string(out)
-	for _, want := range []string{"mode: all\n", "write: deny\n", "Reviewer prompt.\n"} {
+	for _, want := range []string{"mode: all\n", "  \"*\": deny\n", "Reviewer prompt.\n"} {
 		if !strings.Contains(s, want) {
 			t.Errorf("code-reviewer.md missing %q:\n%s", want, s)
 		}

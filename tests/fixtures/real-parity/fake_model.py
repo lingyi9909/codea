@@ -3,21 +3,36 @@
 
 This is NOT a real LLM. It scripts a fixed tool-call lifecycle so the Codea
 real-runtime smoke can exercise OpenCode's native Read/Write/Edit/Bash/Task
-(subagent)/Skill tools end-to-end without a network or an API key. The OpenCode
-runtime, Agent Loop, message persistence, permission gating and SSE are all
-real; only the model is a stub (same methodology as the S2/S3 Phase 0 spikes).
+(subagent)/Skill tools AND the enterprise Custom Tools end-to-end without a
+network or an API key. The OpenCode runtime, Agent Loop, message persistence,
+permission gating and SSE are all real; only the model is a stub (same
+methodology as the S2/S3 Phase 0 spikes).
 
-State machine, keyed on the last user message:
-  READ      -> emit a `read` tool call on SMOKE_DIR/read-me.txt
-  WRITE     -> emit a `write` tool call creating SMOKE_DIR/write-out.txt
-  EDIT      -> emit an `edit` tool call on SMOKE_DIR/edit-me.txt
-  BASH      -> emit a `bash` tool call (echo smoke-bash-ok)
-  SUBAGENT  -> emit a `task` tool call delegating to the `explore` subagent
-  SKILL     -> emit a `skill` tool call for `smoke-skill`
-  otherwise -> emit a plain text answer (also handles the subagent's own turn)
+State machine, keyed on the last user message (all upper-cased):
 
-A request that already carries a `tool` role message (a tool result) always
-answers with plain text, closing the tool loop.
+  Native single-shot tools (emit once, then answer text):
+    READ      -> `read` on SMOKE_DIR/read-me.txt
+    WRITE     -> `write` creating SMOKE_DIR/write-out.txt
+    EDIT      -> `edit` on SMOKE_DIR/edit-me.txt
+    BASH      -> `bash` (echo smoke-bash-ok)
+    SUBAGENT  -> `task` delegating to the `explore` subagent
+    SKILL     -> `skill` for `smoke-skill`
+
+  Enterprise Custom Tool single-shot (whitelist proof):
+    COLLECT_REVIEW_CONTEXT -> `collect_review_context` (source=staged)
+    WRITE_TEST_FILE        -> `write_test_file` (a fresh test under src/test/java)
+    RUN_PROJECT_TEST       -> `run_project_test` (maven)
+    WRITE_DOCUMENT         -> `write_document` (docs/smoke.md)
+
+  Enterprise workflow (multi-step, tracked via the assistant tool-call history):
+    REVIEWFLOW -> collect_review_context -> final output-schema JSON answer
+    UTFLOW     -> analyze_test_project -> write_test_file -> run_project_test
+                  -> final text answer
+
+A request whose final message is a `tool` result answers with text unless a
+workflow still has a remaining step. Keyword matching is ordered so the more
+specific custom-tool keywords (which contain WRITE/RUN substrings) win over the
+shorter native WRITE, and REVIEWFLOW/UTFLOW win over single-shot tool names.
 """
 import json
 import os
@@ -26,6 +41,39 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 SMOKE_DIR = os.environ.get("SMOKE_DIR", "/tmp")
+
+# A new test file path (under the conventional Maven test root) used by both the
+# single-shot WRITETEST whitelist proof and the UTFLOW workflow write step. The
+# fixture mvnw stub does not actually compile, so content is representative only.
+FLOW_TEST_PATH = "src/test/java/com/example/demo/GeneratedFlowTest.java"
+FLOW_TEST_CONTENT = (
+    "package com.example.demo;\n"
+    "import org.junit.jupiter.api.Test;\n"
+    "class GeneratedFlowTest {\n"
+    "  @Test void flow() {}\n"
+    "}\n"
+)
+
+REVIEWER_JSON = json.dumps(
+    {
+        "summary": {"result": "PASS", "text": "reviewed staged change; no blocking findings"},
+        "scope": {"type": "staged", "changedFiles": ["read-me.txt"]},
+        "findings": [],
+        "observations": [],
+        "uncertainObservations": [],
+        "reviewStats": {
+            "filesReviewed": 1,
+            "filesChanged": 1,
+            "callChainsExpanded": 0,
+            "critical": 0,
+            "major": 0,
+            "minor": 0,
+            "suggestions": 0,
+        },
+        "businessKnowledgeUnavailable": True,
+    },
+    separators=(",", ":"),
+)
 
 
 def tool_call(tool_name, arguments, call_id):
@@ -36,29 +84,80 @@ def tool_call(tool_name, arguments, call_id):
     }
 
 
-def script_for(prompt):
+def assistant_tool_names(messages):
+    """Return the tool names already emitted by the assistant in this thread."""
+    names = []
+    for m in messages or []:
+        if m.get("role") != "assistant":
+            continue
+        for tc in m.get("tool_calls") or []:
+            fn = tc.get("function") or {}
+            name = fn.get("name")
+            if name:
+                names.append(name)
+    return names
+
+
+def decide(prompt, messages):
+    """Return (tool_name, arguments, call_id, final_text)."""
     p = (prompt or "").upper()
+    names = assistant_tool_names(messages)
+    last_is_tool = bool(messages) and messages[-1].get("role") == "tool"
+
+    # --- Enterprise workflows (multi-step) ---------------------------------
+    if "REVIEWFLOW" in p:
+        if "collect_review_context" not in names:
+            return "collect_review_context", {"source": "staged"}, "call_collect", None
+        return None, None, None, REVIEWER_JSON
+
+    if "UTFLOW" in p:
+        if "analyze_test_project" not in names:
+            return "analyze_test_project", {}, "call_analyze", None
+        if "write_test_file" not in names:
+            return "write_test_file", {"path": FLOW_TEST_PATH, "content": FLOW_TEST_CONTENT}, "call_write", None
+        if "run_project_test" not in names:
+            return "run_project_test", {"buildSystem": "maven"}, "call_run", None
+        return None, None, None, "UT workflow complete: analyze -> write -> run"
+
+    # --- Single-shot tools: after a tool result, close the loop -------------
+    if last_is_tool:
+        return None, None, None, None
+
+    # --- Enterprise Custom Tool single-shot (whitelist proof) ---------------
+    # Checked before the native WRITE keyword because the tool names themselves
+    # contain "WRITE"/"RUN" substrings.
+    if "COLLECT_REVIEW_CONTEXT" in p:
+        return "collect_review_context", {"source": "staged"}, "call_collect", None
+    if "WRITE_TEST_FILE" in p:
+        return "write_test_file", {"path": FLOW_TEST_PATH, "content": FLOW_TEST_CONTENT}, "call_write", None
+    if "RUN_PROJECT_TEST" in p:
+        return "run_project_test", {"buildSystem": "maven"}, "call_run", None
+    if "WRITE_DOCUMENT" in p:
+        return "write_document", {"path": "docs/smoke.md", "content": "smoke\n"}, "call_doc", None
+
+    # --- Native tools --------------------------------------------------------
     if "READ" in p:
-        return "read", {"filePath": os.path.join(SMOKE_DIR, "read-me.txt")}, "call_read"
+        return "read", {"filePath": os.path.join(SMOKE_DIR, "read-me.txt")}, "call_read", None
     if "WRITE" in p:
-        return "write", {"filePath": os.path.join(SMOKE_DIR, "write-out.txt"), "content": "smoke-write-ok\n"}, "call_write"
+        return "write", {"filePath": os.path.join(SMOKE_DIR, "write-out.txt"), "content": "smoke-write-ok\n"}, "call_write", None
     if "EDIT" in p:
         return "edit", {
             "filePath": os.path.join(SMOKE_DIR, "edit-me.txt"),
             "oldString": "before",
             "newString": "after",
-        }, "call_edit"
+        }, "call_edit", None
     if "BASH" in p:
-        return "bash", {"command": "echo smoke-bash-ok", "description": "smoke echo"}, "call_bash"
+        return "bash", {"command": "echo smoke-bash-ok", "description": "smoke echo"}, "call_bash", None
     if "SUBAGENT" in p:
         return "task", {
             "description": "find go files",
             "prompt": "list the go files in this project and report the count",
             "subagent_type": "explore",
-        }, "call_subagent"
+        }, "call_subagent", None
     if "SKILL" in p:
-        return "skill", {"name": "smoke-skill"}, "call_skill"
-    return None, None, None
+        return "skill", {"name": "smoke-skill"}, "call_skill", None
+
+    return None, None, None, None
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -88,18 +187,12 @@ class Handler(BaseHTTPRequestHandler):
                 last_user = m["content"]
                 break
 
-        # A tool result is the *immediately preceding* message only; a resumed
-        # session carries earlier tool results in history but a new user prompt
-        # must still script a fresh tool call, not answer text.
-        has_tool_result = bool(messages) and messages[-1].get("role") == "tool"
-        tool_name, arguments, call_id = (None, None, None)
-        if not has_tool_result:
-            tool_name, arguments, call_id = script_for(last_user)
+        tool_name, arguments, call_id, final_text = decide(last_user, messages)
 
         if tool_name is None:
             chunks = [
                 self.chunk({"role": "assistant"}, None),
-                self.chunk({"content": "smoke-done"}, None),
+                self.chunk({"content": final_text if final_text is not None else "smoke-done"}, None),
                 self.chunk({}, "stop", usage=True),
             ]
         else:

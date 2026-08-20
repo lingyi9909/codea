@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -28,6 +29,18 @@ type agentEvidence struct {
 	ReviewerWriteDen *gateResult `json:"reviewerWriteDenied"`
 	UnitTestRead     *gateResult `json:"unitTestRead"`
 	UnitTestWriteDen *gateResult `json:"unitTestWriteDenied"`
+
+	// Custom Tool whitelist: proves the fail-closed manifest permission is
+	// enforced for enterprise custom tools, not just native read/write.
+	ReviewerCollectAllowed *gateResult `json:"reviewerCollectReviewAllowed"`
+	ReviewerWriteTestDen   *gateResult `json:"reviewerWriteTestDenied"`
+	ReviewerRunTestDen     *gateResult `json:"reviewerRunTestDenied"`
+	UnitTestWriteTestAllow *gateResult `json:"unitTestWriteTestAllowed"`
+	UnitTestWriteDocDen    *gateResult `json:"unitTestWriteDocDenied"`
+
+	// Real agent workflow E2E.
+	ReviewerWorkflow *gateResult `json:"reviewerWorkflow"`
+	UnitTestWorkflow *gateResult `json:"unitTestWorkflow"`
 
 	TotalChecks   int `json:"totalChecks"`
 	PassedChecks  int `json:"passedChecks"`
@@ -53,10 +66,13 @@ func (ev *agentEvidence) gate(passed bool, detail string, err error) *gateResult
 }
 
 // runAgentScenario drives a single agent session to idle, mirroring runScenario
-// but selecting a specific agent instead of the hardcoded "build".
-func runAgentScenario(t *testing.T, adapter *opencode.OpenCodeAdapter, ch <-chan runtime.Event, state *smokeState, agent, promptText string) *toolObservation {
+// but selecting a specific agent instead of the hardcoded "build". onApproval,
+// when non-nil, is invoked for each permission.asked event so custom tools that
+// carry write/execute actions (write_test_file, run_project_test) can be
+// approved through the real approval flow instead of hanging.
+func runAgentScenario(t *testing.T, adapter *opencode.OpenCodeAdapter, ch <-chan runtime.Event, state *smokeState, agent, promptText string, onApproval func(id string) error) *toolObservation {
 	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), 40*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
 	sess, err := adapter.CreateSession(ctx, runtime.CreateSessionRequest{Title: "real-agent-smoke"})
@@ -73,7 +89,7 @@ func runAgentScenario(t *testing.T, adapter *opencode.OpenCodeAdapter, ch <-chan
 	}
 
 	obs := newToolObservation()
-	timeout := time.After(35 * time.Second)
+	timeout := time.After(55 * time.Second)
 	for !obs.idled {
 		select {
 		case ev, ok := <-ch:
@@ -87,6 +103,11 @@ func runAgentScenario(t *testing.T, adapter *opencode.OpenCodeAdapter, ch <-chan
 				continue
 			}
 			obs.collect(ev)
+			if ev.Type == runtime.EventType("approval.requested") && onApproval != nil {
+				if err := onApproval(ev.Approval.ID); err != nil {
+					t.Fatalf("approval reply: %v", err)
+				}
+			}
 		case <-timeout:
 			t.Fatalf("timed out waiting for idle (agent=%s prompt=%q); called=%v success=%v", agent, promptText, obs.called, obs.success)
 		case <-ctx.Done():
@@ -94,6 +115,55 @@ func runAgentScenario(t *testing.T, adapter *opencode.OpenCodeAdapter, ch <-chan
 		}
 	}
 	return obs
+}
+
+// reviewerJSONValid reports whether a code-reviewer scenario's final answer is
+// a valid output-schema JSON object: a PASS summary, a findings array and a
+// reviewStats object. It tolerates the runtime wrapping the JSON in a code fence.
+func reviewerJSONValid(obs *toolObservation) bool {
+	text := strings.TrimSpace(strings.Join(obs.answerText, ""))
+	m, ok := extractJSONObject(text)
+	if !ok {
+		return false
+	}
+	summary, ok := m["summary"].(map[string]any)
+	if !ok || summary["result"] != "PASS" {
+		return false
+	}
+	if _, ok := m["findings"].([]any); !ok {
+		return false
+	}
+	if _, ok := m["reviewStats"].(map[string]any); !ok {
+		return false
+	}
+	if _, ok := m["businessKnowledgeUnavailable"].(bool); !ok {
+		return false
+	}
+	return true
+}
+
+func extractJSONObject(text string) (map[string]any, bool) {
+	t := strings.TrimSpace(text)
+	if strings.HasPrefix(t, "```") {
+		if i := strings.IndexByte(t, '\n'); i >= 0 {
+			t = strings.TrimSpace(t[i+1:])
+		}
+		t = strings.TrimSuffix(t, "```")
+		t = strings.TrimSpace(t)
+	}
+	var m map[string]any
+	if err := json.Unmarshal([]byte(t), &m); err == nil {
+		return m, true
+	}
+	start := strings.IndexByte(t, '{')
+	end := strings.LastIndexByte(t, '}')
+	if start < 0 || end <= start {
+		return nil, false
+	}
+	if err := json.Unmarshal([]byte(t[start:end+1]), &m); err != nil {
+		return nil, false
+	}
+	return m, true
 }
 
 // TestRealAgentEvidence verifies the enterprise agents (code-reviewer,
@@ -161,29 +231,83 @@ func TestRealAgentEvidence(t *testing.T) {
 	state := &smokeState{}
 
 	// Gate 2: code-reviewer can read (allow) — the agent runs end-to-end.
-	reviewerRead := runAgentScenario(t, adapter, ch, state, "code-reviewer", "READ the file please")
+	reviewerRead := runAgentScenario(t, adapter, ch, state, "code-reviewer", "READ the file please", nil)
 	ev.ReviewerRead = ev.gate(
 		reviewerRead.calledOnce("read") && reviewerRead.succeededOnce("read") && reviewerRead.answered(),
 		"code-reviewer read tool executed and agent continued", nil)
 
 	// Gate 3: code-reviewer write is denied server-side even though the model
 	// emits a write call — the permission deny is real, not a prompt hint.
-	reviewerWrite := runAgentScenario(t, adapter, ch, state, "code-reviewer", "WRITE the file please")
+	reviewerWrite := runAgentScenario(t, adapter, ch, state, "code-reviewer", "WRITE the file please", nil)
 	ev.ReviewerWriteDen = ev.gate(
 		reviewerWrite.calledOnce("write") && !reviewerWrite.succeededOnce("write"),
 		"code-reviewer write called but did not succeed (permission deny)", nil)
 
 	// Gate 4: unit-test-generator can read (allow).
-	unitTestRead := runAgentScenario(t, adapter, ch, state, "unit-test-generator", "READ the file please")
+	unitTestRead := runAgentScenario(t, adapter, ch, state, "unit-test-generator", "READ the file please", nil)
 	ev.UnitTestRead = ev.gate(
 		unitTestRead.calledOnce("read") && unitTestRead.succeededOnce("read") && unitTestRead.answered(),
 		"unit-test-generator read tool executed and agent continued", nil)
 
 	// Gate 5: unit-test-generator write is denied server-side.
-	unitTestWrite := runAgentScenario(t, adapter, ch, state, "unit-test-generator", "WRITE the file please")
+	unitTestWrite := runAgentScenario(t, adapter, ch, state, "unit-test-generator", "WRITE the file please", nil)
 	ev.UnitTestWriteDen = ev.gate(
 		unitTestWrite.calledOnce("write") && !unitTestWrite.succeededOnce("write"),
 		"unit-test-generator write called but did not succeed (permission deny)", nil)
+
+	// approveOnce grants the real approval flow for custom write/execute tools so
+	// an ALLOWED tool can run to completion rather than hang waiting for a user.
+	approveOnce := func(id string) error {
+		return adapter.ReplyApproval(ctx, runtime.ApprovalID(id), runtime.ApprovalReply{Decision: runtime.ApprovalOnce})
+	}
+
+	// Custom Tool whitelist: the fail-closed manifest permission must hold for
+	// enterprise custom tools, not just native read/write.
+
+	// code-reviewer whitelist: collect_review_context allow.
+	reviewerCollect := runAgentScenario(t, adapter, ch, state, "code-reviewer", "CALL collect_review_context please", nil)
+	ev.ReviewerCollectAllowed = ev.gate(
+		reviewerCollect.calledOnce("collect_review_context") && reviewerCollect.succeededOnce("collect_review_context"),
+		"code-reviewer collect_review_context allowed and executed", nil)
+
+	// code-reviewer whitelist: write_test_file deny (Reviewer is read-only).
+	reviewerWt := runAgentScenario(t, adapter, ch, state, "code-reviewer", "CALL write_test_file please", nil)
+	ev.ReviewerWriteTestDen = ev.gate(
+		reviewerWt.calledOnce("write_test_file") && !reviewerWt.succeededOnce("write_test_file"),
+		"code-reviewer write_test_file denied by whitelist", nil)
+
+	// code-reviewer whitelist: run_project_test deny.
+	reviewerRt := runAgentScenario(t, adapter, ch, state, "code-reviewer", "CALL run_project_test please", nil)
+	ev.ReviewerRunTestDen = ev.gate(
+		reviewerRt.calledOnce("run_project_test") && !reviewerRt.succeededOnce("run_project_test"),
+		"code-reviewer run_project_test denied by whitelist", nil)
+
+	// unit-test-generator whitelist: write_test_file allow (approve the write).
+	utWt := runAgentScenario(t, adapter, ch, state, "unit-test-generator", "CALL write_test_file please", approveOnce)
+	ev.UnitTestWriteTestAllow = ev.gate(
+		utWt.calledOnce("write_test_file") && utWt.succeededOnce("write_test_file"),
+		"unit-test-generator write_test_file allowed and executed", nil)
+
+	// unit-test-generator whitelist: write_document deny (not in its tool set).
+	utWd := runAgentScenario(t, adapter, ch, state, "unit-test-generator", "CALL write_document please", nil)
+	ev.UnitTestWriteDocDen = ev.gate(
+		utWd.calledOnce("write_document") && !utWd.succeededOnce("write_document"),
+		"unit-test-generator write_document denied by whitelist", nil)
+
+	// Reviewer workflow E2E: collect_review_context → output-schema JSON.
+	reviewerFlow := runAgentScenario(t, adapter, ch, state, "code-reviewer", "RUN the REVIEWFLOW please", nil)
+	ev.ReviewerWorkflow = ev.gate(
+		reviewerFlow.calledOnce("collect_review_context") && reviewerFlow.succeededOnce("collect_review_context") && reviewerJSONValid(reviewerFlow),
+		"code-reviewer workflow: collect_review_context + valid output-schema JSON", nil)
+
+	// Unit Test workflow E2E: analyze_test_project → write_test_file → run_project_test.
+	utFlow := runAgentScenario(t, adapter, ch, state, "unit-test-generator", "RUN the UTFLOW please", approveOnce)
+	ev.UnitTestWorkflow = ev.gate(
+		utFlow.calledOnce("analyze_test_project") && utFlow.succeededOnce("analyze_test_project") &&
+			utFlow.calledOnce("write_test_file") && utFlow.succeededOnce("write_test_file") &&
+			utFlow.calledOnce("run_project_test") && utFlow.succeededOnce("run_project_test") &&
+			utFlow.answered(),
+		"unit-test workflow: analyze -> write -> run completed", nil)
 
 	writeAgentEvidence(t, evidenceDir, ev)
 

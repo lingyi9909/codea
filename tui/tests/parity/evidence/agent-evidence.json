@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-08-20T01:15:18Z",
+  "timestamp": "2026-08-20T05:19:00Z",
   "endpoint": "http://127.0.0.1:49322",
   "available": true,
   "version": "1.18.11",
@@ -23,8 +23,36 @@
     "passed": true,
     "detail": "unit-test-generator write called but did not succeed (permission deny)"
   },
-  "totalChecks": 5,
-  "passedChecks": 5,
+  "reviewerCollectReviewAllowed": {
+    "passed": true,
+    "detail": "code-reviewer collect_review_context allowed and executed"
+  },
+  "reviewerWriteTestDenied": {
+    "passed": true,
+    "detail": "code-reviewer write_test_file denied by whitelist"
+  },
+  "reviewerRunTestDenied": {
+    "passed": true,
+    "detail": "code-reviewer run_project_test denied by whitelist"
+  },
+  "unitTestWriteTestAllowed": {
+    "passed": true,
+    "detail": "unit-test-generator write_test_file allowed and executed"
+  },
+  "unitTestWriteDocDenied": {
+    "passed": true,
+    "detail": "unit-test-generator write_document denied by whitelist"
+  },
+  "reviewerWorkflow": {
+    "passed": true,
+    "detail": "code-reviewer workflow: collect_review_context + valid output-schema JSON"
+  },
+  "unitTestWorkflow": {
+    "passed": true,
+    "detail": "unit-test workflow: analyze -\u003e write -\u003e run completed"
+  },
+  "totalChecks": 12,
+  "passedChecks": 12,
   "failedChecks": 0,
   "skippedChecks": 0
 }
