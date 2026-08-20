@@ -57,3 +57,20 @@ func TestReviewerOutputSchemaIsJSONSchema(t *testing.T) {
     for _, v := range req { joined += v.(string) + " " }
     for _, k := range []string{"file", "lineRange", "severity", "title", "description", "evidence", "introducedByChange", "confidence", "recommendation"} { if !strings.Contains(joined, k) { t.Errorf("finding required missing %s", k) } }
 }
+
+// TestReviewerConfidenceThresholdEnforcedInSchema is the negative contract test
+// for the confidence floor: a finding with confidence 0.79 must fail the schema
+// minimum, and 0.80 must pass. It reads the declared minimum directly (the Go
+// module has no JSON Schema validator) and asserts the boundary so the schema
+// cannot silently regress back to a 0..1 range.
+func TestReviewerConfidenceThresholdEnforcedInSchema(t *testing.T) {
+    raw := read(t, "distribution/agents/code-reviewer/output-schema.json")
+    var s map[string]any
+    if err := json.Unmarshal([]byte(raw), &s); err != nil { t.Fatal(err) }
+    conf := s["properties"].(map[string]any)["findings"].(map[string]any)["items"].(map[string]any)["properties"].(map[string]any)["confidence"].(map[string]any)
+    min, ok := conf["minimum"].(float64)
+    if !ok { t.Fatal("confidence schema missing numeric minimum") }
+    if min != 0.8 { t.Fatalf("confidence minimum = %v, want 0.8", min) }
+    if 0.79 >= min { t.Errorf("confidence 0.79 must be below the minimum %v (0.79 should FAIL)", min) }
+    if 0.80 < min { t.Errorf("confidence 0.80 must meet the minimum %v (0.80 should PASS)", min) }
+}

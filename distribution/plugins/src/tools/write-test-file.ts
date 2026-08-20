@@ -52,6 +52,7 @@ export const writeTestFileTool = {
         content: input.content,
         allowedRoots: testRoots,
         overwrite: input.overwrite === true,
+        ownership: ctx.ownership,
       });
 
       ctx.guard.after({ sessionId: ctx.sessionId, agent: ctx.agent, tool: this.name, action: "write", projectRoot: ctx.projectRoot, targetPath: input.path, durationMs: Date.now() - started, ok: true });

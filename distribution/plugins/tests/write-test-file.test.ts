@@ -2,7 +2,25 @@ import { describe, expect, test } from "bun:test";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { writeTestFileTool } from "../src/tools/write-test-file";
+import type { ToolContext, WriteOwnership } from "../src/tools/types";
 import { makeTempRoot, makeContext } from "./helpers";
+
+// makeOwnership builds an isolated in-memory ownership set, mirroring the
+// per-(session, agent) store the plugin entry wires in at serve time.
+function makeOwnership(): WriteOwnership {
+  const set = new Set<string>();
+  return {
+    record: (p: string) => { set.add(p); },
+    owns: (p: string) => set.has(p),
+  };
+}
+
+function ownedContext(projectRoot: string, ownership: WriteOwnership, agent = "unit-test-generator"): ToolContext {
+  const { ctx } = makeContext(projectRoot);
+  ctx.ownership = ownership;
+  ctx.agent = agent;
+  return ctx;
+}
 
 function setup(): { root: string; ctx: ReturnType<typeof makeContext>["ctx"] } {
   const root = makeTempRoot("codea-write-");
@@ -73,15 +91,6 @@ describe("writeTestFileTool.execute", () => {
     expect(fs.readFileSync(path.join(root, rel), "utf8")).toBe("original");
   });
 
-  test("allows overwrite when overwrite=true", async () => {
-    const { root, ctx } = setup();
-    const rel = "src/test/java/ExistingTest.java";
-    fs.writeFileSync(path.join(root, rel), "original");
-    const result = await writeTestFileTool.execute({ path: rel, content: "new", overwrite: true }, ctx);
-    expect(result.ok).toBe(true);
-    expect(fs.readFileSync(path.join(root, rel), "utf8")).toBe("new");
-  });
-
   test("blocks DLP secret content", async () => {
     const { ctx } = setup();
     const result = await writeTestFileTool.execute(
@@ -131,5 +140,65 @@ describe("writeTestFileTool.execute", () => {
     );
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error.category).toBe("NOT_SUPPORTED");
+  });
+});
+
+describe("writeTestFileTool.execute — server-side ownership", () => {
+  test("first write (overwrite=false) creates the file and records ownership", async () => {
+    const { root } = setup();
+    const ownership = makeOwnership();
+    const ctx = ownedContext(root, ownership);
+    const rel = "src/test/java/com/example/FreshTest.java";
+    const result = await writeTestFileTool.execute({ path: rel, content: "package com.example;" }, ctx);
+    expect(result.ok).toBe(true);
+    const abs = path.join(root, rel);
+    expect(fs.existsSync(abs)).toBe(true);
+    expect(ownership.owns(abs)).toBe(true);
+  });
+
+  test("overwrite=true on a file this run created is allowed (repair)", async () => {
+    const { root } = setup();
+    const ownership = makeOwnership();
+    const ctx = ownedContext(root, ownership);
+    const rel = "src/test/java/com/example/RepairTest.java";
+    await writeTestFileTool.execute({ path: rel, content: "v1" }, ctx);
+    const result = await writeTestFileTool.execute({ path: rel, content: "v2", overwrite: true }, ctx);
+    expect(result.ok).toBe(true);
+    expect(fs.readFileSync(path.join(root, rel), "utf8")).toBe("v2");
+  });
+
+  test("overwrite=true on a pre-existing test is denied (not owned)", async () => {
+    const { root } = setup();
+    const rel = "src/test/java/ExistingTest.java";
+    fs.writeFileSync(path.join(root, rel), "original");
+    const ctx = ownedContext(root, makeOwnership());
+    const result = await writeTestFileTool.execute({ path: rel, content: "new", overwrite: true }, ctx);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.category).toBe("PERMISSION_DENIED");
+    expect(fs.readFileSync(path.join(root, rel), "utf8")).toBe("original");
+  });
+
+  test("overwrite=true from another session/agent is denied (different ownership)", async () => {
+    const { root } = setup();
+    const rel = "src/test/java/com/example/CrossSession.java";
+    const creator = ownedContext(root, makeOwnership(), "unit-test-generator");
+    await writeTestFileTool.execute({ path: rel, content: "v1" }, creator);
+    const intruder = ownedContext(root, makeOwnership(), "unit-test-generator");
+    const result = await writeTestFileTool.execute({ path: rel, content: "v2", overwrite: true }, intruder);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.category).toBe("PERMISSION_DENIED");
+    expect(fs.readFileSync(path.join(root, rel), "utf8")).toBe("v1");
+  });
+
+  test("overwrite=false on a file this run already created is denied", async () => {
+    const { root } = setup();
+    const ownership = makeOwnership();
+    const ctx = ownedContext(root, ownership);
+    const rel = "src/test/java/com/example/DupCreate.java";
+    await writeTestFileTool.execute({ path: rel, content: "v1" }, ctx);
+    const result = await writeTestFileTool.execute({ path: rel, content: "v2" }, ctx);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.category).toBe("PERMISSION_DENIED");
+    expect(fs.readFileSync(path.join(root, rel), "utf8")).toBe("v1");
   });
 });

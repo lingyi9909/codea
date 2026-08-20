@@ -3,6 +3,7 @@ import * as path from "node:path";
 import { scanDlp } from "../security/dlp";
 import { PathViolationError, assertWithinAllowedRoots, resolveProjectPath } from "../security/path-policy";
 import { dlpBlocked, internalError, pathViolation, permissionDenied } from "./errors";
+import type { WriteOwnership } from "./types";
 
 // Filesystem operations shared by the write tools. Every path is resolved
 // through the canonicalising path policy first; writes are DLP-gated and atomic
@@ -48,6 +49,7 @@ export interface WriteOptions {
   content: string;
   allowedRoots?: string[]; // additional roots (relative to projectRoot) the path must fall inside
   overwrite: boolean;
+  ownership?: WriteOwnership; // when set, overwrite is restricted to paths this run created
 }
 
 export interface WriteResult {
@@ -68,8 +70,21 @@ export function writeFileAtomic(opts: WriteOptions): WriteResult {
     }
   }
 
-  if (fs.existsSync(abs) && !opts.overwrite) {
-    throw permissionDenied(`file exists and overwrite is not allowed: ${opts.relPath}`);
+  if (fs.existsSync(abs)) {
+    if (opts.ownership) {
+      // Server-side ownership: an existing file may only be overwritten when this
+      // exact (session, agent) run created it AND overwrite=true. Any other
+      // existing file (a pre-existing test, or one created by another session) is
+      // denied regardless of the overwrite flag.
+      if (!opts.ownership.owns(abs)) {
+        throw permissionDenied(`file exists and is not owned by this run: ${opts.relPath}`);
+      }
+      if (!opts.overwrite) {
+        throw permissionDenied(`file exists and overwrite is not allowed: ${opts.relPath}`);
+      }
+    } else if (!opts.overwrite) {
+      throw permissionDenied(`file exists and overwrite is not allowed: ${opts.relPath}`);
+    }
   }
 
   const dlp = scanDlp(opts.content, "file-write");
@@ -92,6 +107,8 @@ export function writeFileAtomic(opts: WriteOptions): WriteResult {
     }
     throw internalError(`write failed: ${opts.relPath}`, e);
   }
+
+  opts.ownership?.record(abs);
 
   return { path: abs, bytes: Buffer.byteLength(opts.content, "utf8") };
 }

@@ -871,8 +871,17 @@ function writeFileAtomic(opts) {
       throw e;
     }
   }
-  if (fs3.existsSync(abs) && !opts.overwrite) {
-    throw permissionDenied(`file exists and overwrite is not allowed: ${opts.relPath}`);
+  if (fs3.existsSync(abs)) {
+    if (opts.ownership) {
+      if (!opts.ownership.owns(abs)) {
+        throw permissionDenied(`file exists and is not owned by this run: ${opts.relPath}`);
+      }
+      if (!opts.overwrite) {
+        throw permissionDenied(`file exists and overwrite is not allowed: ${opts.relPath}`);
+      }
+    } else if (!opts.overwrite) {
+      throw permissionDenied(`file exists and overwrite is not allowed: ${opts.relPath}`);
+    }
   }
   const dlp = scanDlp(opts.content, "file-write");
   if (!dlp.allowed) {
@@ -891,6 +900,7 @@ function writeFileAtomic(opts) {
     } catch {}
     throw internalError(`write failed: ${opts.relPath}`, e);
   }
+  opts.ownership?.record(abs);
   return { path: abs, bytes: Buffer.byteLength(opts.content, "utf8") };
 }
 
@@ -1331,7 +1341,8 @@ var writeTestFileTool = {
         relPath: input.path,
         content: input.content,
         allowedRoots: testRoots,
-        overwrite: input.overwrite === true
+        overwrite: input.overwrite === true,
+        ownership: ctx.ownership
       });
       ctx.guard.after({ sessionId: ctx.sessionId, agent: ctx.agent, tool: this.name, action: "write", projectRoot: ctx.projectRoot, targetPath: input.path, durationMs: Date.now() - started, ok: true });
       return ok(result);
@@ -14342,22 +14353,24 @@ function targetPathFor(tool, args) {
     return args?.filePath;
   return;
 }
-function toCodeaContext(octx, audit, guard) {
+function toCodeaContext(octx, audit, guard, ownership) {
   return {
     sessionId: octx.sessionID,
     agent: octx.agent,
     projectRoot: octx.directory,
     audit,
-    guard
+    guard,
+    ownership
   };
 }
-function adaptTool(name, codeaTool, audit, guard) {
+function adaptTool(name, codeaTool, audit, guard, ownershipFactory) {
   return {
     description: codeaTool.description ?? name,
     args: TOOL_ARGS[name] ?? {},
     async execute(args, octx) {
       const action = TOOL_ACTIONS[name] ?? "read";
-      const codeaCtx = toCodeaContext(octx, audit, guard);
+      const ownership = ownershipFactory ? ownershipFactory(octx.sessionID, octx.agent) : undefined;
+      const codeaCtx = toCodeaContext(octx, audit, guard, ownership);
       const before = guard.before({
         sessionId: octx.sessionID,
         agent: octx.agent,
@@ -14441,10 +14454,25 @@ var plugin = {
     const guard = new RuntimeSecurityGuard(audit);
     const difyEnv = difyConfigFromEnv(process.env);
     const dify = difyEnv ? new DifyClient({ baseUrl: difyEnv.baseUrl, apiKey: difyEnv.apiKey }) : null;
+    const ownershipStore = new Map;
+    const ownershipFactory = (sessionId, agent) => {
+      const key = `${sessionId}\x00${agent}`;
+      let set2 = ownershipStore.get(key);
+      if (!set2) {
+        set2 = new Set;
+        ownershipStore.set(key, set2);
+      }
+      return {
+        record: (absPath) => {
+          set2.add(absPath);
+        },
+        owns: (absPath) => set2.has(absPath)
+      };
+    };
     const tools = {
       collect_review_context: adaptTool("collect_review_context", collectReviewContextTool, audit, guard),
       analyze_test_project: adaptTool("analyze_test_project", analyzeTestProjectTool, audit, guard),
-      write_test_file: adaptTool("write_test_file", writeTestFileTool, audit, guard),
+      write_test_file: adaptTool("write_test_file", writeTestFileTool, audit, guard, ownershipFactory),
       run_project_test: adaptTool("run_project_test", runProjectTestTool, audit, guard),
       extract_api_spec: adaptTool("extract_api_spec", extractApiSpecTool, audit, guard),
       validate_api_example: adaptTool("validate_api_example", validateApiExampleTool, audit, guard),

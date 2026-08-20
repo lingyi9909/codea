@@ -17,12 +17,22 @@ export type ToolErrorCategory =
   | "NOT_SUPPORTED"
   | "INTERNAL_ERROR";
 
+// WriteOwnership is the server-side record of files a single (session, agent)
+// run has created. It is what makes "never overwrite an existing test" a real
+// guarantee instead of a prompt instruction: an overwrite is only allowed for a
+// canonical path this run actually created, and only when overwrite=true.
+export interface WriteOwnership {
+  record(absPath: string): void;
+  owns(absPath: string): boolean;
+}
+
 export interface ToolContext {
   sessionId: string;
   agent: string;
   projectRoot: string;
   audit: AuditLogger;
   guard: RuntimeSecurityGuard;
+  ownership?: WriteOwnership;
 }
 
 export type ToolResult<T> =

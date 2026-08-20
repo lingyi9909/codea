@@ -12,7 +12,7 @@ import { runProjectTestTool } from "../tools/run-project-test";
 import { extractApiSpecTool } from "../tools/extract-api-spec";
 import { validateApiExampleTool } from "../tools/validate-api-example";
 import { writeDocumentTool } from "../tools/write-document";
-import type { ToolContext as CodeaToolContext, ToolResult as CodeaToolResult } from "../tools/types";
+import type { ToolContext as CodeaToolContext, ToolResult as CodeaToolResult, WriteOwnership } from "../tools/types";
 import type { Hooks, PluginModule, ToolContext, ToolDefinition, ToolResult } from "./types";
 
 // OpenCode v1.18.11 plugin adapter. This is the real integration point: it
@@ -96,13 +96,21 @@ function targetPathFor(tool: string, args: any): string | undefined {
   return undefined;
 }
 
-function toCodeaContext(octx: ToolContext, audit: AuditLogger, guard: RuntimeSecurityGuard): CodeaToolContext {
+type OwnershipFactory = (sessionId: string, agent: string) => WriteOwnership;
+
+function toCodeaContext(
+  octx: ToolContext,
+  audit: AuditLogger,
+  guard: RuntimeSecurityGuard,
+  ownership?: WriteOwnership,
+): CodeaToolContext {
   return {
     sessionId: octx.sessionID,
     agent: octx.agent,
     projectRoot: octx.directory,
     audit,
     guard,
+    ownership,
   };
 }
 
@@ -117,13 +125,15 @@ function adaptTool(
   codeaTool: CodeaTool,
   audit: AuditLogger,
   guard: RuntimeSecurityGuard,
+  ownershipFactory?: OwnershipFactory,
 ): ToolDefinition {
   return {
     description: codeaTool.description ?? name,
     args: TOOL_ARGS[name] ?? {},
     async execute(args: any, octx: ToolContext): Promise<ToolResult> {
       const action = TOOL_ACTIONS[name] ?? "read";
-      const codeaCtx = toCodeaContext(octx, audit, guard);
+      const ownership = ownershipFactory ? ownershipFactory(octx.sessionID, octx.agent) : undefined;
+      const codeaCtx = toCodeaContext(octx, audit, guard, ownership);
 
       // 1. guard before: path policy + DLP input. Deny aborts the call.
       const before = guard.before({
@@ -231,10 +241,30 @@ export const plugin: PluginModule = {
       ? new DifyClient({ baseUrl: difyEnv.baseUrl, apiKey: difyEnv.apiKey })
       : null;
 
+    // Server-side write ownership: files created by one (session, agent) run.
+    // write_test_file may only overwrite a path this exact run created, so
+    // "never overwrite an existing test" holds even if the model lies about
+    // overwrite=true.
+    const ownershipStore = new Map<string, Set<string>>();
+    const ownershipFactory: OwnershipFactory = (sessionId, agent) => {
+      const key = `${sessionId} ${agent}`;
+      let set = ownershipStore.get(key);
+      if (!set) {
+        set = new Set<string>();
+        ownershipStore.set(key, set);
+      }
+      return {
+        record: (absPath) => {
+          set.add(absPath);
+        },
+        owns: (absPath) => set.has(absPath),
+      };
+    };
+
     const tools: Record<string, ToolDefinition> = {
       collect_review_context: adaptTool("collect_review_context", collectReviewContextTool, audit, guard),
       analyze_test_project: adaptTool("analyze_test_project", analyzeTestProjectTool, audit, guard),
-      write_test_file: adaptTool("write_test_file", writeTestFileTool, audit, guard),
+      write_test_file: adaptTool("write_test_file", writeTestFileTool, audit, guard, ownershipFactory),
       run_project_test: adaptTool("run_project_test", runProjectTestTool, audit, guard),
       extract_api_spec: adaptTool("extract_api_spec", extractApiSpecTool, audit, guard),
       validate_api_example: adaptTool("validate_api_example", validateApiExampleTool, audit, guard),

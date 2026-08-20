@@ -1,0 +1,30 @@
+{
+  "timestamp": "2026-08-20T01:15:18Z",
+  "endpoint": "http://127.0.0.1:49322",
+  "available": true,
+  "version": "1.18.11",
+  "agentsListed": {
+    "passed": true,
+    "detail": "agents listed: code-reviewer=true unit-test-generator=true (total 9)"
+  },
+  "reviewerRead": {
+    "passed": true,
+    "detail": "code-reviewer read tool executed and agent continued"
+  },
+  "reviewerWriteDenied": {
+    "passed": true,
+    "detail": "code-reviewer write called but did not succeed (permission deny)"
+  },
+  "unitTestRead": {
+    "passed": true,
+    "detail": "unit-test-generator read tool executed and agent continued"
+  },
+  "unitTestWriteDenied": {
+    "passed": true,
+    "detail": "unit-test-generator write called but did not succeed (permission deny)"
+  },
+  "totalChecks": 5,
+  "passedChecks": 5,
+  "failedChecks": 0,
+  "skippedChecks": 0
+}

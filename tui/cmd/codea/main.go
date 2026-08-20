@@ -14,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"codea/tui/internal/agent"
 	"codea/tui/internal/app"
 	"codea/tui/internal/opencode"
 	"codea/tui/internal/skill"
@@ -57,6 +58,14 @@ func run() error {
 	// on first launch. A missing bundle (not yet built) degrades to General mode.
 	if err := writePluginConfig(cfgDir); err != nil {
 		return fmt.Errorf("write plugin config: %w", err)
+	}
+
+	// Materialize the enterprise agents (code-reviewer, unit-test-generator, …)
+	// into the controlled config dir BEFORE the runtime starts, so they are
+	// loaded as real first-class agents (appear in /agent) with their deny
+	// permissions enforced server-side, not just as prompt instructions.
+	if err := agent.Materialize(agentRoot(), filepath.Join(cfgDir, "agents")); err != nil {
+		return fmt.Errorf("materialize agents: %w", err)
 	}
 
 	adapter, cleanup, err := bootstrapRuntime(cfgDir, mode)
@@ -126,6 +135,17 @@ func codeaConfigDir() string {
 	}
 	home, _ := os.UserHomeDir()
 	return filepath.Join(home, ".codea", "runtime-config")
+}
+
+// agentRoot returns the filesystem root that holds the Codea enterprise agents
+// (each a <name>/manifest.yaml + agent.md directory). CODEA_AGENTS_DIR overrides
+// the default (the distribution agents directory relative to the launch dir).
+func agentRoot() string {
+	if d := os.Getenv("CODEA_AGENTS_DIR"); d != "" {
+		return d
+	}
+	projectDir, _ := os.Getwd()
+	return filepath.Join(projectDir, "..", "distribution", "agents")
 }
 
 // pluginBundlePath returns the path to the self-contained enterprise plugin
