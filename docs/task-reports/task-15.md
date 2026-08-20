@@ -2,7 +2,7 @@
 
 ## Overview
 
-Checkpoint: `fc09701b6a4ef1f4d7213ebb5245a3c89a9f7d64`
+Checkpoint: `27e5ef91cc19e9a028b8dc87325ff0ae24e3b661`
 
 在 Task 13 的 `analyze_test_project` / `write_test_file` / `run_project_test` / failure-classifier 之上，交付企业级 Unit Test Generator Agent（enterprise-controlled），实现 JUnit 5 测试生成与受控自动修复。原生 `write`/`edit`/`bash` 全部 deny，写与执行能力只经 `write_test_file` / `run_project_test` 通道。
 
@@ -20,7 +20,7 @@ Checkpoint: `fc09701b6a4ef1f4d7213ebb5245a3c89a9f7d64`
 
 `manifest.yaml` + `agent.md` 由 `tui/internal/agent` 物化为 `OPENCODE_CONFIG_DIR/agents/unit-test-generator.md`，在 runtime 启动前由 `main.go` 冷启动写入，使 unit-test-generator 作为真实的一等 agent 出现在 `/agent` 列表中，权限由 OpenCode 服务端强制执行。
 
-**Tool Whitelist fail-closed（server-side）**：materializer 完整解析 manifest 的 tools map，生成 `permission: {"*": deny, <allow-tool>: allow}`。未列入 allow 的 tool（含 `write`/`edit`/`bash`/`write_document`）一律继承 `deny`，因此 UT 只允许 `read`/`grep`/`glob`/`analyze_test_project`/`write_test_file`/`run_project_test`/`dify-query`。真实 runtime 断言：unit-test-generator → `write_test_file` ALLOW、`write_document` DENY。
+**Tool Whitelist fail-closed（server-side）**：materializer 完整解析 manifest 的 tools map，生成 `permission: {"*": deny, <allow-tool>: allow}`。未列入 allow 的 tool（含 `write`/`edit`/`bash`/`write_document`）一律继承 `deny`，因此 UT 只允许 `read`/`grep`/`glob`/`analyze_test_project`/`write_test_file`/`run_project_test`/`dify-query`。真实 runtime 断言：unit-test-generator → `write_test_file` ALLOW、`write_document` DENY、`collect_review_context` DENY。
 
 **写入所有权（server-side，非 Prompt 约束）**：`write_test_file` 的 `overwrite` 不再是 Prompt 提示，而是由 Plugin 服务端基于 `(sessionID + agent)` 维护的 `createdFiles` Set 强制执行：
 
@@ -55,6 +55,14 @@ Checkpoint: `fc09701b6a4ef1f4d7213ebb5245a3c89a9f7d64`
 
 `./scripts/run-real-maven-smoke.sh` → PASS：真实 Maven（非 mvnw stub）编译并执行 `tui/tests/e2e/fixtures/java-maven-project` 的 JUnit，Surefire 报绿。
 
+## 真实 Agent Workflow E2E（真实 Maven）
+
+`run-real-agent-smoke.sh` 现在丢弃 `mvnw` stub，使 unit-test-generator 的 `run_project_test` 回退到真实 `mvn test`：
+
+- **成功链路**：`analyze_test_project → write_test_file(GeneratedFlowTest.java) → run_project_test(真实 mvn test)`，断言 `GeneratedFlowTest.java` 落盘、Surefire 逐类报告存在（证明被真实编译执行）、exitCode=0、Tests run≥1、Failures=0、Errors=0。
+- **最终结论来自 run_project_test**：fake model 读取 `run_project_test` 的 Tool Result（`category`/`exitCode`/`passed`/`failed`/`errors`）生成结论，不再硬编码 `"UT workflow complete"`。
+- **确定性失败链路**：`UTFLOWFAIL` 写入故意失败的 JUnit，`run_project_test` 返回 exitCode≠0，Agent 最终结论必须 FAIL（不得输出 PASS）。
+
 ## Full Gate Verification
 
 | Gate | Result |
@@ -74,5 +82,5 @@ Checkpoint: `fc09701b6a4ef1f4d7213ebb5245a3c89a9f7d64`
 | `./scripts/run-real-maven-smoke.sh` | PASS（真实 Maven fixture JUnit 绿） |
 | `OPENCODE_BIN=… ./scripts/run-real-parity-smoke.sh` | PASS（17/17，v1.18.11） |
 | `OPENCODE_BIN=… ./scripts/run-real-plugin-smoke.sh` | PASS（serve load + 8/8 tool 注册） |
-| `OPENCODE_BIN=… ./scripts/run-real-agent-smoke.sh` | PASS（code-reviewer + unit-test-generator 出现在 /agent；read allow、write deny + Custom Tool 白名单 fail-closed + Reviewer/UT 工作流真实 E2E，12/12） |
+| `OPENCODE_BIN=… ./scripts/run-real-agent-smoke.sh` | PASS（code-reviewer + unit-test-generator 出现在 /agent；read allow、write deny + Custom Tool 白名单 fail-closed cross-tool deny + Reviewer/UT 工作流真实 E2E（UT 用真实 Maven + 结论来自 run 结果 + 失败链路），15/15） |
 | `./scripts/check-execution-state.sh` | PASS（state valid） |
