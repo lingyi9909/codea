@@ -2,11 +2,13 @@
 
 ## Overview
 
-Checkpoint: `22d5f3b9954a1d8c870ac06a269bed03a83db39a`
+Checkpoint: `fc09701b6a4ef1f4d7213ebb5245a3c89a9f7d64`
 
 在 Task 13 的 `collect_review_context` Tool 之上，交付企业级 Code Reviewer Agent（enterprise-controlled），以 Manifest + Prompt + JSON Schema 定义结构化、可追溯、只读的代码审查。原生 `write`/`edit`/`bash` 在 permissions 中 deny，审查证据只能来自 `collect_review_context` 与受限仓库读取。
 
-**Enterprise Runtime Integration（最后一公里）**：`manifest.yaml` + `agent.md` 由 `tui/internal/agent` 物化为 `OPENCODE_CONFIG_DIR/agents/code-reviewer.md`（`mode: all`、`write/edit/bash: deny`），在 runtime 启动前由 `main.go` 冷启动写入，使 code-reviewer 作为真实的一等 agent 出现在 `/agent` 列表中，deny 权限由 OpenCode 服务端强制执行（非 Prompt 提示）。`output-schema.json` 的 finding `confidence.minimum` 已从 `0` 收紧为 `0.8`。
+**Enterprise Runtime Integration（最后一公里）**：`manifest.yaml` + `agent.md` 由 `tui/internal/agent` 物化为 `OPENCODE_CONFIG_DIR/agents/code-reviewer.md`，在 runtime 启动前由 `main.go` 冷启动写入，使 code-reviewer 作为真实的一等 agent 出现在 `/agent` 列表中，权限由 OpenCode 服务端强制执行（非 Prompt 提示）。`output-schema.json` 的 finding `confidence.minimum` 已从 `0` 收紧为 `0.8`。
+
+**Tool Whitelist fail-closed（server-side）**：materializer 不再只解析 `deny`，而是完整解析 manifest 的 tools map，生成 fail-closed 权限 —— `permission: {"*": deny, <allow-tool>: allow}`。OpenCode v1.18.11 对新 custom agent 默认 `"*": "allow"`，若只写 `write/edit/bash: deny`，code-reviewer 仍可调用 `write_test_file`/`write_document` 等未列出的 custom tool；fail-closed 使未列入 allow 的 tool（含 `write`/`edit`/`bash`/`write_test_file`/`run_project_test`/`write_document`）一律继承 `deny`。真实 runtime 断言：code-reviewer → `collect_review_context` ALLOW、`write_test_file` DENY、`run_project_test` DENY。
 
 核心边界（本 Task 不可违反）：
 
@@ -56,5 +58,5 @@ Checkpoint: `22d5f3b9954a1d8c870ac06a269bed03a83db39a`
 | `./scripts/run-real-maven-smoke.sh` | PASS（真实 Maven fixture JUnit 绿） |
 | `OPENCODE_BIN=… ./scripts/run-real-parity-smoke.sh` | PASS（17/17，v1.18.11） |
 | `OPENCODE_BIN=… ./scripts/run-real-plugin-smoke.sh` | PASS（serve load + 8/8 tool 注册） |
-| `OPENCODE_BIN=… ./scripts/run-real-agent-smoke.sh` | PASS（code-reviewer + unit-test-generator 出现在 /agent；read allow、write deny 真实生效，5/5） |
+| `OPENCODE_BIN=… ./scripts/run-real-agent-smoke.sh` | PASS（code-reviewer + unit-test-generator 出现在 /agent；read allow、write deny + Custom Tool 白名单 fail-closed + Reviewer/UT 工作流真实 E2E，12/12） |
 | `./scripts/check-execution-state.sh` | PASS（state valid） |
