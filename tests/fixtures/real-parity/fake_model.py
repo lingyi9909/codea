@@ -20,14 +20,16 @@ State machine, keyed on the last user message (all upper-cased):
 
   Enterprise Custom Tool single-shot (whitelist proof):
     COLLECT_REVIEW_CONTEXT -> `collect_review_context` (source=staged)
-    WRITE_TEST_FILE        -> `write_test_file` (a fresh test under src/test/java)
+    WRITE_TEST_FILE        -> `write_test_file` (a fresh whitelist-only test)
     RUN_PROJECT_TEST       -> `run_project_test` (maven)
     WRITE_DOCUMENT         -> `write_document` (docs/smoke.md)
 
   Enterprise workflow (multi-step, tracked via the assistant tool-call history):
-    REVIEWFLOW -> collect_review_context -> final output-schema JSON answer
-    UTFLOW     -> analyze_test_project -> write_test_file -> run_project_test
-                  -> final text answer
+    REVIEWFLOW  -> collect_review_context -> final output-schema JSON answer
+    UTFLOW      -> analyze_test_project -> write_test_file -> run_project_test
+                   -> final PASS/FAIL derived from the run_project_test Tool Result
+    UTFLOW_FAIL -> same chain with a deterministic failing JUnit -> final FAIL
+                   derived from the run_project_test Tool Result
 
 A request whose final message is a `tool` result answers with text unless a
 workflow still has a remaining step. Keyword matching is ordered so the more
@@ -42,15 +44,32 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 SMOKE_DIR = os.environ.get("SMOKE_DIR", "/tmp")
 
-# A new test file path (under the conventional Maven test root) used by both the
-# single-shot WRITETEST whitelist proof and the UTFLOW workflow write step. The
-# fixture mvnw stub does not actually compile, so content is representative only.
+WHITELIST_TEST_PATH = "src/test/java/com/example/demo/WhitelistSmokeTest.java"
 FLOW_TEST_PATH = "src/test/java/com/example/demo/GeneratedFlowTest.java"
+FLOW_TEST_CLASS = "com.example.demo.GeneratedFlowTest"
+FAIL_FLOW_TEST_PATH = "src/test/java/com/example/demo/GeneratedFailureFlowTest.java"
+FAIL_FLOW_TEST_CLASS = "com.example.demo.GeneratedFailureFlowTest"
+
+WHITELIST_TEST_CONTENT = (
+    "package com.example.demo;\n"
+    "import org.junit.jupiter.api.Test;\n"
+    "class WhitelistSmokeTest {\n"
+    "  @Test void whitelist() {}\n"
+    "}\n"
+)
 FLOW_TEST_CONTENT = (
     "package com.example.demo;\n"
     "import org.junit.jupiter.api.Test;\n"
     "class GeneratedFlowTest {\n"
     "  @Test void flow() {}\n"
+    "}\n"
+)
+FAIL_FLOW_TEST_CONTENT = (
+    "package com.example.demo;\n"
+    "import org.junit.jupiter.api.Assertions;\n"
+    "import org.junit.jupiter.api.Test;\n"
+    "class GeneratedFailureFlowTest {\n"
+    "  @Test void flow() { Assertions.fail(\"deterministic smoke failure\"); }\n"
     "}\n"
 )
 
@@ -98,6 +117,104 @@ def assistant_tool_names(messages):
     return names
 
 
+def _json_value(value):
+    """Best-effort decode of OpenAI tool content without assuming one wrapper."""
+    if isinstance(value, (dict, list)):
+        return value
+    if not isinstance(value, str):
+        return None
+    text = value.strip()
+    if not text:
+        return None
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        start = text.find("{")
+        end = text.rfind("}")
+        if start >= 0 and end > start:
+            try:
+                return json.loads(text[start : end + 1])
+            except json.JSONDecodeError:
+                return None
+    return None
+
+
+def _find_test_run_result(value):
+    """Find the structured run_project_test result inside any tool wrapper."""
+    decoded = _json_value(value)
+    if decoded is not None and decoded is not value:
+        return _find_test_run_result(decoded)
+    if isinstance(value, dict):
+        if "category" in value and "exitCode" in value:
+            return value
+        for child in value.values():
+            found = _find_test_run_result(child)
+            if found is not None:
+                return found
+    elif isinstance(value, list):
+        for child in value:
+            found = _find_test_run_result(child)
+            if found is not None:
+                return found
+    return None
+
+
+def _tool_result_for_call(messages, call_id):
+    for message in reversed(messages or []):
+        if message.get("role") != "tool":
+            continue
+        message_call_id = message.get("tool_call_id")
+        if message_call_id and message_call_id != call_id:
+            continue
+        result = _find_test_run_result(message.get("content"))
+        if result is not None:
+            return result
+    return None
+
+
+def _int_field(result, name, default):
+    value = result.get(name, default)
+    if isinstance(value, bool):
+        return default
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def unit_test_conclusion(messages, call_id):
+    """Return deterministic JSON whose PASS/FAIL is sourced only from run_project_test."""
+    result = _tool_result_for_call(messages, call_id)
+    if result is None:
+        return json.dumps(
+            {
+                "result": "FAIL",
+                "source": "run_project_test",
+                "reason": "missing structured run_project_test result",
+            },
+            separators=(",", ":"),
+        )
+
+    category = str(result.get("category", "")).upper()
+    exit_code = _int_field(result, "exitCode", -1)
+    passed = _int_field(result, "passed", 0)
+    failed = _int_field(result, "failed", 0)
+    errors = _int_field(result, "errors", 0)
+    final = "PASS" if category == "PASS" and exit_code == 0 and passed >= 1 and failed == 0 and errors == 0 else "FAIL"
+    return json.dumps(
+        {
+            "result": final,
+            "source": "run_project_test",
+            "category": category,
+            "exitCode": exit_code,
+            "passed": passed,
+            "failed": failed,
+            "errors": errors,
+        },
+        separators=(",", ":"),
+    )
+
+
 def decide(prompt, messages):
     """Return (tool_name, arguments, call_id, final_text)."""
     p = (prompt or "").upper()
@@ -110,14 +227,23 @@ def decide(prompt, messages):
             return "collect_review_context", {"source": "staged"}, "call_collect", None
         return None, None, None, REVIEWER_JSON
 
+    if "UTFLOW_FAIL" in p:
+        if "analyze_test_project" not in names:
+            return "analyze_test_project", {}, "call_analyze_fail", None
+        if "write_test_file" not in names:
+            return "write_test_file", {"path": FAIL_FLOW_TEST_PATH, "content": FAIL_FLOW_TEST_CONTENT}, "call_write_fail", None
+        if "run_project_test" not in names:
+            return "run_project_test", {"buildSystem": "maven", "testClass": FAIL_FLOW_TEST_CLASS}, "call_run_fail", None
+        return None, None, None, unit_test_conclusion(messages, "call_run_fail")
+
     if "UTFLOW" in p:
         if "analyze_test_project" not in names:
             return "analyze_test_project", {}, "call_analyze", None
         if "write_test_file" not in names:
             return "write_test_file", {"path": FLOW_TEST_PATH, "content": FLOW_TEST_CONTENT}, "call_write", None
         if "run_project_test" not in names:
-            return "run_project_test", {"buildSystem": "maven"}, "call_run", None
-        return None, None, None, "UT workflow complete: analyze -> write -> run"
+            return "run_project_test", {"buildSystem": "maven", "testClass": FLOW_TEST_CLASS}, "call_run", None
+        return None, None, None, unit_test_conclusion(messages, "call_run")
 
     # --- Single-shot tools: after a tool result, close the loop -------------
     if last_is_tool:
@@ -129,7 +255,7 @@ def decide(prompt, messages):
     if "COLLECT_REVIEW_CONTEXT" in p:
         return "collect_review_context", {"source": "staged"}, "call_collect", None
     if "WRITE_TEST_FILE" in p:
-        return "write_test_file", {"path": FLOW_TEST_PATH, "content": FLOW_TEST_CONTENT}, "call_write", None
+        return "write_test_file", {"path": WHITELIST_TEST_PATH, "content": WHITELIST_TEST_CONTENT}, "call_write", None
     if "RUN_PROJECT_TEST" in p:
         return "run_project_test", {"buildSystem": "maven"}, "call_run", None
     if "WRITE_DOCUMENT" in p:
