@@ -2,7 +2,7 @@
 
 ## Overview
 
-Checkpoint: `c9064c20642702fd9b2fd0a577b8acbf802f353f`
+Checkpoint: `22d5f3b9954a1d8c870ac06a269bed03a83db39a`
 
 在 Task 13 的 `analyze_test_project` / `write_test_file` / `run_project_test` / failure-classifier 之上，交付企业级 Unit Test Generator Agent（enterprise-controlled），实现 JUnit 5 测试生成与受控自动修复。原生 `write`/`edit`/`bash` 全部 deny，写与执行能力只经 `write_test_file` / `run_project_test` 通道。
 
@@ -15,6 +15,19 @@ Checkpoint: `c9064c20642702fd9b2fd0a577b8acbf802f353f`
 - **8 类错误分类**：COMPILE_ERROR / DEPENDENCY_ERROR / TEST_FAILURE / ASSERTION_FAILURE / MOCK_CONFIGURATION / TEST_RUNTIME_ERROR / TIMEOUT / INFRASTRUCTURE_ERROR，其中 repairable=true 的才进入 repair。
 - **产品缺陷止损**：`PRODUCT_CODE_DEFECT_SUSPECTED` 触发 stop，禁止改业务代码。
 - **真实结果收口**：最终报告只基于 `run_project_test` 的结构化输出（passed/failed/errors/skipped/duration/failureDetails/exitCode/category），`Never claim tests pass without run_project_test`。
+
+## Enterprise Runtime Integration（最后一公里）
+
+`manifest.yaml` + `agent.md` 由 `tui/internal/agent` 物化为 `OPENCODE_CONFIG_DIR/agents/unit-test-generator.md`（`mode: all`、`write/edit/bash: deny`），在 runtime 启动前由 `main.go` 冷启动写入，使 unit-test-generator 作为真实的一等 agent 出现在 `/agent` 列表中，deny 权限由 OpenCode 服务端强制执行。
+
+**写入所有权（server-side，非 Prompt 约束）**：`write_test_file` 的 `overwrite` 不再是 Prompt 提示，而是由 Plugin 服务端基于 `(sessionID + agent)` 维护的 `createdFiles` Set 强制执行：
+
+- 已有测试文件 + `overwrite=true` → **DENY**（权限错误，工具不成功）
+- 本轮刚创建文件 + `overwrite=true` → **ALLOW**（修复工作流覆盖自己刚写的测试）
+- 其他 session 创建的文件 + `overwrite` → **DENY**
+- 生产代码路径 → **DENY**
+
+所有权记录与覆盖判定位于 `writeFileAtomic` 内，`write_test_file` 是唯一获得 `ownershipFactory` 的写工具；模型即便尝试 `overwrite` 也只会收到 deny。
 
 ## 交付物
 
@@ -44,19 +57,20 @@ Checkpoint: `c9064c20642702fd9b2fd0a577b8acbf802f353f`
 
 | Gate | Result |
 |------|--------|
-| `go test ./tests/e2e/code-review/ ./tests/e2e/unit-test/`（契约） | PASS（11 tests） |
-| `bun test`（distribution/plugins） | PASS（241 tests，0 fail） |
+| `go test ./tests/e2e/code-review/ ./tests/e2e/unit-test/`（契约） | PASS（12 tests） |
+| `bun test`（distribution/plugins） | PASS（245 tests，0 fail） |
 | `bun run build`（bundle） | PASS（dist/index.js 0.52 MB） |
 | `./scripts/check-plugin-bundle.sh` | PASS（bundle 自包含，offline-safe） |
 | `./scripts/run-plugin-smoke.sh` | PASS（8-tool adapter guard chain，零公网） |
 | `./scripts/check-runtime-boundary.sh` | PASS（no vendor DTO leakage） |
 | `go build ./...` | PASS |
 | `go vet ./...` | clean |
-| `go test ./... -count=1` | PASS（24 packages） |
+| `go test ./... -count=1` | PASS（23 packages） |
 | `go test -race ./... -count=1` | PASS（无竞态） |
 | `GOOS=windows GOARCH=amd64 go build ./cmd/codea ./cmd/parity-runner` | PASS |
 | `GOOS=darwin GOARCH=amd64 go build ./cmd/codea ./cmd/parity-runner` | PASS |
 | `./scripts/run-real-maven-smoke.sh` | PASS（真实 Maven fixture JUnit 绿） |
 | `OPENCODE_BIN=… ./scripts/run-real-parity-smoke.sh` | PASS（17/17，v1.18.11） |
 | `OPENCODE_BIN=… ./scripts/run-real-plugin-smoke.sh` | PASS（serve load + 8/8 tool 注册） |
+| `OPENCODE_BIN=… ./scripts/run-real-agent-smoke.sh` | PASS（code-reviewer + unit-test-generator 出现在 /agent；read allow、write deny 真实生效，5/5） |
 | `./scripts/check-execution-state.sh` | PASS（state valid） |

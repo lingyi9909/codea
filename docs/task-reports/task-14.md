@@ -2,9 +2,11 @@
 
 ## Overview
 
-Checkpoint: `c9064c20642702fd9b2fd0a577b8acbf802f353f`
+Checkpoint: `22d5f3b9954a1d8c870ac06a269bed03a83db39a`
 
 在 Task 13 的 `collect_review_context` Tool 之上，交付企业级 Code Reviewer Agent（enterprise-controlled），以 Manifest + Prompt + JSON Schema 定义结构化、可追溯、只读的代码审查。原生 `write`/`edit`/`bash` 在 permissions 中 deny，审查证据只能来自 `collect_review_context` 与受限仓库读取。
+
+**Enterprise Runtime Integration（最后一公里）**：`manifest.yaml` + `agent.md` 由 `tui/internal/agent` 物化为 `OPENCODE_CONFIG_DIR/agents/code-reviewer.md`（`mode: all`、`write/edit/bash: deny`），在 runtime 启动前由 `main.go` 冷启动写入，使 code-reviewer 作为真实的一等 agent 出现在 `/agent` 列表中，deny 权限由 OpenCode 服务端强制执行（非 Prompt 提示）。`output-schema.json` 的 finding `confidence.minimum` 已从 `0` 收紧为 `0.8`。
 
 核心边界（本 Task 不可违反）：
 
@@ -39,19 +41,20 @@ Checkpoint: `c9064c20642702fd9b2fd0a577b8acbf802f353f`
 
 | Gate | Result |
 |------|--------|
-| `go test ./tests/e2e/code-review/ ./tests/e2e/unit-test/`（契约） | PASS（11 tests） |
-| `bun test`（distribution/plugins） | PASS（241 tests，0 fail） |
+| `go test ./tests/e2e/code-review/ ./tests/e2e/unit-test/`（契约） | PASS（12 tests） |
+| `bun test`（distribution/plugins） | PASS（245 tests，0 fail） |
 | `bun run build`（bundle） | PASS（dist/index.js 0.52 MB） |
 | `./scripts/check-plugin-bundle.sh` | PASS（bundle 自包含，offline-safe） |
 | `./scripts/run-plugin-smoke.sh` | PASS（8-tool adapter guard chain，零公网） |
 | `./scripts/check-runtime-boundary.sh` | PASS（no vendor DTO leakage） |
 | `go build ./...` | PASS |
 | `go vet ./...` | clean |
-| `go test ./... -count=1` | PASS（24 packages） |
+| `go test ./... -count=1` | PASS（23 packages） |
 | `go test -race ./... -count=1` | PASS（无竞态） |
 | `GOOS=windows GOARCH=amd64 go build ./cmd/codea ./cmd/parity-runner` | PASS |
 | `GOOS=darwin GOARCH=amd64 go build ./cmd/codea ./cmd/parity-runner` | PASS |
 | `./scripts/run-real-maven-smoke.sh` | PASS（真实 Maven fixture JUnit 绿） |
 | `OPENCODE_BIN=… ./scripts/run-real-parity-smoke.sh` | PASS（17/17，v1.18.11） |
 | `OPENCODE_BIN=… ./scripts/run-real-plugin-smoke.sh` | PASS（serve load + 8/8 tool 注册） |
+| `OPENCODE_BIN=… ./scripts/run-real-agent-smoke.sh` | PASS（code-reviewer + unit-test-generator 出现在 /agent；read allow、write deny 真实生效，5/5） |
 | `./scripts/check-execution-state.sh` | PASS（state valid） |
