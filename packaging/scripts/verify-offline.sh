@@ -16,14 +16,16 @@ plugins=root/'plugins'
 if not plugins.is_dir(): raise SystemExit('FAIL: plugins directory missing')
 js=list(plugins.glob('*.js'))
 if not js: raise SystemExit('FAIL: no plugin bundle found')
-# Static ESM/CJS specifier audit. Relative, absolute, node:, bun:, and data: are
-# self-contained/runtime-provided; bare package specifiers would require install.
-pat=re.compile(r'''(?:from\s*|import\s*\(|require\s*\()\s*["']([^"']+)["']''')
+patterns=[
+    re.compile(r'''(?:from\s*|import\s*\(|require\s*\()\s*["']([^"']+)["']'''),
+    re.compile(r'''(?:^|[;\n])\s*import\s*["']([^"']+)["']'''),
+]
 for p in js:
     text=p.read_text(errors='replace')
-    for spec in pat.findall(text):
-        if not (spec.startswith('.') or spec.startswith('/') or spec.startswith('node:') or spec.startswith('bun:') or spec.startswith('data:')):
-            raise SystemExit(f'FAIL: external import {spec!r} in {p.name}')
+    for pat in patterns:
+        for spec in pat.findall(text):
+            if not (spec.startswith('.') or spec.startswith('/') or spec.startswith('node:') or spec.startswith('bun:') or spec.startswith('data:')):
+                raise SystemExit(f'FAIL: external import {spec!r} in {p.name}')
     if str(pathlib.Path.home()) in text:
         raise SystemExit(f'FAIL: build home path leaked into {p.name}')
 for p in root.rglob('*'):
@@ -32,9 +34,6 @@ for p in root.rglob('*'):
 print('offline static checks passed')
 PY
 
-# If a manifest exists, integrity must also pass. This script deliberately does
-# not attempt public DNS/HTTP; network isolation is supplied by the release test
-# environment while this check proves the package has no install-time dependency.
 if [ -f "$stage/manifest.json" ]; then
   "$(dirname "${BASH_SOURCE[0]}")/verify-checksum.sh" "$stage"
 fi
