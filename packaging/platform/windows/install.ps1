@@ -73,18 +73,26 @@ try {
   if (Test-Path $tmp) { Remove-Item -Recurse -Force -LiteralPath $tmp }
 }
 
-# Keep a BOM-free pointer for the future transactional upgrader while using a
-# directory junction for the V1 launcher. Junctions work without developer-mode
-# symlink privileges on supported Windows systems.
 $currentTxt = Join-Path $home 'current.txt'
 [IO.File]::WriteAllText($currentTxt, $target + [Environment]::NewLine, (New-Object Text.UTF8Encoding($false)))
 $currentDir = Join-Path $home 'current'
 if (Test-Path $currentDir) { Remove-Item -Force -Recurse $currentDir }
 New-Item -ItemType Junction -Path $currentDir -Target $target | Out-Null
 
+# The launcher binds Codea to the resources in the installed current junction.
+# Without this, source-tree relative defaults cannot locate the bundled runtime,
+# agents, skills or enterprise plugin after installation.
 $shim = Join-Path $binDir 'codea.cmd'
-$shimBody = "@echo off`r`n`"%~dp0..\current\bin\codea.exe`" %*`r`n"
-[IO.File]::WriteAllText($shim, $shimBody, [Text.Encoding]::ASCII)
+$shimBody = @"
+@echo off
+set "CODEA_CURRENT=%~dp0..\current"
+set "OPENCODE_BIN=%CODEA_CURRENT%\bin\opencode.exe"
+set "CODEA_AGENTS_DIR=%CODEA_CURRENT%\agents"
+set "CODEA_SKILLS_DIR=%CODEA_CURRENT%\skills"
+set "CODEA_PLUGIN_BUNDLE=%CODEA_CURRENT%\plugins\index.js"
+"%CODEA_CURRENT%\bin\codea.exe" %*
+"@
+[IO.File]::WriteAllText($shim, ($shimBody -replace "`n", "`r`n"), [Text.Encoding]::ASCII)
 
 Write-Host "Installed Codea $version"
 Write-Host "Add $binDir to PATH if needed."
