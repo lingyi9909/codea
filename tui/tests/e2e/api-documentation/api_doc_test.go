@@ -56,7 +56,7 @@ func TestAPIDocumentationWorkflowIsDeterministicFirst(t *testing.T) {
         "write_document",
         "deterministic extraction is authoritative",
         "Not determined from code",
-        "DECLARED", "REFERRED", "INFERRED",
+        "DECLARED", "REFERENCED", "INFERRED",
         "Dify", "optional business context",
         "must not override code evidence",
         "never fabricate",
@@ -78,6 +78,7 @@ func TestAPIDocumentationTemplateCarriesTraceabilityAndUncertainty(t *testing.T)
         "Error Codes",
         "Evidence",
         "Confidence",
+        "REFERENCED",
         "Not determined from code",
     )
 }
