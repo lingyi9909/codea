@@ -9,7 +9,7 @@ metadata="$repo_root/runtime/version.json"
 command -v python3 >/dev/null 2>&1 || { echo "python3 is required" >&2; exit 2; }
 command -v curl >/dev/null 2>&1 || { echo "curl is required" >&2; exit 2; }
 
-readarray -t meta < <(python3 - "$metadata" "$platform" <<'PY'
+IFS=$'\t' read -r version url expected asset < <(python3 - "$metadata" "$platform" <<'PY'
 import json, pathlib, sys
 p=json.loads(pathlib.Path(sys.argv[1]).read_text())
 plat=sys.argv[2]
@@ -17,13 +17,15 @@ if p.get('openCodeVersion') != '1.18.11':
     raise SystemExit('runtime/version.json is not locked to OpenCode 1.18.11')
 x=p.get('platforms',{}).get(plat)
 if not x: raise SystemExit(f'unsupported platform: {plat}')
-print(p['openCodeVersion'])
-print(x['url'])
-print(x['checksum'].removeprefix('sha256:'))
-print(x['asset'])
+print('\t'.join([
+    p['openCodeVersion'],
+    x['url'],
+    x['checksum'].removeprefix('sha256:'),
+    x['asset'],
+]))
 PY
 )
-version=${meta[0]}; url=${meta[1]}; expected=${meta[2]}; asset=${meta[3]}
+[ -n "$version" ] && [ -n "$url" ] && [ -n "$expected" ] && [ -n "$asset" ] || { echo "invalid runtime metadata" >&2; exit 1; }
 mkdir -p "$out_dir"
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
@@ -36,7 +38,7 @@ PY
 )
 [ "$actual" = "$expected" ] || { echo "OpenCode archive checksum mismatch" >&2; exit 1; }
 case "$asset" in
-  *.zip) command -v unzip >/dev/null 2>&1 || { echo "unzip is required" >&2; exit 2; }; unzip -q "$archive" -d "$tmp/extract" ;;
+  *.zip) command -v unzip >/dev/null 2>&1 || { echo "unzip is required" >&2; exit 2; }; mkdir -p "$tmp/extract"; unzip -q "$archive" -d "$tmp/extract" ;;
   *.tar.gz|*.tgz) mkdir -p "$tmp/extract"; tar -xzf "$archive" -C "$tmp/extract" ;;
   *) echo "unsupported runtime archive: $asset" >&2; exit 2 ;;
 esac
