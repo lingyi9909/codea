@@ -5,6 +5,7 @@ import (
     "encoding/json"
     "os"
     "path/filepath"
+    "strings"
     "testing"
     "time"
 
@@ -22,6 +23,10 @@ type apiDocAgentEvidence struct {
     WriteDocumentAllowed bool `json:"writeDocumentAllowed"`
     CrossToolDenied bool `json:"crossToolDenied"`
     DocumentWritten bool `json:"documentWritten"`
+    WorkflowExtractSucceeded bool `json:"workflowExtractSucceeded"`
+    WorkflowValidateSucceeded bool `json:"workflowValidateSucceeded"`
+    WorkflowWriteSucceeded bool `json:"workflowWriteSucceeded"`
+    WorkflowDocumentValid bool `json:"workflowDocumentValid"`
     TotalChecks int `json:"totalChecks"`
     PassedChecks int `json:"passedChecks"`
     FailedChecks int `json:"failedChecks"`
@@ -33,9 +38,9 @@ func (e *apiDocAgentEvidence) check(ok bool) {
 }
 
 // TestRealAPIDocEvidence proves Task 16's agent is materialized into the real
-// locked runtime, its fail-closed whitelist is server-side, and its only write
-// path is write_document. Deterministic extraction semantics are covered by the
-// API Documentation contract/tool tests; this smoke proves runtime integration.
+// locked runtime, its fail-closed whitelist is server-side, and the complete
+// API Documentation workflow executes through real OpenCode v1.18.11:
+// extract_api_spec -> validate_api_example -> write_document -> persisted Markdown.
 func TestRealAPIDocEvidence(t *testing.T) {
     endpoint := os.Getenv("OPENCODE_ENDPOINT")
     if endpoint == "" { endpoint = os.Getenv("OPENCODE_SERVER_URL") }
@@ -47,7 +52,7 @@ func TestRealAPIDocEvidence(t *testing.T) {
 
     ev := &apiDocAgentEvidence{Timestamp: time.Now().UTC().Format(time.RFC3339), Endpoint: endpoint}
     adapter := opencode.NewOpenCodeAdapter(endpoint, username, password)
-    ctx, cancel := context.WithTimeout(context.Background(), 240*time.Second)
+    ctx, cancel := context.WithTimeout(context.Background(), 300*time.Second)
     defer cancel()
 
     info, err := adapter.Health(ctx)
@@ -90,6 +95,19 @@ func TestRealAPIDocEvidence(t *testing.T) {
     ev.DocumentWritten = statErr == nil && string(data) == "smoke\n"
     ev.check(ev.DocumentWritten)
 
+    flowObs := runAgentScenario(t, adapter, ch, state, "api-documentation", "APIDOCFLOW generate the API documentation", approveOnce)
+    ev.WorkflowExtractSucceeded = flowObs.calledOnce("extract_api_spec") && flowObs.succeededOnce("extract_api_spec")
+    ev.check(ev.WorkflowExtractSucceeded)
+    ev.WorkflowValidateSucceeded = flowObs.calledOnce("validate_api_example") && flowObs.succeededOnce("validate_api_example")
+    ev.check(ev.WorkflowValidateSucceeded)
+    ev.WorkflowWriteSucceeded = flowObs.calledOnce("write_document") && flowObs.succeededOnce("write_document")
+    ev.check(ev.WorkflowWriteSucceeded)
+
+    flowPath := filepath.Join(smokeDir, "docs", "api-demo.md")
+    flowData, flowErr := os.ReadFile(flowPath)
+    ev.WorkflowDocumentValid = flowErr == nil && apiDocMarkdownValid(string(flowData))
+    ev.check(ev.WorkflowDocumentValid)
+
     writeAPIDocEvidence(t, ev)
     if ev.FailedChecks != 0 || ev.PassedChecks != ev.TotalChecks {
         t.Fatalf("API doc agent evidence failed: %+v", ev)
@@ -98,6 +116,28 @@ func TestRealAPIDocEvidence(t *testing.T) {
         t.Fatalf("runtime version=%s want 1.18.11", ev.Version)
     }
     t.Logf("API doc agent evidence: %d/%d PASS", ev.PassedChecks, ev.TotalChecks)
+}
+
+func apiDocMarkdownValid(text string) bool {
+    required := []string{
+        "# API Documentation",
+        "DemoController",
+        "GET /api/users/{id}",
+        "POST /api/users",
+        "CreateUserRequest",
+        "@NotBlank",
+        "@Email",
+        "@Min(1)",
+        "@Max(120)",
+        "DECLARED",
+        "Not determined from code",
+        "Example validation: PASS",
+    }
+    for _, needle := range required {
+        if !strings.Contains(text, needle) { return false }
+    }
+    if strings.Contains(text, "REFERRED") { return false }
+    return true
 }
 
 func writeAPIDocEvidence(t *testing.T, ev *apiDocAgentEvidence) {
