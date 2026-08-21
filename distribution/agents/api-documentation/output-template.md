@@ -48,7 +48,7 @@
 
 | Code | Provenance | Meaning | Evidence |
 | --- | --- | --- | --- |
-| {{code}} | {{DECLARED_OR_REFERRED_OR_INFERRED}} | {{meaningOrNotDeterminedFromCode}} | {{sourceEvidence}} |
+| {{code}} | {{DECLARED_OR_REFERENCED_OR_INFERRED}} | {{meaningOrNotDeterminedFromCode}} | {{sourceEvidence}} |
 
 ## Examples
 
