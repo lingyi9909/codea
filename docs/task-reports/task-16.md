@@ -24,13 +24,11 @@ Task 16 在 Task 13 已交付的 `extract_api_spec` / `validate_api_example` / `
   - request/response/validation/error codes/examples/evidence
   - explicit uncertainty marker
 - `distribution/skills/api-documentation/SKILL.md`
-  - closes the requiredSkills dependency declared by the manifest
 - `tui/tests/e2e/api-documentation/api_doc_test.go`
-  - contract tests for bounded tools, deterministic-first workflow, traceability/uncertainty and required Skill
 
 ## Functional Workflow E2E remediation
 
-The original runtime smoke only proved registration/permissions. The functional gap is now implemented as a real Task 16 workflow:
+The original runtime smoke only proved registration/permissions. The functional gap is now implemented as:
 
 ```text
 APIDOCFLOW
@@ -40,30 +38,9 @@ APIDOCFLOW
 → docs/api-demo.md
 ```
 
-### Deterministic API-doc model
+`tests/fixtures/real-parity/fake_api_doc_model.py` consumes the actual extraction Tool Result, passes that exact spec to `validate_api_example`, renders Markdown from the structured result, preserves only `DECLARED` / `REFERENCED` / `INFERRED`, keeps unresolved semantics as `Not determined from code`, and finally calls `write_document`.
 
-`tests/fixtures/real-parity/fake_api_doc_model.py` implements the workflow and deliberately consumes Tool Results:
-
-- calls `extract_api_spec(controllerFile=DemoController.java)`
-- reads the actual structured extraction Tool Result
-- passes that exact `spec` object into `validate_api_example`
-- renders Markdown from extracted endpoints, DTO fields, validation annotations and error-code provenance
-- preserves only `DECLARED` / `REFERENCED` / `INFERRED`
-- renders unresolved semantics as `Not determined from code`
-- calls `write_document(docs/api-demo.md)` with that rendered output
-
-### Shared full-regression fake model
-
-A review found that the combined `run-real-agent-smoke.sh` still starts `tests/fixtures/real-parity/fake_model.py`, while `TestRealAPIDocEvidence` now sends `APIDOCFLOW`. The dedicated Task 16 model already implemented APIDOCFLOW, but the shared Reviewer/UT fake model did not, so the combined Task 14–16 regression would terminate without the three API-doc Tool calls.
-
-This is fixed at checkpoint `83d9d6ff8018883d31c584752fe67610834033ff`:
-
-- shared `fake_model.py` explicitly recognizes `APIDOCFLOW`
-- it delegates to `fake_api_doc_model.decide(prompt, messages)`
-- therefore focused Task 16 smoke and combined Agent regression use the **same Tool-Result-driven workflow implementation**, rather than two duplicated/hard-coded Markdown generators
-- existing Reviewer/UT state machines remain unchanged
-
-### Runtime assertions
+The combined regression model `tests/fixtures/real-parity/fake_model.py` also recognizes `APIDOCFLOW` and delegates to the same `fake_api_doc_model.decide(...)`, so focused Task 16 smoke and combined Task 14–16 regression do not use divergent workflow semantics.
 
 `tui/tests/parity/real_api_doc_smoke_test.go` requires:
 
@@ -75,15 +52,36 @@ This is fixed at checkpoint `83d9d6ff8018883d31c584752fe67610834033ff`:
 - unresolved semantics remain `Not determined from code`
 - example validation is recorded as PASS
 
-`scripts/run-real-api-doc-smoke.sh` starts the dedicated deterministic API-doc model plus real locked OpenCode v1.18.11 and requires fresh `api-doc-agent-evidence.json` to be exactly 9/9 PASS.
+`scripts/run-real-api-doc-smoke.sh` requires fresh `api-doc-agent-evidence.json` to be exactly 9/9 PASS against real locked OpenCode v1.18.11.
 
-`scripts/run-real-agent-smoke.sh` continues to exercise the combined Reviewer/UT/API Documentation runtime regression; its shared fake model can now execute the same APIDOCFLOW semantics.
+## Task 16 acceptance boundary
+
+Task 16 acceptance is intentionally independent from Task 17 platform-release evidence.
+
+Task 16 requires exactly these evidence groups:
+
+1. **API Documentation functional/runtime evidence**
+   - `run-real-api-doc-smoke.sh`
+   - real OpenCode v1.18.11
+   - `api-doc-agent-evidence.json` = 9/9 PASS
+2. **Direct regression**
+   - Go test / race / vet / build
+   - Bun test / build
+3. **Existing runtime regression**
+   - Task 14/15 agent smoke
+   - OpenCode parity/runtime regression
+
+The following Task 17 evidence does **not** block Task 16:
+
+- three-platform release build
+- macOS native offline install/runtime smoke
+- Windows x64 native offline install/runtime smoke
+
+Those remain exclusively under Task 17.
 
 ## Verification status
 
-The implementation blocker is fixed, but this report does **not** claim fresh runtime PASS yet. The current execution sandbox cannot run the repository with Go 1.26.5/Bun/OpenCode v1.18.11. No authoritative completed workflow/native evidence is currently available through the connected execution interface, so no evidence is fabricated.
-
-Fresh acceptance evidence must include:
+Fresh Task 16 evidence is still required before `awaiting_acceptance`:
 
 ```bash
 cd tui
@@ -108,15 +106,15 @@ Required committed artifact:
 tui/tests/parity/evidence/api-doc-agent-evidence.json
 ```
 
-It must show OpenCode `1.18.11`, `failedChecks=0`, and `passedChecks=totalChecks=9`, including:
+It must show OpenCode `1.18.11`, `failedChecks=0`, `passedChecks=totalChecks=9`, and:
 
 - `workflowExtractSucceeded=true`
 - `workflowValidateSucceeded=true`
 - `workflowWriteSucceeded=true`
 - `workflowDocumentValid=true`
 
-Until fresh evidence exists, Task 16 remains `blocked` and must not become `awaiting_acceptance` or `completed`.
+Until these Task 16-specific fresh gates pass, Task 16 remains `blocked`. Task 17 native install evidence is not part of this blocker.
 
 ## Scope boundary
 
-No Task 18 upgrade/rollback implementation is included or started.
+Task 17 release/native evidence is tracked separately. Task 18 remains untouched and pending.
