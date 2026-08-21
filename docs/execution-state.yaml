@@ -5,11 +5,11 @@ taskOrder: ["0", "1", "2", "2A", "3", "4", "5", "6", "7", "8", "9", "10", "11", 
 current:
   task: "16"
   step: 1
-  status: pending
-  nextAction: Task 14/15 已人工联合验收完成；准备启动 Task 16 API Documentation Agent
+  status: in_progress
+  nextAction: 开发 Task 16 API Documentation Agent；完成 Gate 后进入 awaiting_acceptance，再按用户授权继续 Task 17
 checkpoint:
-  commit: d4333bccf09a1c397d59d69e9776cf1d66755943
-  updatedAt: "2026-08-21T01:45:00Z"
+  commit: 4d8afef446ecc67d7b2121ad12c41efa9b7a4865
+  updatedAt: "2026-08-21T01:46:00Z"
 verification:
   status: not_run
   commands: []
@@ -38,7 +38,7 @@ tasks:
   "13": {status: completed, completedSteps: [], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: d2de0203be9f6d06a410e83c51733ab7db4781f4, report: docs/task-reports/task-13.md}
   "14": {status: completed, completedSteps: [], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: d4333bccf09a1c397d59d69e9776cf1d66755943, report: docs/task-reports/task-14.md}
   "15": {status: completed, completedSteps: [], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: d4333bccf09a1c397d59d69e9776cf1d66755943, report: docs/task-reports/task-15.md}
-  "16": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-16.md}
+  "16": {status: in_progress, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: 4d8afef446ecc67d7b2121ad12c41efa9b7a4865, report: docs/task-reports/task-16.md}
   "17": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-17.md}
   "18": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-18.md}
   "19": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-19.md}
