@@ -2,11 +2,18 @@
 set -euo pipefail
 
 package_dir=${1:?usage: install.sh <extracted-package-dir>}
+package_dir=$(cd "$package_dir" && pwd -P)
 version=$(tr -d '[:space:]' < "$package_dir/VERSION")
 [ -n "$version" ] || { echo "VERSION missing or empty" >&2; exit 1; }
-repo_scripts=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/scripts
-"$repo_scripts/verify-checksum.sh" "$package_dir"
-"$repo_scripts/verify-offline.sh" "$package_dir"
+
+script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)
+if [ -x "$script_dir/verify-checksum.sh" ] && [ -x "$script_dir/verify-offline.sh" ]; then
+  verifier_dir="$script_dir"
+else
+  verifier_dir=$(cd "$script_dir/../../scripts" && pwd -P)
+fi
+"$verifier_dir/verify-checksum.sh" "$package_dir"
+"$verifier_dir/verify-offline.sh" "$package_dir"
 
 home=${CODEA_HOME:-$HOME/.codea}
 versions="$home/versions"
