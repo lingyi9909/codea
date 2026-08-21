@@ -1,0 +1,17 @@
+schemaVersion: 1
+codeaVersion: "0.1.0"
+openCodeVersion: "1.18.11"
+platforms:
+  - id: darwin-arm64
+    os: darwin
+    arch: arm64
+  - id: darwin-x64
+    os: darwin
+    arch: x64
+  - id: windows-x64
+    os: windows
+    arch: x64
+signing:
+  method: sha256
+runtimeMetadata: runtime/version.json
+pluginBundle: distribution/plugins/dist/index.js
