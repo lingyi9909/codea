@@ -1,0 +1,20 @@
+name: api-documentation
+version: 1.0.0
+displayName: API Documentation Generator
+mode: enterprise-controlled
+requiredSkills:
+  - api-documentation
+tools:
+  read: allow
+  grep: allow
+  glob: allow
+  extract_api_spec: allow
+  validate_api_example: allow
+  write_document: allow
+  dify-query: allow
+  write: deny
+  edit: deny
+  bash: deny
+constraints:
+  noFabrication: true
+  uncertainFields: "Not determined from code"
