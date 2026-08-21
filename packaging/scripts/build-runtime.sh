@@ -17,12 +17,10 @@ if p.get('openCodeVersion') != '1.18.11':
     raise SystemExit('runtime/version.json is not locked to OpenCode 1.18.11')
 x=p.get('platforms',{}).get(plat)
 if not x: raise SystemExit(f'unsupported platform: {plat}')
-print('\t'.join([
-    p['openCodeVersion'],
-    x['url'],
-    x['checksum'].removeprefix('sha256:'),
-    x['asset'],
-]))
+checksum=x['checksum']
+if checksum.startswith('sha256:'):
+    checksum=checksum[len('sha256:'):]
+print('\t'.join([p['openCodeVersion'], x['url'], checksum, x['asset']]))
 PY
 )
 [ -n "$version" ] && [ -n "$url" ] && [ -n "$expected" ] && [ -n "$asset" ] || { echo "invalid runtime metadata" >&2; exit 1; }
