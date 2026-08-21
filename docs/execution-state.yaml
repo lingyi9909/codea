@@ -6,25 +6,29 @@ current:
   task: "16"
   step: 1
   status: blocked
-  nextAction: Task 16/17 实现已提交；在具备 Go 1.26.5、Bun、锁定 OpenCode v1.18.11、macOS/Windows 发行验证环境中执行完整 Gate 并提交 fresh evidence。通过前不得进入 awaiting_acceptance；Task 18 不得启动。
+  nextAction: Task 16 真 Workflow E2E 与 Task 17 安装后 Runtime/资源绑定及 native smoke 已实现；执行 fresh Go/Bun/OpenCode Task 16 Gate、三平台 release build、真实断公网 macOS + Windows x64 install/runtime smoke 并提交 evidence。证据齐全前不得进入 awaiting_acceptance；Task 18 不得启动。
 checkpoint:
-  commit: 8ab87a91d63de11b89873810b76ad05a89076be9
-  updatedAt: "2026-08-21T02:05:00Z"
+  commit: cdce9ce033f9623f05c20a01058ff03284eee53e
+  updatedAt: "2026-08-21T02:20:00Z"
 verification:
   status: unable_to_run
   commands:
-    - "Task 16 isolated contract mirror: PASS 4/4 before final REFERENCED alignment; not counted as fresh final Gate"
-    - "Task 17 isolated synthetic manifest/checksum/offline contract: PASS before later hardening; not counted as fresh final Gate"
-    - "full Go 1.26.5/Bun/OpenCode/macOS/Windows release gates: unable to run in current sandbox"
-  errorSummary: "Current sandbox cannot clone the repository and does not provide the required Go 1.26.5/Bun/locked OpenCode plus supported macOS/Windows release environments for fresh full verification."
-  recoveryAdvice: "Run Task 16 API Documentation real-agent smoke and full regression gates; build all three Task 17 release targets, run isolated no-public-network runtime/install gates on macOS and Windows, then commit fresh evidence before acceptance."
+    - "Task 16 APIDOCFLOW implementation: extract_api_spec -> validate_api_example -> write_document -> persisted Markdown; fresh runtime execution pending"
+    - "Task 17 installed launcher wiring fixed for bundled OpenCode/agents/skills/plugin; macOS + Windows native smoke scripts added; fresh native execution pending"
+    - "GitHub Actions Task 16 runtime / Task 17 build gate entry committed; no completed run/evidence visible through current connected execution interface"
+    - "current sandbox lacks repository Go 1.26.5/Bun/locked OpenCode and native macOS/Windows offline environments"
+  errorSummary: "Fresh Task 16 runtime evidence and Task 17 three-platform/native offline release evidence have not been executed/committed from an authoritative environment yet."
+  recoveryAdvice: "Run Task 16 Go/plugin regression plus run-real-agent-smoke.sh and run-real-api-doc-smoke.sh; run run-task17-build-gates.sh; then run macos_release_smoke.sh and windows_release_smoke.ps1 on native isolated hosts and commit generated evidence."
 taskGate:
   status: unable_to_evaluate
   gateItems:
-    task16Implementation: pass
-    task17Implementation: pass
+    task16WorkflowE2EImplementation: pass
     task16FreshRuntimeEvidence: unable_to_evaluate
-    task17FreshReleaseEvidence: unable_to_evaluate
+    task17Implementation: pass
+    task17InstalledRuntimeWiring: pass
+    task17ThreePlatformBuildEvidence: unable_to_evaluate
+    task17MacOSNativeOfflineEvidence: unable_to_evaluate
+    task17WindowsNativeOfflineEvidence: unable_to_evaluate
     fullRegression: unable_to_evaluate
 humanAcceptance:
   accepted: false
@@ -46,8 +50,8 @@ tasks:
   "13": {status: completed, completedSteps: [], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: d2de0203be9f6d06a410e83c51733ab7db4781f4, report: docs/task-reports/task-13.md}
   "14": {status: completed, completedSteps: [], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: d4333bccf09a1c397d59d69e9776cf1d66755943, report: docs/task-reports/task-14.md}
   "15": {status: completed, completedSteps: [], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: d4333bccf09a1c397d59d69e9776cf1d66755943, report: docs/task-reports/task-15.md}
-  "16": {status: blocked, completedSteps: [], verificationStatus: unable_to_run, taskGateStatus: unable_to_evaluate, humanAccepted: false, checkpoint: 8ab87a91d63de11b89873810b76ad05a89076be9, report: docs/task-reports/task-16.md}
-  "17": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: 8ab87a91d63de11b89873810b76ad05a89076be9, report: docs/task-reports/task-17.md}
+  "16": {status: blocked, completedSteps: [], verificationStatus: unable_to_run, taskGateStatus: unable_to_evaluate, humanAccepted: false, checkpoint: cdce9ce033f9623f05c20a01058ff03284eee53e, report: docs/task-reports/task-16.md}
+  "17": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: cdce9ce033f9623f05c20a01058ff03284eee53e, report: docs/task-reports/task-17.md}
   "18": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-18.md}
   "19": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-19.md}
   "20": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-20.md}
