@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-08-20T05:19:00Z",
+  "timestamp": "2026-08-21T01:27:48Z",
   "endpoint": "http://127.0.0.1:49322",
   "available": true,
   "version": "1.18.11",
@@ -35,6 +35,10 @@
     "passed": true,
     "detail": "code-reviewer run_project_test denied by whitelist"
   },
+  "reviewerWriteDocDenied": {
+    "passed": true,
+    "detail": "code-reviewer write_document denied by whitelist"
+  },
   "unitTestWriteTestAllowed": {
     "passed": true,
     "detail": "unit-test-generator write_test_file allowed and executed"
@@ -43,16 +47,24 @@
     "passed": true,
     "detail": "unit-test-generator write_document denied by whitelist"
   },
+  "unitTestCollectReviewDenied": {
+    "passed": true,
+    "detail": "unit-test-generator collect_review_context denied by whitelist"
+  },
   "reviewerWorkflow": {
     "passed": true,
     "detail": "code-reviewer workflow: collect_review_context + valid output-schema JSON"
   },
   "unitTestWorkflow": {
     "passed": true,
-    "detail": "unit-test workflow: analyze -\u003e write -\u003e run completed"
+    "detail": "unit-test workflow: analyze -\u003e write -\u003e real Maven run -\u003e final PASS; GeneratedFlowTest.java exists and real Maven/Surefire executed it green"
   },
-  "totalChecks": 12,
-  "passedChecks": 12,
+  "unitTestFailureWorkflow": {
+    "passed": true,
+    "detail": "unit-test failure workflow: run_project_test failure -\u003e final FAIL; generated failing JUnit executed by real Maven/Surefire"
+  },
+  "totalChecks": 15,
+  "passedChecks": 15,
   "failedChecks": 0,
   "skippedChecks": 0
 }
