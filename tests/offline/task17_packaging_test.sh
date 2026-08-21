@@ -14,6 +14,7 @@ required=(
   packaging/scripts/verify-offline.sh
   packaging/platform/macos/install.sh
   packaging/platform/windows/install.ps1
+  tests/offline/no_public_network_test.sh
 )
 for rel in "${required[@]}"; do
   test -f "$repo_root/$rel" || { echo "missing $rel" >&2; exit 1; }
@@ -25,6 +26,11 @@ grep -q 'darwin-x64' "$repo_root/packaging/config/release.yaml"
 grep -q 'windows-x64' "$repo_root/packaging/config/release.yaml"
 grep -q 'go build' "$repo_root/packaging/scripts/build-release.sh"
 grep -q 'GOTOOLCHAIN=local' "$repo_root/packaging/scripts/build-release.sh"
+grep -q 'install/install.sh' "$repo_root/packaging/scripts/build-release.sh"
+grep -q 'install/install.ps1' "$repo_root/packaging/scripts/build-release.sh"
+grep -q 'archive.sha256' "$repo_root/packaging/scripts/build-release.sh"
+grep -q 'Junction' "$repo_root/packaging/platform/windows/install.ps1"
+grep -q 'UTF8Encoding($false)' "$repo_root/packaging/platform/windows/install.ps1"
 
 stage=$(mktemp -d)
 trap 'rm -rf "$stage"' EXIT
@@ -38,6 +44,23 @@ chmod +x "$stage/bin/codea" "$stage/bin/opencode"
 "$repo_root/packaging/scripts/verify-checksum.sh" "$stage" >/dev/null
 "$repo_root/packaging/scripts/verify-offline.sh" "$stage" >/dev/null
 
+printf 'tampered\n' >> "$stage/bin/codea"
+if "$repo_root/packaging/scripts/verify-checksum.sh" "$stage" >/dev/null 2>&1; then
+  echo "verify-checksum must reject tampered files" >&2
+  exit 1
+fi
+printf '#!/bin/sh\nexit 0\n' > "$stage/bin/codea"
+chmod +x "$stage/bin/codea"
+"$repo_root/packaging/scripts/generate-manifest.sh" "$stage" >/dev/null
+
+# Extra unmanifested files fail closed.
+printf 'extra\n' > "$stage/config/unmanifested.txt"
+if "$repo_root/packaging/scripts/verify-checksum.sh" "$stage" >/dev/null 2>&1; then
+  echo "verify-checksum must reject unmanifested files" >&2
+  exit 1
+fi
+rm -f "$stage/config/unmanifested.txt"
+
 touch "$stage/plugins/package.json"
 if "$repo_root/packaging/scripts/verify-offline.sh" "$stage" >/dev/null 2>&1; then
   echo "verify-offline must reject package.json in plugin dist" >&2
@@ -48,6 +71,12 @@ rm -f "$stage/plugins/package.json"
 printf 'import x from "left-pad"; export default x;\n' > "$stage/plugins/index.js"
 if "$repo_root/packaging/scripts/verify-offline.sh" "$stage" >/dev/null 2>&1; then
   echo "verify-offline must reject external imports" >&2
+  exit 1
+fi
+
+printf 'import "left-pad"; export default {};\n' > "$stage/plugins/index.js"
+if "$repo_root/packaging/scripts/verify-offline.sh" "$stage" >/dev/null 2>&1; then
+  echo "verify-offline must reject side-effect external imports" >&2
   exit 1
 fi
 
