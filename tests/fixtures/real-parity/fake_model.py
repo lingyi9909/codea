@@ -30,17 +30,21 @@ State machine, keyed on the last user message (all upper-cased):
                    -> final PASS/FAIL derived from the run_project_test Tool Result
     UTFLOW_FAIL -> same chain with a deterministic failing JUnit -> final FAIL
                    derived from the run_project_test Tool Result
+    APIDOCFLOW  -> extract_api_spec -> validate_api_example -> write_document
+                   -> final Markdown derived from the real Tool Results
 
 A request whose final message is a `tool` result answers with text unless a
 workflow still has a remaining step. Keyword matching is ordered so the more
 specific custom-tool keywords (which contain WRITE/RUN substrings) win over the
-shorter native WRITE, and REVIEWFLOW/UTFLOW win over single-shot tool names.
+shorter native WRITE, and workflow keywords win over single-shot tool names.
 """
 import json
 import os
 import sys
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+import fake_api_doc_model
 
 SMOKE_DIR = os.environ.get("SMOKE_DIR", "/tmp")
 
@@ -220,6 +224,12 @@ def decide(prompt, messages):
     p = (prompt or "").upper()
     names = assistant_tool_names(messages)
     last_is_tool = bool(messages) and messages[-1].get("role") == "tool"
+
+    # Task 16 shares the exact same APIDOCFLOW implementation as the dedicated
+    # API Documentation smoke. This keeps the combined Task 14-16 regression and
+    # the focused Task 16 runtime gate behavior identical and prevents drift.
+    if "APIDOCFLOW" in p:
+        return fake_api_doc_model.decide(prompt, messages)
 
     # --- Enterprise workflows (multi-step) ---------------------------------
     if "REVIEWFLOW" in p:
