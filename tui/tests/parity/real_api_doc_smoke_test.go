@@ -3,7 +3,6 @@ package parity_test
 import (
     "context"
     "encoding/json"
-    "fmt"
     "os"
     "path/filepath"
     "testing"
@@ -111,5 +110,4 @@ func writeAPIDocEvidence(t *testing.T, ev *apiDocAgentEvidence) {
     if err := os.WriteFile(filepath.Join(dir, "api-doc-agent-evidence.json"), body, 0o644); err != nil {
         t.Fatalf("write api doc evidence: %v", err)
     }
-    _ = fmt.Sprintf("%d", ev.TotalChecks)
 }
