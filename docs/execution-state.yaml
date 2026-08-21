@@ -5,19 +5,27 @@ taskOrder: ["0", "1", "2", "2A", "3", "4", "5", "6", "7", "8", "9", "10", "11", 
 current:
   task: "16"
   step: 1
-  status: in_progress
-  nextAction: 开发 Task 16 API Documentation Agent；完成 Gate 后进入 awaiting_acceptance，再按用户授权继续 Task 17
+  status: blocked
+  nextAction: Task 16/17 实现已提交；在具备 Go 1.26.5、Bun、锁定 OpenCode v1.18.11、macOS/Windows 发行验证环境中执行完整 Gate 并提交 fresh evidence。通过前不得进入 awaiting_acceptance；Task 18 不得启动。
 checkpoint:
-  commit: 4d8afef446ecc67d7b2121ad12c41efa9b7a4865
-  updatedAt: "2026-08-21T01:46:00Z"
+  commit: 8ab87a91d63de11b89873810b76ad05a89076be9
+  updatedAt: "2026-08-21T02:05:00Z"
 verification:
-  status: not_run
-  commands: []
-  errorSummary: ""
-  recoveryAdvice: ""
+  status: unable_to_run
+  commands:
+    - "Task 16 isolated contract mirror: PASS 4/4 before final REFERENCED alignment; not counted as fresh final Gate"
+    - "Task 17 isolated synthetic manifest/checksum/offline contract: PASS before later hardening; not counted as fresh final Gate"
+    - "full Go 1.26.5/Bun/OpenCode/macOS/Windows release gates: unable to run in current sandbox"
+  errorSummary: "Current sandbox cannot clone the repository and does not provide the required Go 1.26.5/Bun/locked OpenCode plus supported macOS/Windows release environments for fresh full verification."
+  recoveryAdvice: "Run Task 16 API Documentation real-agent smoke and full regression gates; build all three Task 17 release targets, run isolated no-public-network runtime/install gates on macOS and Windows, then commit fresh evidence before acceptance."
 taskGate:
-  status: not_evaluated
-  gateItems: {}
+  status: unable_to_evaluate
+  gateItems:
+    task16Implementation: pass
+    task17Implementation: pass
+    task16FreshRuntimeEvidence: unable_to_evaluate
+    task17FreshReleaseEvidence: unable_to_evaluate
+    fullRegression: unable_to_evaluate
 humanAcceptance:
   accepted: false
 tasks:
@@ -38,8 +46,8 @@ tasks:
   "13": {status: completed, completedSteps: [], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: d2de0203be9f6d06a410e83c51733ab7db4781f4, report: docs/task-reports/task-13.md}
   "14": {status: completed, completedSteps: [], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: d4333bccf09a1c397d59d69e9776cf1d66755943, report: docs/task-reports/task-14.md}
   "15": {status: completed, completedSteps: [], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: d4333bccf09a1c397d59d69e9776cf1d66755943, report: docs/task-reports/task-15.md}
-  "16": {status: in_progress, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: 4d8afef446ecc67d7b2121ad12c41efa9b7a4865, report: docs/task-reports/task-16.md}
-  "17": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-17.md}
+  "16": {status: blocked, completedSteps: [], verificationStatus: unable_to_run, taskGateStatus: unable_to_evaluate, humanAccepted: false, checkpoint: 8ab87a91d63de11b89873810b76ad05a89076be9, report: docs/task-reports/task-16.md}
+  "17": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: 8ab87a91d63de11b89873810b76ad05a89076be9, report: docs/task-reports/task-17.md}
   "18": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-18.md}
   "19": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-19.md}
   "20": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-20.md}
