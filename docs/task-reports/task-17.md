@@ -2,7 +2,7 @@
 
 ## Overview
 
-Implementation checkpoint: `c9796e2600129dfb0ce476f6192222c403964d48`
+Implementation checkpoint: `3feb08ba0a086af501574ca1b09dc0216add08cc`
 
 Task 17 implements the V1 offline release pipeline for macOS arm64/x64 and Windows x64: cross-compile Codea, acquire the pinned OpenCode v1.18.11 runtime with SHA256 verification, build the self-contained Bun plugin, collect agents/skills/config, generate a strict package manifest, verify package integrity/offline dependency boundaries, produce platform archives, and provide platform installers.
 
@@ -16,65 +16,93 @@ Task 17 implements the V1 offline release pipeline for macOS arm64/x64 and Windo
 - `packaging/scripts/build-runtime.sh`
   - consumes authoritative `runtime/version.json`
   - downloads only the locked platform asset
-  - verifies the recorded SHA256 before extraction
-  - macOS Bash-compatible metadata parsing
+  - verifies recorded SHA256 before extraction
 - `packaging/scripts/build-plugins.sh`
-  - executes `bun test` + `bun run build`
-  - emits only the self-contained ESM bundle
-  - rejects bare external imports, including side-effect imports
+  - `bun test` + `bun run build`
+  - self-contained ESM only
+  - rejects bare external imports including side-effect imports
 - `packaging/scripts/collect-skills.sh`
   - packages Code Reviewer, Unit Test and API Documentation Skills
 - `packaging/scripts/build-release.sh`
-  - closes the full assembly loop: TUI cross-build → runtime → plugin → skills/agents/config → installers → manifest/checksum/offline checks → archive + `.sha256`
+  - TUI cross-build → runtime → plugin → skills/agents/config → installers → manifest/checksum/offline checks → archive + `.sha256`
 - `packaging/scripts/generate-manifest.sh`
   - SHA256 + size for every packaged file
 - `packaging/scripts/verify-checksum.sh`
-  - verifies manifest schema, safe paths, hash/size, missing files and unmanifested extra files
+  - manifest schema/safe paths/hash/size/missing/unmanifested-extra fail-closed verification
 - `packaging/scripts/verify-offline.sh`
   - rejects plugin package-manager metadata and external package imports
-  - checks bundle build-path leakage
+  - checks build-path leakage
   - chains package integrity verification
-- `packaging/platform/macos/install.sh`
-  - self-contained package-side verification
-  - installs under `~/.codea/versions/<version>` (or `CODEA_HOME`)
-  - updates `current` and launcher symlinks
-- `packaging/platform/windows/install.ps1`
-  - verifies manifest hash/size and rejects unmanifested files
-  - performs equivalent plugin dependency/import checks
-  - installs under `%USERPROFILE%\.codea\versions\<version>` (or `CODEA_HOME`)
-  - writes BOM-free `current.txt`, creates a `current` Junction, and a launcher shim without requiring symlink developer privileges
-- `tests/offline/task17_packaging_test.sh`
-  - positive manifest/integrity/offline checks
-  - negative tamper, unmanifested-file, package metadata, external import and side-effect import cases
-- `tests/offline/no_public_network_test.sh`
-  - fail-closed release-environment gate: public HTTPS must be blocked, packaged runtime must be OpenCode 1.18.11, and static offline checks must pass
 
-## Verification performed in current environment
+## Installed runtime wiring remediation
 
-An isolated synthetic packaging mirror was executed during implementation and passed the initial manifest/checksum/offline contract. After that run, the production scripts were further hardened for macOS Bash compatibility, side-effect imports, self-contained installers, Windows package integrity/current pointer handling, archive creation, and additional negative tests. Those later changes have not been executed as a fresh complete repository Gate in the current sandbox.
+A release-only runtime gap was found while designing the real install smoke: source-tree defaults in `codea` resolve `opencode`, agents, skills and plugin relative to the development tree. A direct installed binary launcher therefore cannot reliably locate package resources under `~/.codea/current` / `%USERPROFILE%\.codea\current`.
 
-## Verification still required before Task 17 acceptance
+This is fixed at the installer/launcher boundary without changing Task 18 or upgrade semantics:
 
-Run from a repository/build environment with Go 1.26.5, Bun, Python 3, archive tools, and access to the locked OpenCode release asset:
+- macOS `~/.codea/bin/codea` is now a launcher script, not a raw binary symlink. It exports:
+  - `OPENCODE_BIN=$current/bin/opencode`
+  - `CODEA_AGENTS_DIR=$current/agents`
+  - `CODEA_SKILLS_DIR=$current/skills`
+  - `CODEA_PLUGIN_BUNDLE=$current/plugins/index.js`
+- Windows `codea.cmd` binds the same four variables to the `current` Junction before starting `codea.exe`.
+- Existing Windows BOM-free `current.txt` + Junction behavior remains unchanged.
+
+`tests/offline/task17_packaging_test.sh` now treats those launcher bindings as required release contracts.
+
+## Fresh release Gate tooling
+
+- `scripts/run-task17-build-gates.sh`
+  - requires Go 1.26.5 + Bun
+  - builds `darwin-arm64`, `darwin-x64`, `windows-x64`
+  - verifies archive and `.sha256`
+  - writes `tests/offline/evidence/task17-build-evidence.json`
+- `tests/offline/macos_release_smoke.sh`
+  - must run on real macOS
+  - requires public HTTPS to be blocked
+  - installs with package-side `install.sh`
+  - verifies `current`, launcher, bundled runtime/plugin/agents/skills
+  - starts packaged `opencode serve` and checks `/global/health` reports `1.18.11`
+  - launches installed Codea through its real launcher inside a pseudo-terminal and requires it to remain running
+  - writes platform evidence JSON
+- `tests/offline/windows_release_smoke.ps1`
+  - must run on native Windows x64 and explicitly rejects WSL
+  - requires public HTTPS to be blocked
+  - runs `install.ps1`
+  - verifies `current` Junction, launcher and bundled resources
+  - starts packaged `opencode.exe serve` and checks health/version
+  - launches Codea via `codea.cmd` and requires it to remain running
+  - writes `task17-windows-x64-evidence.json`
+- `.github/workflows/task16-17-gates.yml`
+  - provides an automated runner for three-platform build evidence and Task 16 runtime regression where supported
+  - it is not treated as a substitute for the explicitly offline native macOS/Windows install gates
+
+## Verification status
+
+The implementation and Gate definitions are complete enough for the requested re-review, but this report does **not** claim Task 17 A/PASS. The current execution sandbox cannot run native macOS/Windows installers or enforce a genuine no-public-network release environment, and no fresh native evidence has been committed yet.
+
+Required build evidence:
 
 ```bash
-bash tests/offline/task17_packaging_test.sh
-
-packaging/scripts/build-release.sh darwin-arm64 <out>
-packaging/scripts/build-release.sh darwin-x64 <out>
-packaging/scripts/build-release.sh windows-x64 <out>
+./scripts/run-task17-build-gates.sh <out> tests/offline/evidence/task17-build-evidence.json
 ```
 
-Then in an actually network-isolated macOS release test environment, execute the package installer and:
+Required native macOS evidence (on the matching extracted darwin package, with public network blocked):
 
 ```bash
-tests/offline/no_public_network_test.sh <extracted-package-dir>
+bash tests/offline/macos_release_smoke.sh <extracted-package-dir>
 ```
 
-Windows x64 must receive an equivalent real install/runtime smoke using `install.ps1`, confirming install path/current Junction/launcher and packaged `codea.exe` + `opencode.exe` execution without public network access.
+Required native Windows x64 evidence (without WSL, with public network blocked):
 
-Full regression Gate must also include existing Go, Plugin and OpenCode parity suites. Until those fresh results exist, this report does not claim Task 17 Gate PASS.
+```powershell
+powershell -ExecutionPolicy Bypass -File tests/offline/windows_release_smoke.ps1 -PackageDir <extracted-package-dir>
+```
+
+Full regression must also include Task 14/15 agent smoke, Task 16 agent smoke, Go/race/vet/build, plugin tests/build and parity.
+
+Until committed fresh evidence proves the three release builds plus native macOS + Windows x64 install/runtime/offline smoke, Task 17 remains formally `pending` behind Task 16 and is not accepted.
 
 ## Scope boundary
 
-Task 17 only creates first-install/offline release packaging. It does not implement Task 18 transactional upgrade, migration, rollback, crash recovery or version switching logic.
+Task 17 only covers first-install/offline release packaging. Task 18 transactional upgrade, migration, rollback, crash recovery and version switching remain untouched and pending.
