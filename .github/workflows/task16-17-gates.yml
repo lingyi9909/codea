@@ -1,0 +1,112 @@
+name: Task 16-17 Acceptance Gates
+
+on:
+  push:
+    branches: [develop]
+    paths:
+      - '.github/workflows/task16-17-gates.yml'
+      - 'distribution/agents/api-documentation/**'
+      - 'distribution/skills/api-documentation/**'
+      - 'tests/fixtures/real-parity/fake_api_doc_model.py'
+      - 'tui/tests/e2e/api-documentation/**'
+      - 'tui/tests/parity/real_api_doc_smoke_test.go'
+      - 'scripts/run-real-api-doc-smoke.sh'
+      - 'packaging/**'
+      - 'tests/offline/**'
+      - 'scripts/run-task17-build-gates.sh'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  task16-runtime:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.5'
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.3.14'
+      - name: Install plugin dependencies
+        working-directory: distribution/plugins
+        run: bun install --frozen-lockfile
+      - name: Task 16 contract and full Go regression
+        working-directory: tui
+        run: |
+          GOTOOLCHAIN=local go test ./tests/e2e/api-documentation/ -count=1
+          GOTOOLCHAIN=local go test ./... -count=1
+          GOTOOLCHAIN=local go test -race ./... -count=1
+          GOTOOLCHAIN=local go vet ./...
+          GOTOOLCHAIN=local go build ./...
+      - name: Plugin regression
+        working-directory: distribution/plugins
+        run: |
+          bun test
+          bun run build
+      - name: Download locked OpenCode v1.18.11 linux-x64
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' > "$RUNNER_TEMP/runtime-meta"
+          import json, pathlib
+          p=json.loads(pathlib.Path('runtime/version.json').read_text())
+          x=p['platforms']['linux-x64']
+          print(x['url'])
+          print(x['checksum'].removeprefix('sha256:'))
+          PY
+          url=$(sed -n '1p' "$RUNNER_TEMP/runtime-meta")
+          expected=$(sed -n '2p' "$RUNNER_TEMP/runtime-meta")
+          curl -fL "$url" -o "$RUNNER_TEMP/opencode.tar.gz"
+          actual=$(sha256sum "$RUNNER_TEMP/opencode.tar.gz" | awk '{print $1}')
+          test "$actual" = "$expected"
+          mkdir -p "$RUNNER_TEMP/opencode"
+          tar -xzf "$RUNNER_TEMP/opencode.tar.gz" -C "$RUNNER_TEMP/opencode"
+          find "$RUNNER_TEMP/opencode" -type f -name opencode -exec chmod +x {} \;
+          find "$RUNNER_TEMP/opencode" -type f -name opencode -print -quit > "$RUNNER_TEMP/opencode-path"
+          test -s "$RUNNER_TEMP/opencode-path"
+      - name: Task 14-15 regression smoke
+        shell: bash
+        run: OPENCODE_BIN="$(cat "$RUNNER_TEMP/opencode-path")" ./scripts/run-real-agent-smoke.sh
+      - name: Task 16 real API Documentation workflow smoke
+        shell: bash
+        run: OPENCODE_BIN="$(cat "$RUNNER_TEMP/opencode-path")" ./scripts/run-real-api-doc-smoke.sh
+      - name: Upload Task 16 evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: task16-evidence
+          path: |
+            tui/tests/parity/evidence/api-doc-agent-evidence.json
+            tui/tests/parity/evidence/agent-evidence.json
+
+  task17-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.5'
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.3.14'
+      - name: Install plugin dependencies
+        working-directory: distribution/plugins
+        run: bun install --frozen-lockfile
+      - name: Packaging contracts
+        shell: bash
+        run: bash tests/offline/task17_packaging_test.sh
+      - name: Build all V1 release targets
+        shell: bash
+        run: ./scripts/run-task17-build-gates.sh "$RUNNER_TEMP/releases" tests/offline/evidence/task17-build-evidence.json
+      - name: Upload Task 17 build evidence and releases
+        uses: actions/upload-artifact@v4
+        with:
+          name: task17-build-evidence
+          path: |
+            tests/offline/evidence/task17-build-evidence.json
+            ${{ runner.temp }}/releases/*.tar.gz
+            ${{ runner.temp }}/releases/*.tar.gz.sha256
+            ${{ runner.temp }}/releases/*.zip
+            ${{ runner.temp }}/releases/*.zip.sha256
