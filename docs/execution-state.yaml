@@ -3,32 +3,21 @@ project: codea-v1
 plan: docs/superpowers/plans/2026-07-30-codea-v1-plan.md
 taskOrder: ["0", "1", "2", "2A", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21"]
 current:
-  task: "15"
+  task: "16"
   step: 1
-  status: awaiting_acceptance
-  nextAction: Task 14 已人工验收通过；按联合验收结论收口 Task 15 后启动 Task 16
+  status: pending
+  nextAction: Task 14/15 已人工联合验收完成；准备启动 Task 16 API Documentation Agent
 checkpoint:
   commit: d4333bccf09a1c397d59d69e9776cf1d66755943
-  updatedAt: "2026-08-21T01:44:00Z"
+  updatedAt: "2026-08-21T01:45:00Z"
 verification:
-  status: pass
-  commands:
-    - "go test ./tests/e2e/code-review/ ./tests/e2e/unit-test/: PASS (12/12)"
-    - "go build ./... / go vet ./... / go test ./... / go test -race ./...: PASS"
-    - "cross-build windows amd64 + darwin amd64: PASS"
-    - "bun test (245) + bun run build + check-plugin-bundle.sh + run-plugin-smoke.sh + check-runtime-boundary.sh: PASS"
-    - "run-real-maven-smoke.sh: PASS"
-    - "run-real-parity-smoke.sh: PASS 17/17 (OpenCode v1.18.11)"
-    - "run-real-plugin-smoke.sh: PASS 8/8 tools + serve load (OpenCode v1.18.11)"
-    - "run-real-agent-smoke.sh: PASS 15/15"
+  status: not_run
+  commands: []
   errorSummary: ""
   recoveryAdvice: ""
 taskGate:
-  status: pass
-  gateItems:
-    agentContracts: pass
-    fullBatch: pass
-    realModelE2E: pass
+  status: not_evaluated
+  gateItems: {}
 humanAcceptance:
   accepted: false
 tasks:
@@ -48,7 +37,7 @@ tasks:
   "12": {status: completed, completedSteps: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: d2de0203be9f6d06a410e83c51733ab7db4781f4, report: docs/task-reports/task-12.md}
   "13": {status: completed, completedSteps: [], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: d2de0203be9f6d06a410e83c51733ab7db4781f4, report: docs/task-reports/task-13.md}
   "14": {status: completed, completedSteps: [], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: d4333bccf09a1c397d59d69e9776cf1d66755943, report: docs/task-reports/task-14.md}
-  "15": {status: awaiting_acceptance, completedSteps: [], verificationStatus: pass, taskGateStatus: pass, humanAccepted: false, checkpoint: d4333bccf09a1c397d59d69e9776cf1d66755943, report: docs/task-reports/task-15.md}
+  "15": {status: completed, completedSteps: [], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: d4333bccf09a1c397d59d69e9776cf1d66755943, report: docs/task-reports/task-15.md}
   "16": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-16.md}
   "17": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-17.md}
   "18": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-18.md}
