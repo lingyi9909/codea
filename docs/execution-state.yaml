@@ -6,31 +6,26 @@ current:
   task: "16"
   step: 1
   status: blocked
-  nextAction: Task 16 shared fake model APIDOCFLOW blocker 已修复并复用 Tool-Result-driven fake_api_doc_model；执行 fresh Go/Bun/OpenCode Task 16 Gate、三平台 release build、真实断公网 macOS + Windows x64 install/runtime smoke 并提交 evidence。证据齐全前不得进入 awaiting_acceptance；Task 18 不得启动。
+  nextAction: 执行 Task 16 自身 fresh Gate：API Doc real OpenCode v1.18.11 workflow 9/9、Go/Bun direct regression、现有 Task 14/15 Agent Runtime + OpenCode parity regression。三平台 release build 与 macOS/Windows native offline smoke 全部属于 Task 17，不再阻塞 Task 16；Task 18 不得启动。
 checkpoint:
-  commit: e0d734fdfa3ba3191e0508acc6617599be5b90c8
-  updatedAt: "2026-08-21T10:25:00+08:00"
+  commit: e57dacdd9e363d73c38033eaf7b43b8f2914f44a
+  updatedAt: "2026-08-21T11:45:00+08:00"
 verification:
   status: unable_to_run
   commands:
-    - "Task 16 APIDOCFLOW implementation: extract_api_spec -> validate_api_example -> write_document -> persisted Markdown; shared fake_model now delegates APIDOCFLOW to the same Tool-Result-driven implementation"
-    - "Task 17 installed launcher wiring fixed for bundled OpenCode/agents/skills/plugin; macOS + Windows native smoke scripts added; fresh native execution pending"
-    - "GitHub Actions Task 16 runtime / Task 17 build gate entry committed; no authoritative completed run/evidence available through current connected execution interface"
-    - "current sandbox lacks repository Go 1.26.5/Bun/locked OpenCode and native macOS/Windows offline environments"
-  errorSummary: "Task 16 implementation blocker is fixed, but fresh Task 16 runtime evidence and Task 17 three-platform/native offline release evidence have not been executed/committed from an authoritative environment yet."
-  recoveryAdvice: "Run Task 16 Go/plugin regression plus run-real-agent-smoke.sh and run-real-api-doc-smoke.sh; run run-task17-build-gates.sh; then run macos_release_smoke.sh and windows_release_smoke.ps1 on native isolated hosts and commit generated evidence."
+    - "Task 16 APIDOCFLOW implementation is present in dedicated fake_api_doc_model and shared fake_model delegates to the same Tool-Result-driven workflow"
+    - "Task 16 fresh run-real-api-doc-smoke.sh evidence has not yet been committed"
+    - "Task 16 fresh Go/Bun direct regression and existing Agent Runtime/OpenCode parity regression are still required"
+  errorSummary: "Task 16 implementation is in place, but its own fresh runtime and regression evidence has not yet been executed/committed from an authoritative environment. Task 17 release/native evidence is intentionally excluded from the Task 16 blocker."
+  recoveryAdvice: "Run Task 16 Go test/race/vet/build, Bun test/build, Task 14/15 agent smoke, OpenCode parity/runtime regression, and run-real-api-doc-smoke.sh. If all are fresh PASS and api-doc-agent-evidence.json is 9/9, Task 16 may move to awaiting_acceptance without waiting for Task 17 native smoke."
 taskGate:
   status: unable_to_evaluate
   gateItems:
     task16WorkflowE2EImplementation: pass
     task16SharedRegressionModelAPIDOCFLOW: pass
     task16FreshRuntimeEvidence: unable_to_evaluate
-    task17Implementation: pass
-    task17InstalledRuntimeWiring: pass
-    task17ThreePlatformBuildEvidence: unable_to_evaluate
-    task17MacOSNativeOfflineEvidence: unable_to_evaluate
-    task17WindowsNativeOfflineEvidence: unable_to_evaluate
-    fullRegression: unable_to_evaluate
+    task16DirectRegression: unable_to_evaluate
+    task16ExistingRuntimeRegression: unable_to_evaluate
 humanAcceptance:
   accepted: false
 tasks:
@@ -51,8 +46,8 @@ tasks:
   "13": {status: completed, completedSteps: [], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: d2de0203be9f6d06a410e83c51733ab7db4781f4, report: docs/task-reports/task-13.md}
   "14": {status: completed, completedSteps: [], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: d4333bccf09a1c397d59d69e9776cf1d66755943, report: docs/task-reports/task-14.md}
   "15": {status: completed, completedSteps: [], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: d4333bccf09a1c397d59d69e9776cf1d66755943, report: docs/task-reports/task-15.md}
-  "16": {status: blocked, completedSteps: [], verificationStatus: unable_to_run, taskGateStatus: unable_to_evaluate, humanAccepted: false, checkpoint: e0d734fdfa3ba3191e0508acc6617599be5b90c8, report: docs/task-reports/task-16.md}
-  "17": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: cdce9ce033f9623f05c20a01058ff03284eee53e, report: docs/task-reports/task-17.md}
+  "16": {status: blocked, completedSteps: [], verificationStatus: unable_to_run, taskGateStatus: unable_to_evaluate, humanAccepted: false, checkpoint: e57dacdd9e363d73c38033eaf7b43b8f2914f44a, report: docs/task-reports/task-16.md}
+  "17": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: 5cf43bf19bbae619184d77e1f5156e9bc81251a3, report: docs/task-reports/task-17.md}
   "18": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-18.md}
   "19": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-19.md}
   "20": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-20.md}
