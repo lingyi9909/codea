@@ -17,10 +17,14 @@ python3 - "$out_dir/index.js" <<'PY'
 import pathlib, re, sys
 p=pathlib.Path(sys.argv[1])
 text=p.read_text(errors='replace')
-pat=re.compile(r'''(?:from\s*|import\s*\(|require\s*\()\s*["']([^"']+)["']''')
-for spec in pat.findall(text):
-    if not (spec.startswith('.') or spec.startswith('/') or spec.startswith('node:') or spec.startswith('bun:') or spec.startswith('data:')):
-        raise SystemExit(f'external dependency import found in plugin bundle: {spec}')
+patterns=[
+    re.compile(r'''(?:from\s*|import\s*\(|require\s*\()\s*["']([^"']+)["']'''),
+    re.compile(r'''(?:^|[;\n])\s*import\s*["']([^"']+)["']'''),
+]
+for pat in patterns:
+    for spec in pat.findall(text):
+        if not (spec.startswith('.') or spec.startswith('/') or spec.startswith('node:') or spec.startswith('bun:') or spec.startswith('data:')):
+            raise SystemExit(f'external dependency import found in plugin bundle: {spec}')
 print('plugin import audit passed')
 PY
 
