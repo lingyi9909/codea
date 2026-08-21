@@ -15,6 +15,8 @@ required=(
   packaging/platform/macos/install.sh
   packaging/platform/windows/install.ps1
   tests/offline/no_public_network_test.sh
+  tests/offline/macos_release_smoke.sh
+  tests/offline/windows_release_smoke.ps1
 )
 for rel in "${required[@]}"; do
   test -f "$repo_root/$rel" || { echo "missing $rel" >&2; exit 1; }
@@ -31,6 +33,13 @@ grep -q 'install/install.ps1' "$repo_root/packaging/scripts/build-release.sh"
 grep -q 'archive.sha256' "$repo_root/packaging/scripts/build-release.sh"
 grep -q 'Junction' "$repo_root/packaging/platform/windows/install.ps1"
 grep -q 'UTF8Encoding($false)' "$repo_root/packaging/platform/windows/install.ps1"
+
+# Installed launchers must point Codea at resources inside ~/.codea/current.
+# Without these bindings the source-tree relative defaults break after install.
+for key in OPENCODE_BIN CODEA_AGENTS_DIR CODEA_SKILLS_DIR CODEA_PLUGIN_BUNDLE; do
+  grep -q "$key" "$repo_root/packaging/platform/macos/install.sh" || { echo "macOS launcher missing $key" >&2; exit 1; }
+  grep -q "$key" "$repo_root/packaging/platform/windows/install.ps1" || { echo "Windows launcher missing $key" >&2; exit 1; }
+done
 
 stage=$(mktemp -d)
 trap 'rm -rf "$stage"' EXIT
@@ -53,7 +62,6 @@ printf '#!/bin/sh\nexit 0\n' > "$stage/bin/codea"
 chmod +x "$stage/bin/codea"
 "$repo_root/packaging/scripts/generate-manifest.sh" "$stage" >/dev/null
 
-# Extra unmanifested files fail closed.
 printf 'extra\n' > "$stage/config/unmanifested.txt"
 if "$repo_root/packaging/scripts/verify-checksum.sh" "$stage" >/dev/null 2>&1; then
   echo "verify-checksum must reject unmanifested files" >&2
