@@ -8,6 +8,7 @@ required=(
   packaging/scripts/build-runtime.sh
   packaging/scripts/build-plugins.sh
   packaging/scripts/collect-skills.sh
+  packaging/scripts/build-release.sh
   packaging/scripts/generate-manifest.sh
   packaging/scripts/verify-checksum.sh
   packaging/scripts/verify-offline.sh
@@ -22,6 +23,8 @@ grep -q 'openCodeVersion: "1.18.11"' "$repo_root/packaging/config/release.yaml"
 grep -q 'darwin-arm64' "$repo_root/packaging/config/release.yaml"
 grep -q 'darwin-x64' "$repo_root/packaging/config/release.yaml"
 grep -q 'windows-x64' "$repo_root/packaging/config/release.yaml"
+grep -q 'go build' "$repo_root/packaging/scripts/build-release.sh"
+grep -q 'GOTOOLCHAIN=local' "$repo_root/packaging/scripts/build-release.sh"
 
 stage=$(mktemp -d)
 trap 'rm -rf "$stage"' EXIT
