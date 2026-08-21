@@ -32,12 +32,12 @@ Capture, when available:
 
 Use bounded `read` / `grep` / `glob` only when extraction leaves a field unresolved or when evidence is needed for DTO/exception behavior. Do not expand into unrelated code.
 
-For error codes preserve provenance:
+For error codes preserve the exact Task 13 provenance values:
 - `DECLARED`: explicitly declared by the endpoint or directly bound metadata.
-- `REFERRED`: endpoint/call path references a known error constant or exception mapping.
+- `REFERENCED`: endpoint/call path references a known error constant or exception mapping.
 - `INFERRED`: evidence strongly implies an error outcome but code does not directly declare it.
 
-Never upgrade `INFERRED` to `DECLARED` or `REFERRED`.
+Never upgrade `INFERRED` to `DECLARED` or `REFERENCED`, and never rename the provenance emitted by `extract_api_spec`.
 
 ### 3. Optional business enrichment
 
@@ -62,7 +62,7 @@ Call `write_document` with the final Markdown. Do not use native filesystem writ
 - Every documented endpoint came from `extract_api_spec`.
 - HTTP method/path match deterministic extraction.
 - DTO fields and validation rules are code-backed.
-- Error code provenance is one of `DECLARED`, `REFERRED`, `INFERRED`.
+- Error code provenance is one of `DECLARED`, `REFERENCED`, `INFERRED`.
 - Examples were validated or explicitly marked unresolved.
 - Every uncertain statement uses `Not determined from code`.
 - Dify text, if used, is clearly auxiliary and does not override code evidence.
