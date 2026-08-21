@@ -3,16 +3,15 @@ set -euo pipefail
 
 # run-real-agent-smoke.sh
 #
-# Proves the enterprise agents are materialized into the real locked OpenCode
-# v1.18.11 runtime and their fail-closed permissions are enforced server-side.
-# Task 14/15 additionally execute the Reviewer/UT workflows; Task 16 adds a
-# runtime smoke proving api-documentation is listed, can use write_document,
-# cannot use UT write tools, and produces a real docs artifact.
+# Task 14/15 real-runtime regression: code-reviewer + unit-test-generator are
+# materialized into locked OpenCode v1.18.11, fail-closed permissions are
+# enforced server-side, and Reviewer/UT workflows execute end-to-end.
+# Task 16 has its own run-real-api-doc-smoke.sh so its deterministic model and
+# evidence do not perturb the already accepted Task 14/15 15/15 baseline.
 
 repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 fixture_dir="$repo_root/tests/fixtures/real-parity"
 evidence_file="$repo_root/tui/tests/parity/evidence/agent-evidence.json"
-api_doc_evidence_file="$repo_root/tui/tests/parity/evidence/api-doc-agent-evidence.json"
 
 opencode_bin=${OPENCODE_BIN:-}
 smoke_port=${SMOKE_PORT:-49322}
@@ -28,8 +27,7 @@ opencode_pid=""
 cleanup() {
   if [ -n "$opencode_pid" ]; then kill "$opencode_pid" 2>/dev/null || true; wait "$opencode_pid" 2>/dev/null || true; fi
   if [ -n "$fake_pid" ]; then kill "$fake_pid" 2>/dev/null || true; wait "$fake_pid" 2>/dev/null || true; fi
-  find "$run_root" -type f -delete 2>/dev/null || true
-  find "$run_root" -depth -type d -exec rmdir {} \; 2>/dev/null || true
+  rm -rf "$run_root"
 }
 trap cleanup EXIT INT TERM
 
@@ -151,20 +149,18 @@ OPENCODE_ENDPOINT="http://127.0.0.1:$smoke_port" \
 OPENCODE_SERVER_USERNAME="$username" \
 OPENCODE_SERVER_PASSWORD="$password" \
 SMOKE_DIR="$smoke_dir" \
-GOTOOLCHAIN=local go test ./tests/parity/ -run '^TestReal(Agent|APIDoc)Evidence$' -count=1 -v
+GOTOOLCHAIN=local go test ./tests/parity/ -run '^TestRealAgentEvidence$' -count=1 -v
 
-python3 - "$evidence_file" "$api_doc_evidence_file" <<'PY'
+python3 - "$evidence_file" <<'PY'
 import json, pathlib, sys
-for raw in sys.argv[1:]:
-    path=pathlib.Path(raw)
-    if not path.exists(): raise SystemExit(f'evidence artifact missing: {path}')
-    payload=json.loads(path.read_text())
-    if payload.get('available') is not True: raise SystemExit(f'{path.name}: available != true')
-    if payload.get('failedChecks', 1) != 0: raise SystemExit(f'{path.name}: failedChecks != 0')
-    total=payload.get('totalChecks', 0); passed=payload.get('passedChecks', 0)
-    if total <= 0 or passed != total: raise SystemExit(f'{path.name}: not fully green {passed}/{total}')
-    if payload.get('version') != '1.18.11': raise SystemExit(f'{path.name}: wrong runtime version')
-    print(f'{path.name}: {passed}/{total} PASS')
+path=pathlib.Path(sys.argv[1])
+if not path.exists(): raise SystemExit(f'evidence artifact missing: {path}')
+payload=json.loads(path.read_text())
+if payload.get('available') is not True: raise SystemExit('available != true')
+if payload.get('failedChecks', 1) != 0: raise SystemExit('failedChecks != 0')
+if payload.get('totalChecks') != 15 or payload.get('passedChecks') != 15: raise SystemExit(f"expected 15/15, got {payload.get('passedChecks')}/{payload.get('totalChecks')}")
+if payload.get('version') != '1.18.11': raise SystemExit('wrong runtime version')
+print('agent-evidence.json: 15/15 PASS')
 PY
 
-echo "[PASS] real OpenCode agent smoke: Reviewer + UT + API Documentation runtime gates"
+echo "[PASS] Task 14/15 real OpenCode agent smoke: 15/15"
