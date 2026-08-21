@@ -2,7 +2,7 @@
 
 ## Overview
 
-Implementation checkpoint: `3feb08ba0a086af501574ca1b09dc0216add08cc`
+Implementation checkpoint: `83d9d6ff8018883d31c584752fe67610834033ff`
 
 Task 16 在 Task 13 已交付的 `extract_api_spec` / `validate_api_example` / `write_document` Custom Tools 之上，增加企业级 `api-documentation` Agent。Agent 采用 deterministic-first 策略：接口结构、DTO、校验和错误码 provenance 以 Tool/代码证据为准；模型只负责组织文档和可选业务语义补充，未知字段固定写为 `Not determined from code`。
 
@@ -30,39 +30,58 @@ Task 16 在 Task 13 已交付的 `extract_api_spec` / `validate_api_example` / `
 
 ## Functional Workflow E2E remediation
 
-The previous runtime smoke only proved registration/permissions. This gap is now implemented as a separate Task 16 functional smoke so Task 14/15's accepted deterministic model remains isolated.
+The original runtime smoke only proved registration/permissions. The functional gap is now implemented as a real Task 16 workflow:
 
-New files/changes:
+```text
+APIDOCFLOW
+→ extract_api_spec
+→ validate_api_example
+→ write_document
+→ docs/api-demo.md
+```
 
-- `tests/fixtures/real-parity/fake_api_doc_model.py`
-  - deterministic `APIDOCFLOW`
-  - `extract_api_spec(controllerFile=DemoController.java)`
-  - consumes the **actual structured Tool Result**
-  - passes that exact spec into `validate_api_example`
-  - renders Markdown from the extracted endpoints/DTO/validation/error provenance
-  - calls `write_document(docs/api-demo.md)`
-  - does not hard-code endpoint method/path/DTO/provenance as the final document source
-- `tui/tests/parity/real_api_doc_smoke_test.go`
-  - requires all three workflow tools to be called and succeed through the real runtime
-  - checks the persisted Markdown contains code-derived `DemoController`, `GET /api/users/{id}`, `POST /api/users`, `CreateUserRequest`, `@NotBlank`, `@Email`, `@Min(1)`, `@Max(120)`
-  - checks error provenance remains `DECLARED` / `REFERENCED` / `INFERRED` and explicitly rejects the historical typo `REFERRED`
-  - checks unresolved semantics remain `Not determined from code`
-  - checks example validation is recorded as PASS
-- `scripts/run-real-api-doc-smoke.sh`
-  - starts deterministic fake API-doc model
-  - starts real locked OpenCode v1.18.11
-  - materializes real enterprise agents
-  - loads the real plugin bundle
-  - executes `TestRealAPIDocEvidence`
-  - requires fresh `api-doc-agent-evidence.json` to be exactly 9/9 PASS
-- `scripts/run-real-agent-smoke.sh`
-  - restored to the Task 14/15-only 15/15 regression so Task 16 cannot perturb the accepted Reviewer/UT fake-model lifecycle
-- `.github/workflows/task16-17-gates.yml`
-  - automated runner entry for Go/plugin regression, Task 14/15 15/15 regression and Task 16 real workflow smoke
+### Deterministic API-doc model
+
+`tests/fixtures/real-parity/fake_api_doc_model.py` implements the workflow and deliberately consumes Tool Results:
+
+- calls `extract_api_spec(controllerFile=DemoController.java)`
+- reads the actual structured extraction Tool Result
+- passes that exact `spec` object into `validate_api_example`
+- renders Markdown from extracted endpoints, DTO fields, validation annotations and error-code provenance
+- preserves only `DECLARED` / `REFERENCED` / `INFERRED`
+- renders unresolved semantics as `Not determined from code`
+- calls `write_document(docs/api-demo.md)` with that rendered output
+
+### Shared full-regression fake model
+
+A review found that the combined `run-real-agent-smoke.sh` still starts `tests/fixtures/real-parity/fake_model.py`, while `TestRealAPIDocEvidence` now sends `APIDOCFLOW`. The dedicated Task 16 model already implemented APIDOCFLOW, but the shared Reviewer/UT fake model did not, so the combined Task 14–16 regression would terminate without the three API-doc Tool calls.
+
+This is fixed at checkpoint `83d9d6ff8018883d31c584752fe67610834033ff`:
+
+- shared `fake_model.py` explicitly recognizes `APIDOCFLOW`
+- it delegates to `fake_api_doc_model.decide(prompt, messages)`
+- therefore focused Task 16 smoke and combined Agent regression use the **same Tool-Result-driven workflow implementation**, rather than two duplicated/hard-coded Markdown generators
+- existing Reviewer/UT state machines remain unchanged
+
+### Runtime assertions
+
+`tui/tests/parity/real_api_doc_smoke_test.go` requires:
+
+- `extract_api_spec` called once and succeeded
+- `validate_api_example` called once and succeeded
+- `write_document` called once and succeeded
+- persisted Markdown contains code-derived `DemoController`, `GET /api/users/{id}`, `POST /api/users`, `CreateUserRequest`, `@NotBlank`, `@Email`, `@Min(1)`, `@Max(120)`
+- error provenance remains `DECLARED` / `REFERENCED` / `INFERRED` and rejects `REFERRED`
+- unresolved semantics remain `Not determined from code`
+- example validation is recorded as PASS
+
+`scripts/run-real-api-doc-smoke.sh` starts the dedicated deterministic API-doc model plus real locked OpenCode v1.18.11 and requires fresh `api-doc-agent-evidence.json` to be exactly 9/9 PASS.
+
+`scripts/run-real-agent-smoke.sh` continues to exercise the combined Reviewer/UT/API Documentation runtime regression; its shared fake model can now execute the same APIDOCFLOW semantics.
 
 ## Verification status
 
-The required functional E2E is now encoded, but this report does **not** claim fresh runtime PASS yet. The current ChatGPT execution sandbox cannot run the repository with Go 1.26.5/Bun/OpenCode v1.18.11. A GitHub Actions gate entry was committed, but no completed workflow run/evidence is currently visible through the connected execution interface, so it is not counted as verification evidence.
+The implementation blocker is fixed, but this report does **not** claim fresh runtime PASS yet. The current execution sandbox cannot run the repository with Go 1.26.5/Bun/OpenCode v1.18.11. No authoritative completed workflow/native evidence is currently available through the connected execution interface, so no evidence is fabricated.
 
 Fresh acceptance evidence must include:
 
