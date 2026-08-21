@@ -1,11 +1,11 @@
 {
-  "timestamp": "2026-08-21T01:27:48Z",
+  "timestamp": "2026-08-21T04:09:54Z",
   "endpoint": "http://127.0.0.1:49322",
   "available": true,
   "version": "1.18.11",
   "agentsListed": {
     "passed": true,
-    "detail": "agents listed: code-reviewer=true unit-test-generator=true (total 9)"
+    "detail": "agents listed: code-reviewer=true unit-test-generator=true (total 10)"
   },
   "reviewerRead": {
     "passed": true,

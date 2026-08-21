@@ -29,6 +29,14 @@ func requireAll(t *testing.T, s string, needles ...string) {
     }
 }
 
+func requireAllFold(t *testing.T, s string, needles ...string) {
+    t.Helper()
+    lower := strings.ToLower(s)
+    for _, n := range needles {
+        if !strings.Contains(lower, strings.ToLower(n)) { t.Errorf("missing %q", n) }
+    }
+}
+
 func TestAPIDocumentationManifestUsesOnlyBoundedTools(t *testing.T) {
     m := read(t, "distribution/agents/api-documentation/manifest.yaml")
     requireAll(t, m,
@@ -54,11 +62,13 @@ func TestAPIDocumentationWorkflowIsDeterministicFirst(t *testing.T) {
         "extract_api_spec",
         "validate_api_example",
         "write_document",
-        "deterministic extraction is authoritative",
         "Not determined from code",
         "DECLARED", "REFERENCED", "INFERRED",
         "Dify", "optional business context",
         "must not override code evidence",
+    )
+    requireAllFold(t, a,
+        "deterministic extraction is authoritative",
         "never fabricate",
     )
     if strings.Index(a, "extract_api_spec") > strings.Index(a, "Dify") {

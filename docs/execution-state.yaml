@@ -6,26 +6,27 @@ current:
   task: "16"
   step: 1
   status: blocked
-  nextAction: 执行 Task 16 自身 fresh Gate：API Doc real OpenCode v1.18.11 workflow 9/9、Go/Bun direct regression、现有 Task 14/15 Agent Runtime + OpenCode parity regression。三平台 release build 与 macOS/Windows native offline smoke 全部属于 Task 17，不再阻塞 Task 16；Task 18 不得启动。
+  nextAction: Task 16 自身 fresh Gate 已跑完并提交：API Doc real OpenCode v1.18.11 workflow 9/9、Go/Bun direct regression 全绿、Task 14/15 Agent Runtime 15/15 与 OpenCode parity regression 全绿。等待人工核验最新代码与 evidence 后推进 awaiting_acceptance；Task 17 macOS/Windows native smoke 属后期，Task 18 不得启动。
 checkpoint:
-  commit: e57dacdd9e363d73c38033eaf7b43b8f2914f44a
-  updatedAt: "2026-08-21T11:45:00+08:00"
+  commit: fc2f04bb02cbaa4102936d0b01f91f6a2ef2e66e
+  updatedAt: "2026-08-21T12:10:00+08:00"
 verification:
   status: unable_to_run
   commands:
     - "Task 16 APIDOCFLOW implementation is present in dedicated fake_api_doc_model and shared fake_model delegates to the same Tool-Result-driven workflow"
-    - "Task 16 fresh run-real-api-doc-smoke.sh evidence has not yet been committed"
-    - "Task 16 fresh Go/Bun direct regression and existing Agent Runtime/OpenCode parity regression are still required"
-  errorSummary: "Task 16 implementation is in place, but its own fresh runtime and regression evidence has not yet been executed/committed from an authoritative environment. Task 17 release/native evidence is intentionally excluded from the Task 16 blocker."
-  recoveryAdvice: "Run Task 16 Go test/race/vet/build, Bun test/build, Task 14/15 agent smoke, OpenCode parity/runtime regression, and run-real-api-doc-smoke.sh. If all are fresh PASS and api-doc-agent-evidence.json is 9/9, Task 16 may move to awaiting_acceptance without waiting for Task 17 native smoke."
+    - "Task 16 fresh run-real-api-doc-smoke.sh PASS: api-doc-agent-evidence.json 9/9 (version 1.18.11, workflow extract/validate/write/documentValid all true)"
+    - "Task 16 fresh Go direct regression PASS: go test/race/vet/build 全绿（含 api-documentation case-insensitive 断言修复）；Bun test 245 pass + bun run build 成功"
+    - "Task 16 existing runtime regression PASS: run-real-agent-smoke.sh 15/15 + go test ./tests/parity ./internal/opencode 全绿"
+  errorSummary: "Task 16 自身 fresh Gate 三组证据全部真实 PASS 并已提交（api-doc 9/9、direct regression、existing runtime regression）。等待人工核验后推进 awaiting_acceptance。Task 17 release/native evidence 仍属后期，不阻塞 Task 16。"
+  recoveryAdvice: "人工核验 api-doc-agent-evidence.json 9/9、agent-evidence.json 15/15、Go/Bun regression 全绿后，将 Task 16 由 blocked 推进到 awaiting_acceptance；无需等待 Task 17 macOS/Windows native smoke。"
 taskGate:
   status: unable_to_evaluate
   gateItems:
     task16WorkflowE2EImplementation: pass
     task16SharedRegressionModelAPIDOCFLOW: pass
-    task16FreshRuntimeEvidence: unable_to_evaluate
-    task16DirectRegression: unable_to_evaluate
-    task16ExistingRuntimeRegression: unable_to_evaluate
+    task16FreshRuntimeEvidence: pass
+    task16DirectRegression: pass
+    task16ExistingRuntimeRegression: pass
 humanAcceptance:
   accepted: false
 tasks:
