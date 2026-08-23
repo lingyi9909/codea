@@ -73,14 +73,8 @@ try {
   if (Test-Path $tmp) { Remove-Item -Recurse -Force -LiteralPath $tmp }
 }
 
-# current.txt is the authoritative Windows version pointer. Task 18 updates it
-# atomically, so every launcher invocation must resolve this file instead of a
-# stale Junction.
 $currentTxt = Join-Path $home 'current.txt'
 [IO.File]::WriteAllText($currentTxt, $target + [Environment]::NewLine, (New-Object Text.UTF8Encoding($false)))
-
-# Keep the first-install Junction for compatibility and manual browsing. It is
-# not the authoritative update pointer after Task 18.
 $currentDir = Join-Path $home 'current'
 if (Test-Path $currentDir) { Remove-Item -Force -Recurse $currentDir }
 New-Item -ItemType Junction -Path $currentDir -Target $target | Out-Null
@@ -89,7 +83,9 @@ $shim = Join-Path $binDir 'codea.cmd'
 $shimBody = @"
 @echo off
 setlocal
-set "CODEA_POINTER=%~dp0..\current.txt"
+for %%I in ("%~dp0..") do set "CODEA_HOME=%%~fI"
+set "CODEA_RUNTIME_CONFIG_DIR=%CODEA_HOME%\runtime-config"
+set "CODEA_POINTER=%CODEA_HOME%\current.txt"
 if not exist "%CODEA_POINTER%" (
   echo Error: Codea current pointer missing: %CODEA_POINTER% 1>&2
   exit /b 1
