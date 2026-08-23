@@ -39,8 +39,10 @@ func (f *DefaultCandidateRuntimeFactory) Start(ctx context.Context, candidate up
 		return nil, "", nil, fmt.Errorf("candidate version/config dir required")
 	}
 	mode := f.Options.SkillMode
-	if !mode.Valid() {
+	if mode == "" {
 		mode = skill.SkillModeStrict
+	} else if !mode.Valid() {
+		return nil, "", nil, fmt.Errorf("invalid candidate skill mode %q", mode)
 	}
 	policy := skill.SkillPolicy{Mode: mode, Approved: f.Options.ApprovedSkills}
 	if err := prepareCandidateConfig(candidate, policy); err != nil {
