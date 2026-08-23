@@ -11,6 +11,7 @@ import (
 	"codea/tui/internal/doctor"
 	"codea/tui/internal/opencode"
 	"codea/tui/internal/skill"
+	"codea/tui/internal/update"
 )
 
 func codeaHomeDir() string {
@@ -25,7 +26,23 @@ func runInitCommand() error {
 	return nil
 }
 
+func recoverInterruptedUpdateIfNeeded(ctx context.Context) error {
+	marker := filepath.Join(codeaHomeDir(), "update.in-progress")
+	if _, err := os.Stat(marker); os.IsNotExist(err) {
+		return nil
+	} else if err != nil {
+		return fmt.Errorf("检查升级恢复标记: %w", err)
+	}
+	if err := update.RecoverHome(ctx, codeaHomeDir(), codeaConfigDir()); err != nil {
+		return fmt.Errorf("恢复未完成升级事务: %w", err)
+	}
+	return nil
+}
+
 func runDoctorCommand() error {
+	if err := recoverInterruptedUpdateIfNeeded(context.Background()); err != nil {
+		return err
+	}
 	cfgDir := codeaConfigDir()
 	var adapter *opencode.OpenCodeAdapter
 	cleanup := func() {}
