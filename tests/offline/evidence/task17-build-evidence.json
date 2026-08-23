@@ -1,0 +1,26 @@
+{
+  "timestamp": "2026-08-23T04:28:07Z",
+  "openCodeVersion": "1.18.11",
+  "platforms": {
+    "darwin-arm64": {
+      "archive": "codea-0.1.0-darwin-arm64.tar.gz",
+      "sha256": "275b481774790b4da892cf0ba0478225be5723deca7ecb6500114df6b74f76ca",
+      "bytes": 50650835,
+      "staticPackageVerified": true
+    },
+    "darwin-x64": {
+      "archive": "codea-0.1.0-darwin-x64.tar.gz",
+      "sha256": "a746617d1b9b33818a54d55d1e2b2ef4e2542e0e89268f6af061d863e6a4426f",
+      "bytes": 53289785,
+      "staticPackageVerified": true
+    },
+    "windows-x64": {
+      "archive": "codea-0.1.0-windows-x64.zip",
+      "sha256": "b7b593f65954d5ec678c2904c0bde52f850eb9aaefe6fcc10bbc517753971e2a",
+      "bytes": 65391775,
+      "staticPackageVerified": true
+    }
+  },
+  "passedChecks": 3,
+  "totalChecks": 3
+}

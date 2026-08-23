@@ -39,6 +39,15 @@ macOS resolves these under `~/.codea/current`; Windows resolves them under the `
 
 Task 17 owns the release-specific gates; they do not block Task 16.
 
+### Gate status
+
+| Gate | Status |
+|------|--------|
+| task17PackagingContract | pass |
+| task17ThreePlatformBuildEvidence | pass |
+| task17MacOSNativeOfflineEvidence | deferred |
+| task17WindowsNativeOfflineEvidence | deferred |
+
 ### Required before Task 17 final acceptance
 
 - full regression relevant to the release contents
@@ -81,7 +90,14 @@ Deferral is an explicit evidence status, not a substitute for execution and not 
 
 ## Current status
 
-Task 17 remains formally `pending` because Task 16 is still the first incomplete task. No native macOS/Windows PASS is claimed. When Task 16 closes, Task 17 can be activated and evaluated against its own release-build/regression evidence, with the two native smoke items retained as `deferred` until their target environments are available.
+Task 17 remains formally `pending` because Task 16 is still the first incomplete task. The release-specific evidence is now recorded:
+
+- `task17PackagingContract`: **pass** — `tests/offline/task17_packaging_test.sh` passes.
+- `task17ThreePlatformBuildEvidence`: **pass** — darwin-arm64, darwin-x64 and windows-x64 archives built and statically verified (archive, `.sha256`, package staging, checksum/manifest/offline verification). Evidence: `tests/offline/evidence/task17-build-evidence.json` (OpenCode v1.18.11, 3/3 checks).
+- `task17MacOSNativeOfflineEvidence`: **deferred** — native macOS offline smoke not yet run.
+- `task17WindowsNativeOfflineEvidence`: **deferred** — native Windows offline smoke not yet run.
+
+No native macOS/Windows PASS is claimed. When Task 16 closes, Task 17 can be activated for final acceptance, with the two native smoke items retained as `deferred` until their target environments are available.
 
 ## Scope boundary
 

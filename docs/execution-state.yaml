@@ -29,6 +29,11 @@ taskGate:
     task16ExistingRuntimeRegression: pass
 humanAcceptance:
   accepted: false
+task17Gate:
+  task17PackagingContract: pass
+  task17ThreePlatformBuildEvidence: pass
+  task17MacOSNativeOfflineEvidence: deferred
+  task17WindowsNativeOfflineEvidence: deferred
 tasks:
   "0": {status: completed, completedSteps: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: 97ea4b8e7f6d86a97e17781bb858b5f90ad81b20, report: docs/task-reports/task-00.md}
   "1": {status: completed, completedSteps: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: 50e32c2673d1324c040d5c2296b25196307a4662, report: docs/task-reports/task-01.md}
