@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"sync"
 
 	"codea/tui/internal/runtime"
 )
@@ -14,6 +15,10 @@ type OpenCodeAdapter struct {
 	httpClient *HTTPClient
 	reconnect  *ReconnectingSSEClient
 	tracker    *SessionTracker
+
+	promptMu        sync.RWMutex
+	lastPromptAgent string
+	lastPromptSeen  bool
 }
 
 // NewOpenCodeAdapter creates an adapter backed by an OpenCode server at baseURL.
@@ -94,7 +99,26 @@ func (a *OpenCodeAdapter) Prompt(ctx context.Context, sessionID runtime.SessionI
 	if err != nil {
 		return err
 	}
-	return classifyError("Prompt", a.httpClient.SendPrompt(ctx, sid, &input))
+	if err := a.httpClient.SendPrompt(ctx, sid, &input); err != nil {
+		return classifyError("Prompt", err)
+	}
+
+	// Parity evidence must reflect what actually crossed the vendor boundary and
+	// was accepted by the Runtime, not merely the caller's pre-mapping request.
+	a.promptMu.Lock()
+	a.lastPromptAgent = input.Agent
+	a.lastPromptSeen = true
+	a.promptMu.Unlock()
+	return nil
+}
+
+// LastPrompt exposes the mapped Agent value from the most recent Prompt that
+// the OpenCode Runtime accepted. It intentionally satisfies parity.PromptRecorder
+// structurally without making the vendor adapter depend on the parity package.
+func (a *OpenCodeAdapter) LastPrompt() (string, bool) {
+	a.promptMu.RLock()
+	defer a.promptMu.RUnlock()
+	return a.lastPromptAgent, a.lastPromptSeen
 }
 
 func (a *OpenCodeAdapter) Subscribe(ctx context.Context) (<-chan runtime.Event, error) {
