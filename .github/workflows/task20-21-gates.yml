@@ -1,0 +1,35 @@
+name: Task 20-21 Acceptance Gates
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [develop]
+    paths:
+      - 'tui/internal/app/**'
+      - 'tui/internal/parity/**'
+      - 'tui/cmd/parity-runner/**'
+      - 'tui/tests/parity/**'
+      - 'tests/release/**'
+      - 'scripts/run-release-parity-gates.sh'
+      - 'docs/release-checklist.md'
+      - 'runtime/capabilities.yaml'
+      - '.github/workflows/task20-21-gates.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  task20-21-gates:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.5'
+          cache-dependency-path: tui/go.sum
+
+      - name: Go full regression
+        working-directory: tui
+        run: |
+          GOTOOLCHAIN=local go test ./... -count=1
