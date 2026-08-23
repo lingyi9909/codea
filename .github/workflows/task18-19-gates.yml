@@ -69,6 +69,10 @@ jobs:
           bash tests/offline/task18_launcher_contract_test.sh
           bash tests/offline/task17_packaging_test.sh
 
+      - name: Execution-state validator
+        shell: bash
+        run: bash scripts/check-execution-state.sh
+
       - name: Download locked OpenCode v1.18.11 linux-x64
         shell: bash
         run: |
@@ -90,6 +94,12 @@ jobs:
           find "$RUNNER_TEMP/opencode" -type f -name opencode -exec chmod +x {} \;
           find "$RUNNER_TEMP/opencode" -type f -name opencode -print -quit > "$RUNNER_TEMP/opencode-path"
           test -s "$RUNNER_TEMP/opencode-path"
+
+      - name: Existing Task 14-16 real runtime regression
+        shell: bash
+        run: |
+          OPENCODE_BIN="$(cat "$RUNNER_TEMP/opencode-path")" bash scripts/run-real-agent-smoke.sh
+          OPENCODE_BIN="$(cat "$RUNNER_TEMP/opencode-path")" bash scripts/run-real-api-doc-smoke.sh
 
       - name: Real candidate Doctor with OpenCode v1.18.11
         shell: bash
@@ -117,6 +127,9 @@ jobs:
             "bunRegression": True,
             "launcherContract": True,
             "task17PackagingRegression": True,
+            "executionStateValidator": True,
+            "existingAgentRuntimeRegression": True,
+            "apiDocumentationRuntimeRegression": True,
             "candidateDoctor": candidate,
             "passed": True,
           }
