@@ -18,12 +18,15 @@ import pathlib, re, sys
 p=pathlib.Path(sys.argv[1])
 text=p.read_text(errors='replace')
 patterns=[
-    re.compile(r'''(?:from\s*|import\s*\(|require\s*\()\s*["']([^"']+)["']'''),
-    re.compile(r'''(?:^|[;\n])\s*import\s*["']([^"']+)["']'''),
+    re.compile(r'''(?:from\s*|import\s*\(|require\s*\()\s*["']([^"'\n]+)["']'''),
+    re.compile(r'''(?:^|[;\n])\s*import\s*["']([^"'\n]+)["']'''),
 ]
+NODE_BUILTINS = frozenset("""assert async_hooks buffer child_process cluster console constants crypto dgram diagnostics_channel dns domain events fs http http2 https inspector module net os path perf_hooks process punycode querystring readline repl stream string_decoder sys timers tls trace_events tty url util v8 vm wasi worker_threads zlib""".split())
+def allowed(spec):
+    return spec.startswith(('.', '/', 'node:', 'bun:', 'data:')) or spec.split('/')[0] in NODE_BUILTINS
 for pat in patterns:
     for spec in pat.findall(text):
-        if not (spec.startswith('.') or spec.startswith('/') or spec.startswith('node:') or spec.startswith('bun:') or spec.startswith('data:')):
+        if not allowed(spec):
             raise SystemExit(f'external dependency import found in plugin bundle: {spec}')
 print('plugin import audit passed')
 PY

@@ -17,14 +17,17 @@ if not plugins.is_dir(): raise SystemExit('FAIL: plugins directory missing')
 js=list(plugins.glob('*.js'))
 if not js: raise SystemExit('FAIL: no plugin bundle found')
 patterns=[
-    re.compile(r'''(?:from\s*|import\s*\(|require\s*\()\s*["']([^"']+)["']'''),
-    re.compile(r'''(?:^|[;\n])\s*import\s*["']([^"']+)["']'''),
+    re.compile(r'''(?:from\s*|import\s*\(|require\s*\()\s*["']([^"'\n]+)["']'''),
+    re.compile(r'''(?:^|[;\n])\s*import\s*["']([^"'\n]+)["']'''),
 ]
+NODE_BUILTINS = frozenset("""assert async_hooks buffer child_process cluster console constants crypto dgram diagnostics_channel dns domain events fs http http2 https inspector module net os path perf_hooks process punycode querystring readline repl stream string_decoder sys timers tls trace_events tty url util v8 vm wasi worker_threads zlib""".split())
+def allowed(spec):
+    return spec.startswith(('.', '/', 'node:', 'bun:', 'data:')) or spec.split('/')[0] in NODE_BUILTINS
 for p in js:
     text=p.read_text(errors='replace')
     for pat in patterns:
         for spec in pat.findall(text):
-            if not (spec.startswith('.') or spec.startswith('/') or spec.startswith('node:') or spec.startswith('bun:') or spec.startswith('data:')):
+            if not allowed(spec):
                 raise SystemExit(f'FAIL: external import {spec!r} in {p.name}')
     if str(pathlib.Path.home()) in text:
         raise SystemExit(f'FAIL: build home path leaked into {p.name}')
