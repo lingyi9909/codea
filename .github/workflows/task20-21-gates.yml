@@ -15,6 +15,10 @@ on:
       - 'runtime/capabilities.yaml'
       - '.github/workflows/task20-21-gates.yml'
 
+concurrency:
+  group: task20-21-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: write
 
