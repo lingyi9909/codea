@@ -10,6 +10,7 @@ import (
 	"time"
 
 	runtimedomain "codea/tui/internal/runtime"
+	"codea/tui/internal/update"
 )
 
 type Status string
@@ -78,6 +79,21 @@ func NewDefaultService(cfg Config) (*Service,error) {
 	expected:=strings.TrimSpace(cfg.ExpectedOpenCodeVersion); if expected==""{expected="1.18.11"}
 	timeout:=cfg.BehaviorTimeout; if timeout<=0{timeout=20*time.Second}
 	checks:=defaultChecks(defaultCheckConfig{home:home,configDir:configDir,runtime:cfg.Runtime,runtimeStartErr:cfg.RuntimeStartError,runtimeURL:cfg.RuntimeURL,expectedVersion:expected,behaviorTimeout:timeout})
+	return NewService(checks...),nil
+}
+
+// NewCandidateService runs the same Doctor contract against a staged/installed
+// update candidate instead of resolving the currently active version pointer.
+// This is the bridge Task 18 uses for both pre-switch V2+C2-temp and post-switch
+// validation.
+func NewCandidateService(candidate update.Candidate, rt runtimedomain.AgentRuntime, runtimeURL, expectedOpenCodeVersion string, timeout time.Duration) (*Service,error) {
+	if strings.TrimSpace(candidate.VersionDir)==""||strings.TrimSpace(candidate.ConfigDir)==""{return nil,fmt.Errorf("candidate version/config dir required")}
+	versionDir,err:=filepath.Abs(candidate.VersionDir);if err!=nil{return nil,err}
+	configDir,err:=filepath.Abs(candidate.ConfigDir);if err!=nil{return nil,err}
+	home:=filepath.Dir(filepath.Dir(versionDir))
+	expected:=strings.TrimSpace(expectedOpenCodeVersion);if expected==""{expected="1.18.11"}
+	if timeout<=0{timeout=20*time.Second}
+	checks:=defaultChecks(defaultCheckConfig{home:home,configDir:configDir,releaseRoot:versionDir,runtime:rt,runtimeURL:runtimeURL,expectedVersion:expected,behaviorTimeout:timeout})
 	return NewService(checks...),nil
 }
 
