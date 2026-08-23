@@ -117,6 +117,14 @@ type Model struct {
 	// count of skills that failed to load).
 	skillNotice string
 
+	// Task 20 pilot telemetry is metadata-only and optional. loadedSkillIDs is
+	// populated from the Skill snapshot; activeMetricID links one in-flight task
+	// to its metadata event. feedback is a skippable post-task prompt.
+	metrics        *MetricsCollector
+	feedback       FeedbackModel
+	activeMetricID string
+	loadedSkillIDs []string
+
 	eventCh <-chan runtime.Event
 
 	// streamBuf and reasoningBuf coalesce high-frequency streaming deltas so a
@@ -146,6 +154,7 @@ func NewModel(client runtime.AgentRuntime) *Model {
 		messages:      make([]ChatMessage, 0),
 		proc:          reasoning.NewProcessor(),
 		tools:         make([]ToolActivity, 0),
+		loadedSkillIDs: make([]string, 0),
 		dirty:         true,
 	}
 }
