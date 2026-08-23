@@ -73,19 +73,32 @@ try {
   if (Test-Path $tmp) { Remove-Item -Recurse -Force -LiteralPath $tmp }
 }
 
+# current.txt is the authoritative Windows version pointer. Task 18 updates it
+# atomically, so every launcher invocation must resolve this file instead of a
+# stale Junction.
 $currentTxt = Join-Path $home 'current.txt'
 [IO.File]::WriteAllText($currentTxt, $target + [Environment]::NewLine, (New-Object Text.UTF8Encoding($false)))
+
+# Keep the first-install Junction for compatibility and manual browsing. It is
+# not the authoritative update pointer after Task 18.
 $currentDir = Join-Path $home 'current'
 if (Test-Path $currentDir) { Remove-Item -Force -Recurse $currentDir }
 New-Item -ItemType Junction -Path $currentDir -Target $target | Out-Null
 
-# The launcher binds Codea to the resources in the installed current junction.
-# Without this, source-tree relative defaults cannot locate the bundled runtime,
-# agents, skills or enterprise plugin after installation.
 $shim = Join-Path $binDir 'codea.cmd'
 $shimBody = @"
 @echo off
-set "CODEA_CURRENT=%~dp0..\current"
+setlocal
+set "CODEA_POINTER=%~dp0..\current.txt"
+if not exist "%CODEA_POINTER%" (
+  echo Error: Codea current pointer missing: %CODEA_POINTER% 1>&2
+  exit /b 1
+)
+set /p "CODEA_CURRENT="<"%CODEA_POINTER%"
+if not defined CODEA_CURRENT (
+  echo Error: Codea current pointer is empty 1>&2
+  exit /b 1
+)
 set "OPENCODE_BIN=%CODEA_CURRENT%\bin\opencode.exe"
 set "CODEA_AGENTS_DIR=%CODEA_CURRENT%\agents"
 set "CODEA_SKILLS_DIR=%CODEA_CURRENT%\skills"
