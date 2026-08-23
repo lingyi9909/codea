@@ -33,9 +33,10 @@ grep -q 'install/install.ps1' "$repo_root/packaging/scripts/build-release.sh"
 grep -q 'archive.sha256' "$repo_root/packaging/scripts/build-release.sh"
 grep -q 'Junction' "$repo_root/packaging/platform/windows/install.ps1"
 grep -q 'UTF8Encoding($false)' "$repo_root/packaging/platform/windows/install.ps1"
+grep -q 'CODEA_POINTER=.*current.txt' "$repo_root/packaging/platform/windows/install.ps1" || { echo "Windows launcher must resolve current.txt" >&2; exit 1; }
+grep -q 'set /p "CODEA_CURRENT="' "$repo_root/packaging/platform/windows/install.ps1" || { echo "Windows launcher must read atomic current pointer" >&2; exit 1; }
 
-# Installed launchers must point Codea at resources inside ~/.codea/current.
-# Without these bindings the source-tree relative defaults break after install.
+# Installed launchers must point Codea at resources inside the selected version.
 for key in OPENCODE_BIN CODEA_AGENTS_DIR CODEA_SKILLS_DIR CODEA_PLUGIN_BUNDLE; do
   grep -q "$key" "$repo_root/packaging/platform/macos/install.sh" || { echo "macOS launcher missing $key" >&2; exit 1; }
   grep -q "$key" "$repo_root/packaging/platform/windows/install.ps1" || { echo "Windows launcher missing $key" >&2; exit 1; }
