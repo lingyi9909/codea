@@ -43,7 +43,11 @@ var (
 	procMoveFileExW  = kernel32.NewProc("MoveFileExW")
 )
 
-type fileLock struct { f *os.File; ov syscall.Overlapped }
+type fileLock struct {
+	f      *os.File
+	ov     syscall.Overlapped
+	marker string
+}
 
 func acquireUpdateLock(home string) (updateLock, error) {
 	if err := os.MkdirAll(home, 0o700); err != nil { return nil, err }
@@ -52,12 +56,22 @@ func acquireUpdateLock(home string) (updateLock, error) {
 	l := &fileLock{f: f}
 	r, _, callErr := procLockFileEx.Call(f.Fd(), lockfileFailImmediately|lockfileExclusiveLock, 0, 1, 0, uintptr(unsafe.Pointer(&l.ov)))
 	if r == 0 { f.Close(); return nil, fmt.Errorf("another update is running: %w", callErr) }
+	l.marker = filepath.Join(home, "update.in-progress")
+	if err := os.WriteFile(l.marker, []byte(fmt.Sprintf("pid=%d\r\n", os.Getpid())), 0o600); err != nil {
+		_, _, _ = procUnlockFileEx.Call(f.Fd(), 0, 1, 0, uintptr(unsafe.Pointer(&l.ov)))
+		_ = f.Close()
+		return nil, fmt.Errorf("publish update marker: %w", err)
+	}
 	return l, nil
 }
 func (l *fileLock) Release() error {
 	if l == nil || l.f == nil { return nil }
+	markerErr := os.Remove(l.marker)
+	if os.IsNotExist(markerErr) { markerErr = nil }
 	r, _, callErr := procUnlockFileEx.Call(l.f.Fd(), 0, 1, 0, uintptr(unsafe.Pointer(&l.ov)))
-	closeErr := l.f.Close(); l.f = nil
+	closeErr := l.f.Close()
+	l.f = nil
+	if markerErr != nil { return markerErr }
 	if r == 0 { return callErr }
 	return closeErr
 }
