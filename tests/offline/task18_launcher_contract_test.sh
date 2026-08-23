@@ -10,7 +10,9 @@ for key in CODEA_HOME CODEA_RUNTIME_CONFIG_DIR OPENCODE_BIN CODEA_AGENTS_DIR COD
 done
 
 grep -q 'update.in-progress' "$mac" || { echo "macOS launcher must block during update transaction" >&2; exit 1; }
+grep -q '\${1:-}.*doctor' "$mac" || { echo "macOS launcher must allow doctor recovery through update blocker" >&2; exit 1; }
 grep -q 'update.in-progress' "$win" || { echo "Windows launcher must block during update transaction" >&2; exit 1; }
+grep -q 'not "%~1"=="doctor"' "$win" || { echo "Windows launcher must allow doctor recovery through update blocker" >&2; exit 1; }
 grep -q 'current.txt' "$win" || { echo "Windows launcher must use current.txt" >&2; exit 1; }
 grep -q 'set /p "CODEA_CURRENT="' "$win" || { echo "Windows launcher must resolve current.txt on every start" >&2; exit 1; }
 grep -q 'current="$codea_home/current"' "$mac" || { echo "macOS launcher must resolve current symlink" >&2; exit 1; }
