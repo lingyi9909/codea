@@ -52,3 +52,11 @@ func TestPrepareCandidateConfigMaterializesResourcesAndPreservesModelConfig(t *t
 		t.Fatalf("candidate plugin URL = %q", got)
 	}
 }
+
+func TestCandidateRuntimeFactoryRejectsInvalidSkillMode(t *testing.T) {
+	factory := NewCandidateRuntimeFactory(CandidateRuntimeOptions{SkillMode: skill.SkillMode("invalid")})
+	_, _, _, err := factory.Start(t.Context(), update.Candidate{VersionDir: t.TempDir(), ConfigDir: t.TempDir()})
+	if err == nil || !strings.Contains(err.Error(), "invalid candidate skill mode") {
+		t.Fatalf("err=%v, want invalid candidate skill mode", err)
+	}
+}
