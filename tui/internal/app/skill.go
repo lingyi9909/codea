@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"fmt"
+	"sort"
 
 	"codea/tui/internal/components"
 	"codea/tui/internal/skill"
@@ -110,12 +111,19 @@ func (m *Model) toggleSelectedSkill() tea.Cmd {
 	return SetSkillEnabledCmd(m.skills, item.Name, !item.Enabled)
 }
 
-// handleSkillListResult populates the skills table from a list fetch, or
-// surfaces a load failure in the page notice.
+// handleSkillListResult always refreshes the metadata-only loaded Skill IDs for
+// Task 20 metrics. A background refresh while on Chat must not open the Skills
+// page or surface its presentation state.
 func (m *Model) handleSkillListResult(msg listSkillsResultMsg) tea.Cmd {
 	if msg.err != nil {
-		m.skillNotice = "Failed to load skills: " + msg.err.Error()
-		m.markDirty()
+		if m.currentPage == PageSkills {
+			m.skillNotice = "Failed to load skills: " + msg.err.Error()
+			m.markDirty()
+		}
+		return nil
+	}
+	m.loadedSkillIDs = loadedSkillNames(msg.snapshot.Skills)
+	if m.currentPage != PageSkills {
 		return nil
 	}
 	m.skillPanel.Open(skillItems(msg.snapshot.Skills))
@@ -154,4 +162,15 @@ func skillItems(skills []skill.Skill) []components.SkillItem {
 		}
 	}
 	return items
+}
+
+func loadedSkillNames(skills []skill.Skill) []string {
+	out := make([]string, 0, len(skills))
+	for _, s := range skills {
+		if s.Loaded && s.Name != "" {
+			out = append(out, s.Name)
+		}
+	}
+	sort.Strings(out)
+	return out
 }
