@@ -3,52 +3,33 @@ project: codea-v1
 plan: docs/superpowers/plans/2026-07-30-codea-v1-plan.md
 taskOrder: ["0", "1", "2", "2A", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21"]
 current:
-  task: "18"
+  task: "19"
   step: 1
   status: awaiting_acceptance
-  nextAction: Task 18/19 共享 opencode.json 覆盖 blocker 已修复并通过 fresh Gate #28；人工验收 Task 18。Task 19 按顺序保持 pending；Task 20 不得启动。
+  nextAction: Task 18 已人工验收完成；Task 19 使用同一 fresh Gate #28 进入人工验收。
 checkpoint:
   commit: 372aa8387257f3018f11d4404d3888fbc5136e0c
-  updatedAt: "2026-08-23T16:30:00+08:00"
+  updatedAt: "2026-08-23T19:18:00+08:00"
 verification:
   status: pass
   commands:
-    - "cd distribution/plugins && bun test && bun run build"
-    - "cd tui && GOTOOLCHAIN=local go test ./... -count=1"
-    - "cd tui && GOTOOLCHAIN=local go test -race ./... -count=1"
-    - "cd tui && GOTOOLCHAIN=local go vet ./..."
-    - "cd tui && GOTOOLCHAIN=local go build ./..."
-    - "cd tui && CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 GOTOOLCHAIN=local go build ./..."
-    - "cd tui && CGO_ENABLED=0 GOOS=windows GOARCH=amd64 GOTOOLCHAIN=local go build ./..."
-    - "bash tests/upgrade/fresh_install_test.sh"
-    - "bash tests/upgrade/upgrade_test.sh"
-    - "bash tests/upgrade/failed_upgrade_test.sh"
-    - "bash tests/upgrade/rollback_test.sh"
-    - "bash tests/offline/task18_launcher_contract_test.sh"
-    - "bash tests/offline/task17_packaging_test.sh"
-    - "bash scripts/check-execution-state.sh"
-    - "OPENCODE_BIN=<locked-v1.18.11> bash scripts/run-real-agent-smoke.sh"
-    - "OPENCODE_BIN=<locked-v1.18.11> bash scripts/run-real-api-doc-smoke.sh"
-    - "OPENCODE_BIN=<locked-v1.18.11> bash scripts/run-real-candidate-doctor-smoke.sh"
+    - "Task 18-19 Acceptance Gates #28 / run 32628284824"
   errorSummary: ""
   recoveryAdvice: ""
 taskGate:
   status: pass
   gateItems:
-    task18TransactionalUpgrade: pass
-    task18MigrationRollback: pass
-    task18CrashRecovery: pass
-    task18LauncherContract: pass
-    task18UpgradeScenarios4of4: pass
-    task18CandidateDoctorPreSwitch: pass
-    task18RuntimeConfigPreservation: pass
-    task18InvalidJSONFailClosed: pass
-    fullGoRegression: pass
-    goRaceVetBuild: pass
-    macOSArm64CrossBuild: pass
-    windowsX64CrossBuild: pass
-    existingAgentRuntimeRegression: pass
-    apiDocumentationRuntimeRegression: pass
+    task19Implementation: pass
+    task19StaticDoctor: pass
+    task19RuntimeDoctor: pass
+    task19ModelConnection: pass
+    task19SSE: pass
+    task19Inference: pass
+    task19CandidateDoctor: pass
+    task19RuntimeIsolation: pass
+    task19OpenCode11811: pass
+    task19RuntimeConfigPreservation: pass
+    task19InvalidJSONFailClosed: pass
 humanAcceptance:
   accepted: false
 task17Gate:
@@ -88,7 +69,7 @@ tasks:
   "15": {status: completed, completedSteps: [], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: d4333bccf09a1c397d59d69e9776cf1d66755943, report: docs/task-reports/task-15.md}
   "16": {status: completed, completedSteps: [], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: 057ad70d0f5bb4242147fd468b1e904ce1414aae, report: docs/task-reports/task-16.md}
   "17": {status: completed, completedSteps: [], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: 057ad70d0f5bb4242147fd468b1e904ce1414aae, report: docs/task-reports/task-17.md}
-  "18": {status: awaiting_acceptance, completedSteps: [], verificationStatus: pass, taskGateStatus: pass, humanAccepted: false, checkpoint: 372aa8387257f3018f11d4404d3888fbc5136e0c, report: docs/task-reports/task-18.md}
-  "19": {status: pending, completedSteps: [], verificationStatus: pass, taskGateStatus: pass, humanAccepted: false, checkpoint: 372aa8387257f3018f11d4404d3888fbc5136e0c, report: docs/task-reports/task-19.md}
+  "18": {status: completed, completedSteps: [], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: 372aa8387257f3018f11d4404d3888fbc5136e0c, report: docs/task-reports/task-18.md}
+  "19": {status: awaiting_acceptance, completedSteps: [], verificationStatus: pass, taskGateStatus: pass, humanAccepted: false, checkpoint: 372aa8387257f3018f11d4404d3888fbc5136e0c, report: docs/task-reports/task-19.md}
   "20": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-20.md}
   "21": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-21.md}
