@@ -8,9 +8,7 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"net/url"
 	"os"
 	"path/filepath"
 
@@ -171,10 +169,9 @@ func pluginBundlePath() string {
 	return filepath.Join(projectDir, "..", "distribution", "plugins", "dist", "index.js")
 }
 
-// writePluginConfig materializes a Codea-owned opencode.json into the controlled
-// config dir, registering the enterprise plugin bundle via a file:// URL. This
-// is what makes the plugin (and its 7 custom tools + DLP) actually load in the
-// supervised runtime. It never touches OpenCode's native ~/.config/opencode.
+// writePluginConfig registers the enterprise plugin without replacing existing
+// OpenCode model/provider/custom configuration. Invalid existing JSON is
+// rejected before any write so normal startup and Doctor fail closed.
 func writePluginConfig(cfgDir string) error {
 	bundle := pluginBundlePath()
 	if bundle == "" {
@@ -185,19 +182,7 @@ func writePluginConfig(cfgDir string) error {
 	if _, err := os.Stat(bundle); err != nil {
 		return nil
 	}
-	abs, err := filepath.Abs(bundle)
-	if err != nil {
-		return err
-	}
-	u := &url.URL{Scheme: "file", Path: filepath.ToSlash(abs)}
-	cfg := map[string]any{
-		"plugin": []string{u.String()},
-	}
-	data, err := json.MarshalIndent(cfg, "", "  ")
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(filepath.Join(cfgDir, "opencode.json"), data, 0o644)
+	return opencode.MergePluginConfig(cfgDir, bundle, 0o644)
 }
 
 // skillRoots returns the filesystem roots Codea scans to display skills. Codea
