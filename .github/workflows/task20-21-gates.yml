@@ -7,6 +7,7 @@ on:
     paths:
       - 'tui/internal/app/**'
       - 'tui/internal/parity/**'
+      - 'tui/internal/opencode/**'
       - 'tui/cmd/codea/**'
       - 'tui/cmd/parity-runner/**'
       - 'tui/tests/parity/**'
