@@ -131,6 +131,8 @@ func (s *UpdateService) Upgrade(ctx context.Context, packagePath string) (err er
 	if err != nil {
 		return err
 	}
+	txDir := filepath.Join(s.home, "transactions", txID)
+	defer os.RemoveAll(txDir)
 	stage := filepath.Join(s.home, "staging", txID)
 	defer os.RemoveAll(stage)
 	releaseRoot, err := PreparePackage(packagePath, stage)
@@ -152,7 +154,7 @@ func (s *UpdateService) Upgrade(ctx context.Context, packagePath string) (err er
 	if s.versions.Exists(info.Version) {
 		return fmt.Errorf("target version already installed: %s", info.Version)
 	}
-	tempConfig := filepath.Join(s.home, "transactions", txID, "config-c2-temp")
+	tempConfig := filepath.Join(txDir, "config-c2-temp")
 	if err := cloneConfigDir(s.configDir, tempConfig); err != nil {
 		return fmt.Errorf("clone config: %w", err)
 	}
@@ -489,5 +491,10 @@ func (s *UpdateService) rollbackTx(_ context.Context, tx *Transaction, failedUpg
 	}
 	tx.Status = TxRolledBack
 	tx.MarkStep("rollback", TxRolledBack, "")
-	return s.journal.Save(tx)
+	if err := s.journal.Save(tx); err != nil {
+		return err
+	}
+	_ = os.RemoveAll(filepath.Join(s.home, "transactions", tx.ID))
+	_ = os.RemoveAll(filepath.Join(s.home, "staging", tx.ID))
+	return nil
 }
