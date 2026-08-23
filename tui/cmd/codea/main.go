@@ -24,7 +24,20 @@ import (
 )
 
 func main() {
-	if err := run(); err != nil {
+	var err error
+	if len(os.Args) > 1 {
+		switch os.Args[1] {
+		case "init":
+			err = runInitCommand()
+		case "doctor":
+			err = runDoctorCommand()
+		default:
+			err = run()
+		}
+	} else {
+		err = run()
+	}
+	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
@@ -133,8 +146,7 @@ func codeaConfigDir() string {
 	if d := os.Getenv("CODEA_RUNTIME_CONFIG_DIR"); d != "" {
 		return d
 	}
-	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".codea", "runtime-config")
+	return filepath.Join(codeaHomeDir(), "runtime-config")
 }
 
 // agentRoot returns the filesystem root that holds the Codea enterprise agents
