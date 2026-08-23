@@ -16,7 +16,7 @@ import (
 )
 
 type defaultCheckConfig struct {
-	home, configDir string
+	home, configDir, releaseRoot string
 	runtime runtimedomain.AgentRuntime
 	runtimeStartErr error
 	runtimeURL, expectedVersion string
@@ -24,7 +24,7 @@ type defaultCheckConfig struct {
 }
 
 func defaultChecks(c defaultCheckConfig) []Check {
-	current:=func()(string,error){return update.NewPlatformSwitcher(c.home).Current()}
+	current:=func()(string,error){if c.releaseRoot!=""{return c.releaseRoot,nil};return update.NewPlatformSwitcher(c.home).Current()}
 	return []Check{
 		staticCheck("发行包完整性",func(context.Context)(Status,string){root,err:=current();if err!=nil{return Fail,err.Error()};info,err:=(update.Verifier{}).Verify(root);if err!=nil{return Fail,err.Error()};return Pass,"Codea "+info.Version+" Manifest/hash 完整"}),
 		staticCheck("配置 Schema",func(context.Context)(Status,string){p:=filepath.Join(c.configDir,"codea","config.json");b,err:=os.ReadFile(p);if os.IsNotExist(err){return Warn,"config.json 不存在，按 schemaVersion=1 兼容"};if err!=nil{return Fail,err.Error()};var v map[string]any;if err:=json.Unmarshal(b,&v);err!=nil{return Fail,"config.json JSON 无效: "+err.Error()};raw,ok:=v["schemaVersion"];if !ok{return Fail,"缺少 schemaVersion"};n,ok:=raw.(float64);if !ok||n<1||n!=float64(int(n)){return Fail,"schemaVersion 必须为正整数"};return Pass,fmt.Sprintf("schemaVersion=%d",int(n))}),
