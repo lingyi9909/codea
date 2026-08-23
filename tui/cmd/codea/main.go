@@ -88,6 +88,11 @@ func run() error {
 	projectDir, _ := os.Getwd()
 	model := app.NewModel(adapter)
 	model.SetSkillManager(skill.NewManager(roots, store, targetDir, projectDir, adapter, policy))
+	// Pilot metrics are deliberately best-effort. An unwritable metrics location
+	// must never prevent Codea or the Runtime from starting.
+	if collector, metricsErr := app.NewMetricsCollector(projectDir, filepath.Join(codeaHomeDir(), "metrics")); metricsErr == nil {
+		model.SetMetricsCollector(collector)
+	}
 	p := tea.NewProgram(model, tea.WithAltScreen())
 	if _, err := p.Run(); err != nil {
 		return fmt.Errorf("run TUI: %w", err)
