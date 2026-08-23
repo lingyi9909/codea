@@ -86,8 +86,10 @@ setlocal
 for %%I in ("%~dp0..") do set "CODEA_HOME=%%~fI"
 set "CODEA_RUNTIME_CONFIG_DIR=%CODEA_HOME%\runtime-config"
 if exist "%CODEA_HOME%\update.in-progress" (
-  echo Error: Codea upgrade/rollback transaction is in progress; try again after recovery completes. 1>&2
-  exit /b 75
+  if /I not "%~1"=="doctor" (
+    echo Error: Codea upgrade/rollback transaction was interrupted or is still running. Run 'codea doctor' to recover, or retry after the active update completes. 1>&2
+    exit /b 75
+  )
 )
 set "CODEA_POINTER=%CODEA_HOME%\current.txt"
 if not exist "%CODEA_POINTER%" (
