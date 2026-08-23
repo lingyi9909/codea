@@ -70,9 +70,9 @@ func V1RequiredScenarios() []Scenario {
 		}, Assertions: Assertion{RequireApproval: true}, ApprovalDecision: &approvalReject},
 		{Name: "Cancel", Required: true, RepeatCount: 2},
 		{Name: "AgentSelection", Required: true, RepeatCount: 2, Prompt: &runtime.PromptRequest{
-			Agent: "reviewer",
+			Agent: "build",
 			Parts: []runtime.PromptPart{runtime.TextPart{Text: "review"}},
-		}, Assertions: Assertion{RequireAnswer: true, RequireAgent: "reviewer"}},
+		}, Assertions: Assertion{RequireAnswer: true, RequireAgent: "build"}},
 		{Name: "RawEventHandling", Required: true, RepeatCount: 2, Prompt: &runtime.PromptRequest{
 			Agent: "general",
 			Parts: []runtime.PromptPart{runtime.TextPart{Text: "raw event test"}},
