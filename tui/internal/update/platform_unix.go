@@ -35,18 +35,32 @@ func (s *platformSwitcher) Switch(target string) error {
 
 func replaceFileAtomic(oldPath, newPath string) error { return os.Rename(oldPath, newPath) }
 
-type fileLock struct{ f *os.File }
+type fileLock struct {
+	f      *os.File
+	marker string
+}
 
 func acquireUpdateLock(home string) (updateLock, error) {
 	if err := os.MkdirAll(home, 0o700); err != nil { return nil, err }
 	f, err := os.OpenFile(filepath.Join(home, "update.lock"), os.O_CREATE|os.O_RDWR, 0o600)
 	if err != nil { return nil, err }
 	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil { f.Close(); return nil, fmt.Errorf("another update is running: %w", err) }
-	return &fileLock{f: f}, nil
+	marker := filepath.Join(home, "update.in-progress")
+	if err := os.WriteFile(marker, []byte(fmt.Sprintf("pid=%d\n", os.Getpid())), 0o600); err != nil {
+		_ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
+		_ = f.Close()
+		return nil, fmt.Errorf("publish update marker: %w", err)
+	}
+	return &fileLock{f: f, marker: marker}, nil
 }
 func (l *fileLock) Release() error {
 	if l == nil || l.f == nil { return nil }
-	err1 := syscall.Flock(int(l.f.Fd()), syscall.LOCK_UN); err2 := l.f.Close(); l.f = nil
+	markerErr := os.Remove(l.marker)
+	if os.IsNotExist(markerErr) { markerErr = nil }
+	err1 := syscall.Flock(int(l.f.Fd()), syscall.LOCK_UN)
+	err2 := l.f.Close()
+	l.f = nil
+	if markerErr != nil { return markerErr }
 	if err1 != nil { return err1 }
 	return err2
 }
