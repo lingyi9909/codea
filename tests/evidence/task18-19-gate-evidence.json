@@ -1,0 +1,25 @@
+{
+  "timestamp": "2026-08-23T07:59:30.199926+00:00",
+  "sourceCommit": "b0dd67d4dce8f6af0ee351dbd86ac772eef795b4",
+  "goFullRegression": true,
+  "goRace": true,
+  "goVet": true,
+  "goBuild": true,
+  "darwinArm64CrossBuild": true,
+  "windowsX64CrossBuild": true,
+  "upgradeScenarios": "4/4",
+  "bunRegression": true,
+  "launcherContract": true,
+  "task17PackagingRegression": true,
+  "executionStateValidator": true,
+  "existingAgentRuntimeRegression": true,
+  "apiDocumentationRuntimeRegression": true,
+  "candidateDoctor": {
+    "candidateDoctorPassed": true,
+    "candidateVersion": "0.1.0",
+    "openCodeVersion": "1.18.11",
+    "phase": "pre-switch",
+    "runtimeIsolation": true
+  },
+  "passed": true
+}
