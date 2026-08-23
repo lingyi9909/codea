@@ -29,15 +29,14 @@ mv "$tmp" "$target"
 trap - EXIT
 ln -sfn "$target" "$home/current"
 
-# Use a launcher instead of a direct binary symlink. Source-tree defaults such
-# as ../distribution/agents do not exist in an installed release, so bind the
-# application explicitly to the resources shipped under ~/.codea/current.
 launcher="$home/bin/codea"
 cat > "$launcher" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 codea_home=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)
 current="$codea_home/current"
+export CODEA_HOME="$codea_home"
+export CODEA_RUNTIME_CONFIG_DIR="$codea_home/runtime-config"
 export OPENCODE_BIN="$current/bin/opencode"
 export CODEA_AGENTS_DIR="$current/agents"
 export CODEA_SKILLS_DIR="$current/skills"
