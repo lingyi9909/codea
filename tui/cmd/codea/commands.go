@@ -46,7 +46,10 @@ func runDoctorCommand() error {
 		} else if err := agent.Materialize(agentRoot(), filepath.Join(cfgDir, "agents")); err != nil {
 			runtimeErr = fmt.Errorf("物化 Agents: %w", err)
 		} else {
-			adapter, cleanup, runtimeErr = bootstrapRuntime(cfgDir, mode)
+			startedAdapter, startedCleanup, startErr := bootstrapRuntime(cfgDir, mode)
+			adapter = startedAdapter
+			runtimeErr = startErr
+			if startedCleanup != nil { cleanup = startedCleanup }
 		}
 	}
 	defer cleanup()
