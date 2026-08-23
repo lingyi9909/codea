@@ -3,30 +3,21 @@ project: codea-v1
 plan: docs/superpowers/plans/2026-07-30-codea-v1-plan.md
 taskOrder: ["0", "1", "2", "2A", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21"]
 current:
-  task: "16"
+  task: "18"
   step: 1
-  status: blocked
-  nextAction: Task 16 自身 fresh Gate 已跑完并提交：API Doc real OpenCode v1.18.11 workflow 9/9、Go/Bun direct regression 全绿、Task 14/15 Agent Runtime 15/15 与 OpenCode parity regression 全绿。等待人工核验最新代码与 evidence 后推进 awaiting_acceptance；Task 17 macOS/Windows native smoke 属后期，Task 18 不得启动。
+  status: in_progress
+  nextAction: 按已批准主计划开发 Task 18 升级回滚事务；完成并验证后再开发 Task 19 Doctor。Task 20 不得启动。
 checkpoint:
-  commit: fc2f04bb02cbaa4102936d0b01f91f6a2ef2e66e
-  updatedAt: "2026-08-21T12:10:00+08:00"
+  commit: 057ad70d0f5bb4242147fd468b1e904ce1414aae
+  updatedAt: "2026-08-23T12:54:00+08:00"
 verification:
-  status: unable_to_run
-  commands:
-    - "Task 16 APIDOCFLOW implementation is present in dedicated fake_api_doc_model and shared fake_model delegates to the same Tool-Result-driven workflow"
-    - "Task 16 fresh run-real-api-doc-smoke.sh PASS: api-doc-agent-evidence.json 9/9 (version 1.18.11, workflow extract/validate/write/documentValid all true)"
-    - "Task 16 fresh Go direct regression PASS: go test/race/vet/build 全绿（含 api-documentation case-insensitive 断言修复）；Bun test 245 pass + bun run build 成功"
-    - "Task 16 existing runtime regression PASS: run-real-agent-smoke.sh 15/15 + go test ./tests/parity ./internal/opencode 全绿"
-  errorSummary: "Task 16 自身 fresh Gate 三组证据全部真实 PASS 并已提交（api-doc 9/9、direct regression、existing runtime regression）。等待人工核验后推进 awaiting_acceptance。Task 17 release/native evidence 仍属后期，不阻塞 Task 16。"
-  recoveryAdvice: "人工核验 api-doc-agent-evidence.json 9/9、agent-evidence.json 15/15、Go/Bun regression 全绿后，将 Task 16 由 blocked 推进到 awaiting_acceptance；无需等待 Task 17 macOS/Windows native smoke。"
+  status: not_run
+  commands: []
+  errorSummary: ""
+  recoveryAdvice: ""
 taskGate:
-  status: unable_to_evaluate
-  gateItems:
-    task16WorkflowE2EImplementation: pass
-    task16SharedRegressionModelAPIDOCFLOW: pass
-    task16FreshRuntimeEvidence: pass
-    task16DirectRegression: pass
-    task16ExistingRuntimeRegression: pass
+  status: not_evaluated
+  gateItems: {}
 humanAcceptance:
   accepted: false
 task17Gate:
@@ -52,9 +43,9 @@ tasks:
   "13": {status: completed, completedSteps: [], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: d2de0203be9f6d06a410e83c51733ab7db4781f4, report: docs/task-reports/task-13.md}
   "14": {status: completed, completedSteps: [], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: d4333bccf09a1c397d59d69e9776cf1d66755943, report: docs/task-reports/task-14.md}
   "15": {status: completed, completedSteps: [], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: d4333bccf09a1c397d59d69e9776cf1d66755943, report: docs/task-reports/task-15.md}
-  "16": {status: blocked, completedSteps: [], verificationStatus: unable_to_run, taskGateStatus: unable_to_evaluate, humanAccepted: false, checkpoint: e57dacdd9e363d73c38033eaf7b43b8f2914f44a, report: docs/task-reports/task-16.md}
-  "17": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: 5cf43bf19bbae619184d77e1f5156e9bc81251a3, report: docs/task-reports/task-17.md}
-  "18": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-18.md}
+  "16": {status: completed, completedSteps: [], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: 057ad70d0f5bb4242147fd468b1e904ce1414aae, report: docs/task-reports/task-16.md}
+  "17": {status: completed, completedSteps: [], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: 057ad70d0f5bb4242147fd468b1e904ce1414aae, report: docs/task-reports/task-17.md}
+  "18": {status: in_progress, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-18.md}
   "19": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-19.md}
   "20": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-20.md}
   "21": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-21.md}
