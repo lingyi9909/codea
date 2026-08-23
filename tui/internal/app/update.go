@@ -12,9 +12,15 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-// Init starts the runtime subscription and the merge-refresh ticker.
+// Init starts the runtime subscription and the merge-refresh ticker. When a
+// Skill manager is available, it also refreshes the metadata-only loaded Skill
+// IDs used by Task 20 metrics; the result does not open the Skills page.
 func (m *Model) Init() tea.Cmd {
-	return tea.Batch(SubscribeEvents(m.runtimeClient), TickCmd())
+	cmds := []tea.Cmd{SubscribeEvents(m.runtimeClient), TickCmd()}
+	if m.skills != nil {
+		cmds = append(cmds, ListSkillsCmd(m.skills))
+	}
+	return tea.Batch(cmds...)
 }
 
 // Update handles Bubble Tea messages: subscription lifecycle, key input,
@@ -38,7 +44,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case promptResultMsg:
 		if msg.err != nil {
-			m.finishStreaming()
+			m.finishStreamingWithOutcome(MetricStatusFailed, "prompt_error", false)
 			m.markDirty()
 			return m, nil
 		}
@@ -50,7 +56,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case sessionCreatedMsg:
 		if msg.err != nil {
 			m.pendingPrompt = nil
-			m.finishStreaming()
+			m.finishStreamingWithOutcome(MetricStatusFailed, "session_create_error", false)
 			m.markDirty()
 			return m, nil
 		}
@@ -119,6 +125,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case subscribeErrMsg:
 		m.runtimeStatus = runtime.RuntimeCrashed
+		m.finishStreamingWithOutcome(MetricStatusFailed, "subscription_error", false)
 		m.markDirty()
 		return m, nil
 
@@ -149,15 +156,24 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// handleKey routes keypresses. Quit always works; otherwise the approval modal
-// and session panel take priority over chat keys so typing/Enter/shortcuts
-// cannot leak through an open modal.
+// handleKey routes keypresses. Quit always works; otherwise modal state takes
+// priority over chat keys so typing/Enter/shortcuts cannot leak through.
 func (m *Model) handleKey(msg tea.KeyMsg) tea.Cmd {
 	if key.Matches(msg, m.keys.Quit) {
 		return tea.Quit
 	}
 	if m.permission.Visible() {
 		return m.handleApprovalKey(msg)
+	}
+	if m.feedback.Visible() {
+		eventID := m.feedback.EventID
+		choice, handled := m.feedback.HandleKey(msg)
+		if handled && choice != FeedbackSkip && m.metrics != nil {
+			_ = m.metrics.RecordFeedback(eventID, choice)
+		}
+		// A visible feedback prompt swallows unrelated keys as well; the user can
+		// always dismiss it with Esc.
+		return nil
 	}
 	if m.sessionPanel.Visible {
 		return m.handleSessionKey(msg)
@@ -376,6 +392,7 @@ func (m *Model) submit() tea.Cmd {
 	}
 	m.msgCounter++
 	m.input = ""
+	m.startTaskMetric(req.Agent)
 
 	if m.sessionID == "" {
 		m.pendingPrompt = &req
@@ -399,9 +416,13 @@ func (m *Model) processRuntimeEvent(ev runtime.Event) bool {
 		dirty = m.applyReasoningEvents(m.proc.Flush()) || dirty
 		m.finishStreaming()
 		dirty = true
-	case eventTypeSessionError, eventTypeRuntimeError:
+	case eventTypeSessionError:
 		dirty = m.applyReasoningEvents(m.proc.Process(ev)) || dirty
-		m.finishStreaming()
+		m.finishStreamingWithOutcome(MetricStatusFailed, "session_error", false)
+		dirty = true
+	case eventTypeRuntimeError:
+		dirty = m.applyReasoningEvents(m.proc.Process(ev)) || dirty
+		m.finishStreamingWithOutcome(MetricStatusFailed, "runtime_error", false)
 		dirty = true
 	case eventTypeToolCalled:
 		m.addTool(ev)
@@ -496,17 +517,22 @@ func (m *Model) appendAnswer(content string) {
 	m.messages = append(m.messages, ChatMessage{Role: RoleAssistant, Content: content})
 }
 
-// finishStreaming flushes any buffered streaming content, then marks the
-// in-flight assistant message finished and clears the streaming flag.
+// finishStreaming is the successful completion path and requests lightweight
+// feedback when a metric event exists.
 func (m *Model) finishStreaming() {
+	m.finishStreamingWithOutcome(MetricStatusCompleted, "", true)
+}
+
+func (m *Model) finishStreamingWithOutcome(status MetricStatus, errorCategory string, requestFeedback bool) {
 	m.flushStreaming()
 	m.isStreaming = false
 	for i := len(m.messages) - 1; i >= 0; i-- {
 		if m.messages[i].Role == RoleAssistant && !m.messages[i].Finished {
 			m.messages[i].Finished = true
-			return
+			break
 		}
 	}
+	m.completeTaskMetric(status, errorCategory, requestFeedback)
 }
 
 // deleteLastRune removes the final rune from s, handling multi-byte UTF-8.
