@@ -2,9 +2,7 @@ package doctor
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -99,28 +97,5 @@ func mergeCandidatePluginConfig(configDir, bundle string) error {
 	if err != nil || st.IsDir() || st.Size() == 0 {
 		return fmt.Errorf("candidate plugin bundle missing: %s", bundle)
 	}
-	cfgPath := filepath.Join(configDir, "opencode.json")
-	cfg := map[string]any{}
-	if data, err := os.ReadFile(cfgPath); err == nil {
-		if err := json.Unmarshal(data, &cfg); err != nil {
-			return fmt.Errorf("decode candidate opencode.json: %w", err)
-		}
-	} else if !os.IsNotExist(err) {
-		return err
-	}
-	abs, err := filepath.Abs(bundle)
-	if err != nil {
-		return err
-	}
-	u := &url.URL{Scheme: "file", Path: filepath.ToSlash(abs)}
-	cfg["plugin"] = []string{u.String()}
-	data, err := json.MarshalIndent(cfg, "", "  ")
-	if err != nil {
-		return err
-	}
-	data = append(data, '\n')
-	if err := os.MkdirAll(filepath.Dir(cfgPath), 0o700); err != nil {
-		return err
-	}
-	return os.WriteFile(cfgPath, data, 0o600)
+	return opencode.MergePluginConfig(configDir, bundle, 0o600)
 }
