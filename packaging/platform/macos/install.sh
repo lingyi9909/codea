@@ -34,8 +34,8 @@ cat > "$launcher" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 codea_home=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)
-if [ -e "$codea_home/update.in-progress" ]; then
-  echo "Error: Codea upgrade/rollback transaction is in progress; try again after recovery completes." >&2
+if [ -e "$codea_home/update.in-progress" ] && [ "${1:-}" != "doctor" ]; then
+  echo "Error: Codea upgrade/rollback transaction was interrupted or is still running. Run 'codea doctor' to recover, or retry after the active update completes." >&2
   exit 75
 fi
 current="$codea_home/current"
