@@ -13,10 +13,11 @@ on:
       - 'scripts/run-real-candidate-doctor-smoke.sh'
       - 'packaging/platform/**'
       - 'tests/offline/task17_packaging_test.sh'
+      - 'tests/offline/task18_launcher_contract_test.sh'
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   task18-19-gates:
@@ -62,9 +63,11 @@ jobs:
           bash tests/upgrade/failed_upgrade_test.sh
           bash tests/upgrade/rollback_test.sh
 
-      - name: Task 17 packaging regression after pointer integration
+      - name: Launcher and packaging regression
         shell: bash
-        run: bash tests/offline/task17_packaging_test.sh
+        run: |
+          bash tests/offline/task18_launcher_contract_test.sh
+          bash tests/offline/task17_packaging_test.sh
 
       - name: Download locked OpenCode v1.18.11 linux-x64
         shell: bash
@@ -98,11 +101,12 @@ jobs:
       - name: Write gate summary evidence
         shell: bash
         run: |
-          python3 - "$RUNNER_TEMP/candidate-doctor-evidence.json" "$RUNNER_TEMP/task18-19-gate-evidence.json" <<'PY'
+          python3 - "$RUNNER_TEMP/candidate-doctor-evidence.json" "$RUNNER_TEMP/task18-19-gate-evidence.json" "$GITHUB_SHA" <<'PY'
           import json, pathlib, sys, datetime
           candidate=json.loads(pathlib.Path(sys.argv[1]).read_text())
           out={
             "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            "sourceCommit": sys.argv[3],
             "goFullRegression": True,
             "goRace": True,
             "goVet": True,
@@ -111,6 +115,7 @@ jobs:
             "windowsX64CrossBuild": True,
             "upgradeScenarios": "4/4",
             "bunRegression": True,
+            "launcherContract": True,
             "task17PackagingRegression": True,
             "candidateDoctor": candidate,
             "passed": True,
@@ -125,3 +130,15 @@ jobs:
           path: |
             ${{ runner.temp }}/candidate-doctor-evidence.json
             ${{ runner.temp }}/task18-19-gate-evidence.json
+
+      - name: Persist fresh evidence to develop
+        shell: bash
+        run: |
+          mkdir -p tests/evidence
+          cp "$RUNNER_TEMP/candidate-doctor-evidence.json" tests/evidence/candidate-doctor-evidence.json
+          cp "$RUNNER_TEMP/task18-19-gate-evidence.json" tests/evidence/task18-19-gate-evidence.json
+          git config user.name "codea-gates"
+          git config user.email "codea-gates@users.noreply.github.com"
+          git add tests/evidence/candidate-doctor-evidence.json tests/evidence/task18-19-gate-evidence.json
+          git commit -m "chore: record Task 18-19 gate evidence [skip ci]"
+          git push origin HEAD:develop
