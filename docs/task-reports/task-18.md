@@ -2,9 +2,9 @@
 
 ## Overview
 
-Implementation checkpoint: `b0dd67d4dce8f6af0ee351dbd86ac772eef795b4`
+Implementation checkpoint: `372aa8387257f3018f11d4404d3888fbc5136e0c`
 
-Fresh gate evidence commit: `cc15b5c3d8f2202974eeaef53d5ded750185926c`
+Fresh gate evidence commit: `46e1d31a700de8f85474c64aeeef18ef65bfa8ce`
 
 Task 18 implements the V1 transactional upgrade, migration, rollback and crash-recovery path on top of the Task 17 installed layout. The update transaction is fail-closed: a candidate package must pass package/manifest/hash validation, configuration migration and Candidate Doctor checks before the installed version can be committed.
 
@@ -36,15 +36,31 @@ Supporting integration includes the macOS/Windows launcher contract, `current.tx
 - A crash in the current-pointer transition window can be recovered from the journal and real filesystem state.
 - Normal launch is blocked while an update transaction exposes an intermediate version/config state.
 - Stale update markers can be recovered without interfering with a still-live updater because recovery must acquire the real update lock.
+- Normal plugin materialization preserves migrated `model`, `provider` and other OpenCode configuration fields instead of rebuilding `opencode.json`.
+- Invalid existing `opencode.json` fails closed and is not overwritten.
+
+## Shared Task 18/19 blocker remediation
+
+Final human review found one shared implementation blocker in the normal startup path: `writePluginConfig()` rebuilt `opencode.json` with only the `plugin` field. A successful C2 migration could therefore be committed correctly and then lose `model`, `provider` and other migrated configuration on the next normal Codea launch.
+
+The remediation is intentionally bounded:
+
+- added shared `opencode.MergePluginConfig(...)` semantics
+- normal startup/`codea doctor` now read existing `opencode.json`, preserve every non-Codea field and update only the Codea-managed `plugin` field
+- Candidate Doctor now reuses the same shared merge helper, removing the previous duplicate implementation
+- invalid existing JSON returns an error before any write
+- added regressions for model/provider/custom field preservation, invalid-JSON fail-closed behavior, and migrated C2 preservation through normal plugin materialization
+
+TDD RED was confirmed in Task 18-19 Gate run `#25` / run ID `32628166891`: all three new regressions failed against the old implementation for the expected reasons. The final implementation then passed the full fresh Gate.
 
 ## Fresh acceptance evidence
 
 GitHub Actions workflow:
 
 - Workflow: `Task 18-19 Acceptance Gates`
-- Run: `#24`
-- Run ID: `32626853054`
-- Source commit: `b0dd67d4dce8f6af0ee351dbd86ac772eef795b4`
+- Run: `#28`
+- Run ID: `32628284824`
+- Source commit: `372aa8387257f3018f11d4404d3888fbc5136e0c`
 - Result: **PASS**
 
 Persisted evidence: `tests/evidence/task18-19-gate-evidence.json`.
@@ -69,16 +85,14 @@ Task 18 relevant gates from that run:
 
 The Candidate Doctor evidence records `runtimeIsolation: true`, `candidateDoctorPassed: true`, and OpenCode version `1.18.11`.
 
-## CI remediation found during final verification
+## Earlier CI remediation
 
-The first joint Gate run exposed a real Linux CI build regression in `tui/internal/supervisor/process_unix.go`: the file was tagged `darwin` even though its process-group implementation is Unix-compatible. As a result Linux had no definitions for `configureProcess`, `attachProcess`, `detachProcess`, `terminateProcess` and `killProcess`.
-
-This was fixed by using the non-Windows build constraint and the full Gate was rerun successfully. The Task 18/19 workflow path filters were also expanded to include supervisor/runtime/OpenCode dependencies so future changes to those dependencies cannot bypass the joint Gate.
+An earlier joint Gate run exposed a Linux CI build regression in `tui/internal/supervisor/process_unix.go`: the file was tagged `darwin` even though its process-group implementation is Unix-compatible. Linux therefore had no definitions for the process lifecycle helpers. This was fixed with a non-Windows build constraint, and the Task 18/19 workflow path filters were expanded to include supervisor/runtime/OpenCode dependencies.
 
 ## Current status
 
-Task 18 automatic verification and Task Gate are **PASS**. Per the project execution-state contract, Task 18 is ready for `awaiting_acceptance`; it must not be marked `completed` until explicit human acceptance is recorded.
+Task 18 automatic verification and Task Gate are **PASS** at checkpoint `372aa8387257f3018f11d4404d3888fbc5136e0c`. Per the execution-state contract, Task 18 is `awaiting_acceptance`; it must not be marked `completed` until explicit human acceptance is recorded.
 
-Task 19 has also been implemented and jointly verified, but remains formally `pending` until Task 18 is human-accepted because Task 18 is still the first incomplete task.
+Task 19 has also been implemented and jointly verified at the same checkpoint, but remains formally `pending` until Task 18 is human-accepted because Task 18 is still the first incomplete task.
 
 Task 20 remains pending and is not authorized to start.
