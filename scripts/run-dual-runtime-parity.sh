@@ -74,9 +74,16 @@ done
 curl -fsS --max-time 1 "http://127.0.0.1:$fake_port/v1/models" >/dev/null || { echo "fake model not ready" >&2; exit 1; }
 
 start_runtime() {
-  local cfg=$1 port=$2 log=$3
+  local cfg=$1 port=$2 log=$3 label=$4
+  local isolate="$run_root/$label-runtime"
+  mkdir -p "$isolate/home" "$isolate/data" "$isolate/state" "$isolate/cache" "$isolate/xdg-config"
   (
     cd "$smoke_dir"
+    export HOME="$isolate/home"
+    export XDG_DATA_HOME="$isolate/data"
+    export XDG_STATE_HOME="$isolate/state"
+    export XDG_CACHE_HOME="$isolate/cache"
+    export XDG_CONFIG_HOME="$isolate/xdg-config"
     export OPENCODE_CONFIG_DIR="$cfg"
     export OPENCODE_SERVER_USERNAME="$username"
     export OPENCODE_SERVER_PASSWORD="$password"
@@ -91,8 +98,8 @@ start_runtime() {
   echo $!
 }
 
-baseline_pid=$(start_runtime "$baseline_cfg" "$baseline_port" "$run_root/baseline.log")
-candidate_pid=$(start_runtime "$candidate_cfg" "$candidate_port" "$run_root/candidate.log")
+baseline_pid=$(start_runtime "$baseline_cfg" "$baseline_port" "$run_root/baseline.log" baseline)
+candidate_pid=$(start_runtime "$candidate_cfg" "$candidate_port" "$run_root/candidate.log" candidate)
 
 wait_runtime() {
   local port=$1 pid=$2 log=$3 label=$4
