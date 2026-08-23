@@ -30,8 +30,7 @@ func (m *Model) View() string {
 
 // renderView assembles the full three-region layout (header / chat /
 // status+input). It is only invoked on a dirty render, not on every event.
-// When the approval modal or session panel is visible, it replaces the chat
-// body.
+// Modal states replace normal input so keystrokes cannot leak into chat.
 func (m *Model) renderView() string {
 	width := m.width
 
@@ -50,6 +49,13 @@ func (m *Model) renderView() string {
 			b.WriteString("\n\n")
 			b.WriteString(theme.ErrorStyle().Render("Approval error: " + m.approvalErr))
 		}
+		return b.String()
+	}
+
+	if m.feedback.Visible() {
+		b.WriteString(m.renderBody())
+		b.WriteString("\n\n")
+		b.WriteString(theme.AccentStyle().Render(m.feedback.View()))
 		return b.String()
 	}
 
