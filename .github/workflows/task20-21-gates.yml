@@ -11,10 +11,14 @@ on:
       - 'tui/cmd/codea/**'
       - 'tui/cmd/parity-runner/**'
       - 'tui/tests/parity/**'
+      - 'tests/fixtures/release-parity/**'
       - 'tests/release/**'
+      - 'scripts/run-dual-runtime-parity.sh'
       - 'scripts/run-release-parity-gates.sh'
+      - 'distribution/plugins/**'
       - 'docs/release-checklist.md'
       - 'runtime/capabilities.yaml'
+      - 'runtime/version.json'
       - '.github/workflows/task20-21-gates.yml'
 
 concurrency:
@@ -35,7 +39,46 @@ jobs:
           go-version: '1.26.5'
           cache-dependency-path: tui/go.sum
 
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.3.14'
+
+      - name: Install plugin dependencies
+        working-directory: distribution/plugins
+        run: bun install --frozen-lockfile
+
+      - name: Build plugin bundle and run regression
+        working-directory: distribution/plugins
+        run: |
+          bun test
+          bun run build
+
       - name: Go full regression
         working-directory: tui
+        run: GOTOOLCHAIN=local go test ./... -count=1
+
+      - name: Download locked OpenCode v1.18.11 linux-x64
+        shell: bash
         run: |
-          GOTOOLCHAIN=local go test ./... -count=1
+          set -euo pipefail
+          python3 - <<'PY' > "$RUNNER_TEMP/runtime-meta"
+          import json, pathlib
+          p=json.loads(pathlib.Path('runtime/version.json').read_text())
+          x=p['platforms']['linux-x64']
+          print(x['url'])
+          print(x['checksum'].removeprefix('sha256:'))
+          PY
+          url=$(sed -n '1p' "$RUNNER_TEMP/runtime-meta")
+          expected=$(sed -n '2p' "$RUNNER_TEMP/runtime-meta")
+          curl -fL "$url" -o "$RUNNER_TEMP/opencode.tar.gz"
+          actual=$(sha256sum "$RUNNER_TEMP/opencode.tar.gz" | awk '{print $1}')
+          test "$actual" = "$expected"
+          mkdir -p "$RUNNER_TEMP/opencode"
+          tar -xzf "$RUNNER_TEMP/opencode.tar.gz" -C "$RUNNER_TEMP/opencode"
+          find "$RUNNER_TEMP/opencode" -type f -name opencode -exec chmod +x {} \;
+          find "$RUNNER_TEMP/opencode" -type f -name opencode -print -quit > "$RUNNER_TEMP/opencode-path"
+          test -s "$RUNNER_TEMP/opencode-path"
+
+      - name: Real distinct baseline/candidate parity
+        shell: bash
+        run: OPENCODE_BIN="$(cat "$RUNNER_TEMP/opencode-path")" bash scripts/run-dual-runtime-parity.sh
