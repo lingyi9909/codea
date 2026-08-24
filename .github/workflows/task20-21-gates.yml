@@ -82,3 +82,11 @@ jobs:
       - name: Real distinct baseline/candidate parity
         shell: bash
         run: OPENCODE_BIN="$(cat "$RUNNER_TEMP/opencode-path")" bash scripts/run-dual-runtime-parity.sh
+
+      - name: Preserve release parity evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: task20-21-release-parity-${{ github.sha }}
+          path: tui/tests/parity/evidence/release-parity.json
+          if-no-files-found: warn
