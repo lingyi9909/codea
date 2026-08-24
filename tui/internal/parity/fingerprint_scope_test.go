@@ -9,13 +9,14 @@ import (
 	fakeruntime "codea/tui/tests/fixtures/fake-runtime"
 )
 
-func TestTaskParityIgnoresNonSemanticLifecycleEventPresence(t *testing.T) {
+func TestTaskParityIgnoresLifecycleTimingAndStreamChunkBoundaries(t *testing.T) {
 	baseline := fakeruntime.New()
 	baseline.Events = []runtime.Event{
 		{Type: runtime.EventType("session.updated")},
 		{Type: runtime.EventType("message.updated")},
 		{Type: runtime.EventType("session.diff")},
-		{Type: runtime.EventType("answer.delta"), Content: "ok"},
+		{Type: runtime.EventType("answer.delta"), Content: "o"},
+		{Type: runtime.EventType("answer.delta"), Content: "k"},
 	}
 	candidate := fakeruntime.New()
 	candidate.Events = []runtime.Event{
@@ -31,9 +32,9 @@ func TestTaskParityIgnoresNonSemanticLifecycleEventPresence(t *testing.T) {
 		Assertions: Assertion{RequireAnswer: true},
 	})
 	if !result.Passed {
-		t.Fatalf("non-semantic OpenCode lifecycle timing must not fail task-effect parity: %+v", result.Failures)
+		t.Fatalf("lifecycle timing/chunk boundaries must not fail task-effect parity: %+v", result.Failures)
 	}
 	if result.SilentLoss {
-		t.Fatal("non-semantic lifecycle timing must not be classified as silent task loss")
+		t.Fatal("lifecycle timing/chunk boundaries must not be classified as silent task loss")
 	}
 }
