@@ -279,18 +279,27 @@ func computeFingerprint(events []runtime.Event) eventFingerprint {
 // different number of streaming deltas. Those transport/lifecycle details are
 // covered by G13's zero-silent-drop mapper gate, not by G12.1 task parity.
 //
-// Task parity still fails closed when a semantic capability class that existed
-// in the baseline disappears entirely from the candidate.
+// Task parity still fails closed when reconstructed semantic content or a
+// semantic capability class that existed in the baseline disappears from the
+// candidate.
 func compareFingerprints(bEvents, cEvents []runtime.Event, a Assertion) []string {
 	bFP := computeFingerprint(bEvents)
 	cFP := computeFingerprint(cEvents)
 	var issues []string
 
-	if a.RequireAnswer && bFP.answerChars > 0 && cFP.answerChars == 0 {
-		issues = append(issues, fmt.Sprintf("answer.delta content: baseline has %d chars, candidate has 0", bFP.answerChars))
+	if a.RequireAnswer {
+		bAnswer := ConcatContent(bEvents, "answer.delta")
+		cAnswer := ConcatContent(cEvents, "answer.delta")
+		if bAnswer != cAnswer {
+			issues = append(issues, fmt.Sprintf("answer.delta content mismatch: baseline %d chars, candidate %d chars", len(bAnswer), len(cAnswer)))
+		}
 	}
-	if a.RequireReasoning && bFP.reasoningChars > 0 && cFP.reasoningChars == 0 {
-		issues = append(issues, fmt.Sprintf("reasoning.delta content: baseline has %d chars, candidate has 0", bFP.reasoningChars))
+	if a.RequireReasoning {
+		bReasoning := ConcatContent(bEvents, "reasoning.delta")
+		cReasoning := ConcatContent(cEvents, "reasoning.delta")
+		if bReasoning != cReasoning {
+			issues = append(issues, fmt.Sprintf("reasoning.delta content mismatch: baseline %d chars, candidate %d chars", len(bReasoning), len(cReasoning)))
+		}
 	}
 	if a.RequireRaw && bFP.rawEvents > 0 && cFP.rawEvents == 0 {
 		issues = append(issues, "candidate missing raw event required by scenario")
