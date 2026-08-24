@@ -42,6 +42,21 @@ current=$(cd "$home/current" && pwd -P)
 [ -f "$current/plugins/index.js" ] || { echo "FAIL: installed plugin missing" >&2; exit 1; }
 [ -d "$current/agents" ] && [ -d "$current/skills" ] || { echo "FAIL: installed enterprise resources missing" >&2; exit 1; }
 
+# G2: if Runtime startup tries to invoke an external package manager, capture it
+# and fail closed. The release itself must not need npm/bun/pip/mvn at startup.
+sentinel_dir="$work/package-manager-sentinels"
+package_manager_marker="$work/package-manager-invocations"
+mkdir -p "$sentinel_dir"
+for command_name in npm bun pip pip3 mvn; do
+  cat > "$sentinel_dir/$command_name" <<EOF
+#!/bin/sh
+printf '%s\n' '$command_name' >> '$package_manager_marker'
+exit 97
+EOF
+  chmod +x "$sentinel_dir/$command_name"
+done
+export PATH="$sentinel_dir:$PATH"
+
 export OPENCODE_SERVER_USERNAME="$username"
 export OPENCODE_SERVER_PASSWORD="$password"
 export OPENCODE_DISABLE_MODELS_FETCH=1
@@ -50,6 +65,17 @@ export OPENCODE_DISABLE_EMBEDDED_WEB_UI=1
 export OPENCODE_DISABLE_LSP_DOWNLOAD=1
 export OPENCODE_DISABLE_DEFAULT_PLUGINS=1
 mkdir -p "$config"
+plugin_uri=$(python3 - "$current/plugins/index.js" <<'PY'
+import pathlib, sys
+print(pathlib.Path(sys.argv[1]).resolve().as_uri())
+PY
+)
+cat > "$config/opencode.json" <<EOF
+{
+  "plugin": ["$plugin_uri"],
+  "permission": {"bash": "ask"}
+}
+EOF
 OPENCODE_CONFIG_DIR="$config" "$current/bin/opencode" serve --hostname 127.0.0.1 --port "$port" >"$work/opencode.log" 2>&1 &
 runtime_pid=$!
 
@@ -65,6 +91,25 @@ import json, pathlib, sys
 p=json.loads(pathlib.Path(sys.argv[1]).read_text())
 if p.get('healthy') is not True or p.get('version') != '1.18.11': raise SystemExit(f'bad health: {p}')
 PY
+
+# G2.1: the bundled plugin must load into the real locked Runtime without any
+# package installation and expose all enterprise tools while still offline.
+curl -fsS --max-time 30 -u "$username:$password" \
+  "http://127.0.0.1:$port/experimental/tool/ids?directory=$work" >"$work/tool-ids.json"
+python3 - "$work/tool-ids.json" <<'PY'
+import json, pathlib, sys
+ids=json.loads(pathlib.Path(sys.argv[1]).read_text())
+expected=[
+  'collect_review_context','analyze_test_project','write_test_file','run_project_test',
+  'extract_api_spec','validate_api_example','write_document','dify-query',
+]
+missing=[x for x in expected if x not in ids]
+if missing: raise SystemExit(f'missing enterprise plugin tools: {missing}')
+PY
+if [ -s "$package_manager_marker" ]; then
+  echo "FAIL: Runtime invoked external package manager(s): $(tr '\n' ' ' < "$package_manager_marker")" >&2
+  exit 1
+fi
 
 # Run the installed launcher inside a pseudo-terminal. OPENCODE_URL attaches it
 # to the already verified packaged runtime; remaining resource paths come only
@@ -84,6 +129,10 @@ fi
 kill "$codea_pid" 2>/dev/null || true
 wait "$codea_pid" 2>/dev/null || true
 codea_pid=""
+if [ -s "$package_manager_marker" ]; then
+  echo "FAIL: Codea startup invoked external package manager(s): $(tr '\n' ' ' < "$package_manager_marker")" >&2
+  exit 1
+fi
 
 python3 - "$evidence_file" "$platform" "$current" <<'PY'
 import json, pathlib, sys, time
@@ -99,10 +148,12 @@ p={
   'opencodeServeHealthy': True,
   'openCodeVersion': '1.18.11',
   'codeaLauncherStarted': True,
-  'passedChecks': 7,
-  'totalChecks': 7,
+  'externalPackageManagerInvocations': 0,
+  'enterprisePluginToolsRegistered': 8,
+  'passedChecks': 9,
+  'totalChecks': 9,
 }
 out.write_text(json.dumps(p, indent=2)+'\n')
 PY
 
-echo "[PASS] $platform installed release: offline + install + OpenCode serve + Codea launcher"
+echo "[PASS] $platform installed release: offline + install + no startup package manager + 8/8 plugin tools + OpenCode serve + Codea launcher"
