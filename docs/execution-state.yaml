@@ -4,24 +4,25 @@ plan: docs/superpowers/plans/2026-07-30-codea-v1-plan.md
 taskOrder: ["0", "1", "2", "2A", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21"]
 current:
   task: "21"
-  step: 2
+  step: 3
   status: in_progress
-  nextAction: 在公司内网执行 G15 真实 Maven/npm/PyPI/Go 镜像验证；取得与最终 source commit 绑定的 G15 PASS 证据后，聚合 G1-G15（含 G2.1/G12.1），运行最终 Release Certification，并收口 checklist/report 与 execution-state。
+  nextAction: 对本轮 final closeout automation 运行 fresh Gate；通过后，在公司内网对最终 source commit 执行 G15 真实 Maven/npm/PyPI/Go 镜像验证，并携带 G15 PASS 证据 dispatch V1 Release Certification。严格认证 PASS 后取得机器 evidence + final checklist/report，再更新 execution-state 为 completed。
 checkpoint:
-  commit: 81665bc7629d8b211696a657dac209d6c7cb1f2e
-  updatedAt: "2026-08-24T18:31:00+08:00"
+  commit: e4e34be2298bb27a1b706afeb5decc430defdd76
+  updatedAt: "2026-08-24T18:41:20+08:00"
 verification:
   status: pass
   commands:
     - Task 20-21 Acceptance Gates fresh run #71
     - Real dual Runtime parity 12/12 Required scenarios PASS
   errorSummary: ""
-  recoveryAdvice: "最终认证仅等待 G15 公司内网真实镜像证据；不得使用 GitHub 环境或伪造证据替代。"
+  recoveryAdvice: "Task 21 核心 Gate 已通过；本轮 closeout-only 变更仍需 fresh Gate。最终认证仅等待 G15 公司内网真实镜像证据；不得使用 GitHub 环境或伪造证据替代。"
 taskGate:
   status: pass
   gateItems:
     task20_21FreshGate: pass
     dualRuntimeParity12of12: pass
+    finalCloseoutAutomation: implemented_pending_fresh_gate
     g15CompanyIntranetMirror: deferred
     finalReleaseCertification: blocked_on_g15
 humanAcceptance:
@@ -54,4 +55,4 @@ tasks:
   "18": {status: completed, completedSteps: [], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: 372aa8387257f3018f11d4404d3888fbc5136e0c, report: docs/task-reports/task-18.md}
   "19": {status: completed, completedSteps: [], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: 372aa8387257f3018f11d4404d3888fbc5136e0c, report: docs/task-reports/task-19.md}
   "20": {status: awaiting_acceptance, completedSteps: [], verificationStatus: pass, taskGateStatus: pass, humanAccepted: false, checkpoint: e2a97095acc58dc0c95c4a091738181504d35f42, report: docs/task-reports/task-20.md}
-  "21": {status: in_progress, completedSteps: [1], verificationStatus: pass, taskGateStatus: pass, humanAccepted: false, checkpoint: 81665bc7629d8b211696a657dac209d6c7cb1f2e, report: docs/task-reports/task-21.md}
+  "21": {status: in_progress, completedSteps: [1, 2], verificationStatus: pass, taskGateStatus: pass, humanAccepted: false, checkpoint: e4e34be2298bb27a1b706afeb5decc430defdd76, report: docs/task-reports/task-21.md}
