@@ -254,10 +254,7 @@ type eventFingerprint struct {
 	counts         map[runtime.EventType]int
 	answerChars    int
 	reasoningChars int
-	toolCalls      int
-	approvals      int
 	rawEvents      int
-	hasStepFinish  bool
 }
 
 func computeFingerprint(events []runtime.Event) eventFingerprint {
@@ -269,48 +266,48 @@ func computeFingerprint(events []runtime.Event) eventFingerprint {
 			fp.answerChars += len(e.Content)
 		case "reasoning.delta":
 			fp.reasoningChars += len(e.Content)
-		case "tool.called":
-			fp.toolCalls++
-		case "approval.requested":
-			fp.approvals++
 		case "raw":
 			fp.rawEvents++
-		case "step.finished":
-			fp.hasStepFinish = true
 		}
 	}
 	return fp
 }
 
+// compareFingerprints is deliberately scoped to task-effect semantics. OpenCode
+// emits lifecycle metadata (session.updated, message.updated, session.diff, etc.)
+// on timing-dependent paths and may split the same semantic content into a
+// different number of streaming deltas. Those transport/lifecycle details are
+// covered by G13's zero-silent-drop mapper gate, not by G12.1 task parity.
+//
+// Task parity still fails closed when a semantic capability class that existed
+// in the baseline disappears entirely from the candidate.
 func compareFingerprints(bEvents, cEvents []runtime.Event, a Assertion) []string {
 	bFP := computeFingerprint(bEvents)
 	cFP := computeFingerprint(cEvents)
 	var issues []string
+
 	if a.RequireAnswer && bFP.answerChars > 0 && cFP.answerChars == 0 {
 		issues = append(issues, fmt.Sprintf("answer.delta content: baseline has %d chars, candidate has 0", bFP.answerChars))
-	} else if a.RequireAnswer && cFP.counts["answer.delta"] < bFP.counts["answer.delta"] {
-		issues = append(issues, fmt.Sprintf("answer.delta count: baseline %d, candidate %d", bFP.counts["answer.delta"], cFP.counts["answer.delta"]))
 	}
 	if a.RequireReasoning && bFP.reasoningChars > 0 && cFP.reasoningChars == 0 {
 		issues = append(issues, fmt.Sprintf("reasoning.delta content: baseline has %d chars, candidate has 0", bFP.reasoningChars))
-	} else if a.RequireReasoning && cFP.counts["reasoning.delta"] < bFP.counts["reasoning.delta"] {
-		issues = append(issues, fmt.Sprintf("reasoning.delta count: baseline %d, candidate %d", bFP.counts["reasoning.delta"], cFP.counts["reasoning.delta"]))
 	}
-	if a.RequireTool && cFP.toolCalls < bFP.toolCalls {
-		issues = append(issues, fmt.Sprintf("tool.called count: baseline %d, candidate %d", bFP.toolCalls, cFP.toolCalls))
+	if a.RequireRaw && bFP.rawEvents > 0 && cFP.rawEvents == 0 {
+		issues = append(issues, "candidate missing raw event required by scenario")
 	}
-	if a.RequireApproval && cFP.approvals < bFP.approvals {
-		issues = append(issues, fmt.Sprintf("approval.requested count: baseline %d, candidate %d", bFP.approvals, cFP.approvals))
+
+	semanticTypes := []runtime.EventType{
+		"answer.delta",
+		"reasoning.delta",
+		"tool.called",
+		"tool.success",
+		"tool.failed",
+		"approval.requested",
+		"approval.resolved",
 	}
-	if a.RequireRaw && cFP.rawEvents < bFP.rawEvents {
-		issues = append(issues, fmt.Sprintf("raw event count: baseline %d, candidate %d", bFP.rawEvents, cFP.rawEvents))
-	}
-	if bFP.hasStepFinish && !cFP.hasStepFinish {
-		issues = append(issues, "candidate missing step.finished completion event")
-	}
-	for typ := range bFP.counts {
-		if cFP.counts[typ] == 0 {
-			issues = append(issues, fmt.Sprintf("candidate missing event type %q present in baseline (%d events)", typ, bFP.counts[typ]))
+	for _, typ := range semanticTypes {
+		if bFP.counts[typ] > 0 && cFP.counts[typ] == 0 {
+			issues = append(issues, fmt.Sprintf("candidate missing semantic event type %q present in baseline", typ))
 		}
 	}
 	return issues
