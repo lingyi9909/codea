@@ -15,22 +15,22 @@ import (
 )
 
 type runnerConfig struct {
-	BaselineURL      string
-	CandidateURL     string
-	BaselineUsername string
-	BaselinePassword string
+	BaselineURL       string
+	CandidateURL      string
+	BaselineUsername  string
+	BaselinePassword  string
 	CandidateUsername string
 	CandidatePassword string
-	EvidencePath     string
+	EvidencePath      string
 }
 
 type parityEvidence struct {
-	SchemaVersion  int            `json:"schemaVersion"`
-	Timestamp      string         `json:"timestamp"`
-	BaselineURL    string         `json:"baselineUrl"`
-	CandidateURL   string         `json:"candidateUrl"`
-	Result         *parity.Result `json:"result"`
-	Passed         bool           `json:"passed"`
+	SchemaVersion int            `json:"schemaVersion"`
+	Timestamp     string         `json:"timestamp"`
+	BaselineURL   string         `json:"baselineUrl"`
+	CandidateURL  string         `json:"candidateUrl"`
+	Result        *parity.Result `json:"result"`
+	Passed        bool           `json:"passed"`
 }
 
 func normalizeEndpoint(raw string) (string, error) {
@@ -94,6 +94,28 @@ func writeEvidence(path string, evidence parityEvidence) error {
 	return os.Rename(tmp, path)
 }
 
+func formatFailureSummary(result *parity.Result) string {
+	if result == nil {
+		return ""
+	}
+	var b strings.Builder
+	for _, scenario := range result.Scenarios {
+		if scenario.Passed {
+			continue
+		}
+		fmt.Fprintf(&b, "FAIL scenario=%s required=%t silentLoss=%t runs=%d\n",
+			scenario.Name, scenario.Required, scenario.SilentLoss, scenario.Runs)
+		if len(scenario.Failures) == 0 {
+			b.WriteString("  reason: no failure detail recorded\n")
+			continue
+		}
+		for _, failure := range scenario.Failures {
+			fmt.Fprintf(&b, "  reason: %s\n", failure.Reason)
+		}
+	}
+	return b.String()
+}
+
 func run() error {
 	cfg, err := loadRunnerConfig(os.Getenv)
 	if err != nil {
@@ -119,6 +141,7 @@ func run() error {
 		return fmt.Errorf("write evidence: %w", err)
 	}
 	if result.RequiredFailed != 0 {
+		fmt.Fprint(os.Stderr, formatFailureSummary(result))
 		return fmt.Errorf("release parity failed: %d required scenario(s) failed", result.RequiredFailed)
 	}
 	fmt.Printf("release parity passed: %d/%d scenarios\n", result.Passed, result.Total)
