@@ -23,6 +23,7 @@ const (
 	defaultTimeout     = 30 * time.Second
 	inactivityFallback = 500 * time.Millisecond
 	terminalGrace      = 1 * time.Second
+	semanticGrace      = 2 * time.Second
 )
 
 func (r *Runner) Run(ctx context.Context, s Scenario) ScenarioResult {
@@ -343,6 +344,7 @@ func (r *Runner) collectEvents(ctx context.Context, rt runtime.AgentRuntime, req
 	deadline := time.After(timeout)
 	var inactivity <-chan time.Time
 	var terminalWait <-chan time.Time
+	var semanticWait <-chan time.Time
 	terminalSeen := false
 	for {
 		select {
@@ -371,9 +373,13 @@ func (r *Runner) collectEvents(ctx context.Context, rt runtime.AgentRuntime, req
 						terminalWait = time.After(terminalGrace)
 					}
 				}
+				if isSemanticParityEvent(ev) && semanticWait == nil {
+					semanticWait = time.After(semanticGrace)
+				}
 				continue
 			}
 
+			semanticWait = nil
 			if terminalSeen {
 				if drainRawTail {
 					terminalWait = nil
@@ -392,6 +398,8 @@ func (r *Runner) collectEvents(ctx context.Context, rt runtime.AgentRuntime, req
 				inactivity = time.After(inactivityFallback)
 			}
 		case <-terminalWait:
+			return events, nil
+		case <-semanticWait:
 			return events, nil
 		case <-inactivity:
 			return events, nil
