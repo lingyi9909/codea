@@ -84,8 +84,15 @@ The fresh Task 20/21 Gate at checkpoint `e2a97095acc58dc0c95c4a091738181504d35f4
 
 Task-specific Go regressions cover metadata-only serialization, anonymous IDs, adoption mapping, feedback skip, loaded Skill normalization, successful/failed lifecycle completion, stream closure and user quit.
 
+## Final acceptance
+
+Formal human acceptance recorded on 2026-08-24:
+
+- **Task 20: A — final acceptance PASS**
+- implementation: PASS
+- automated verification: PASS
+- human acceptance: PASS
+
 ## Current status
 
-Task 20 implementation and automated verification are **PASS** at checkpoint `e2a97095acc58dc0c95c4a091738181504d35f42`.
-
-Human acceptance has **not** been recorded by this report. The execution-state transition to `awaiting_acceptance` must keep `humanAccepted: false` until explicit user acceptance.
+**Task 20: COMPLETED / ACCEPTED (A)**
