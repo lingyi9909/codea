@@ -39,8 +39,8 @@ func TestMapPromptRequestWithTextPart(t *testing.T) {
 	if req.MessageID != "msg-1" {
 		t.Fatalf("expected MessageID=msg-1, got %q", req.MessageID)
 	}
-	if req.Agent != "general" {
-		t.Fatalf("expected Agent=general, got %q", req.Agent)
+	if req.Agent != "build" {
+		t.Fatalf("expected Codea general to map to OpenCode Agent=build, got %q", req.Agent)
 	}
 	if req.Model == nil || req.Model.ProviderID != "deepseek" || req.Model.ModelID != "v3" {
 		t.Fatalf("unexpected model: %+v", req.Model)
