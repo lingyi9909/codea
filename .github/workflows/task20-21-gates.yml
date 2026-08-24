@@ -11,6 +11,7 @@ on:
       - 'tui/cmd/codea/**'
       - 'tui/cmd/parity-runner/**'
       - 'tui/tests/parity/**'
+      - 'tui/tests/fixtures/fake-runtime/**'
       - 'tests/fixtures/release-parity/**'
       - 'tests/release/**'
       - 'scripts/run-dual-runtime-parity.sh'
