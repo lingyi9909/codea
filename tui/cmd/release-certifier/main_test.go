@@ -24,7 +24,7 @@ func TestLoadCertificationUsesParityAndAllReleaseGates(t *testing.T) {
 	writeJSON(t, parityPath, map[string]any{"passed": true, "result": result})
 	gates := make([]parity.ReleaseGateEvidence, 0, len(parity.RequiredReleaseGateIDs()))
 	for _, id := range parity.RequiredReleaseGateIDs() {
-		gates = append(gates, parity.ReleaseGateEvidence{ID:id, Status:parity.ReleaseGatePass, Evidence:"evidence/"+id})
+		gates = append(gates, parity.ReleaseGateEvidence{ID:id, Status:parity.ReleaseGatePass, Evidence:"evidence/"+id, SourceCommit:"abc123"})
 	}
 	writeJSON(t, gatesPath, gates)
 
