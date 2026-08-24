@@ -22,6 +22,7 @@ type Runner struct {
 const (
 	defaultTimeout     = 30 * time.Second
 	inactivityFallback = 500 * time.Millisecond
+	terminalGrace      = 1 * time.Second
 )
 
 func (r *Runner) Run(ctx context.Context, s Scenario) ScenarioResult {
@@ -239,7 +240,6 @@ func checkAssertions(events []runtime.Event, a Assertion) assertResult {
 					found = true
 					break
 				}
-			}
 		}
 		if !found {
 			return assertResult{false, "missing raw event with non-empty valid JSON payload"}
@@ -341,16 +341,14 @@ func (r *Runner) collectEvents(ctx context.Context, rt runtime.AgentRuntime, req
 	var events []runtime.Event
 	deadline := time.After(timeout)
 	var inactivity <-chan time.Time
+	var terminalWait <-chan time.Time
+	terminalSeen := false
 	for {
 		select {
 		case ev, ok := <-ch:
 			if !ok {
 				return events, nil
 			}
-			// Subscribe is a global event stream. Events carrying a different
-			// session ID are foreign and must not terminate or pollute this
-			// scenario. Empty SessionID is retained for backwards compatibility
-			// with legacy/fake runtimes that do not populate correlation fields.
 			if ev.SessionID != "" && ev.SessionID != session.ID {
 				continue
 			}
@@ -362,25 +360,38 @@ func (r *Runner) collectEvents(ctx context.Context, rt runtime.AgentRuntime, req
 				}
 			}
 
+			terminal := ev.RawType == "session.idle" || ev.Type == "step.finished" || ev.Type == "step.failed"
 			requiredSatisfied := checkAssertions(events, assertions).ok
 			if !requiredSatisfied {
-				// A terminal/lifecycle event can race ahead of the semantic
-				// event we are certifying (for example session.idle from
-				// title/small-model work). Until all Required assertions are
-				// present, neither terminal nor inactivity may end collection.
 				inactivity = nil
+				if terminal {
+					terminalSeen = true
+					if terminalWait == nil {
+						terminalWait = time.After(terminalGrace)
+					}
+				}
 				continue
 			}
 
+			if terminalSeen {
+				if drainRawTail {
+					terminalWait = nil
+					inactivity = time.After(inactivityFallback)
+					continue
+				}
+				return events, nil
+			}
 			if ev.RawType == "session.idle" {
 				return events, nil
 			}
 			if (ev.Type == "step.finished" || ev.Type == "step.failed") && !drainRawTail {
 				return events, nil
 			}
-			if isSemanticParityEvent(ev) || (drainRawTail && (ev.Type == "step.finished" || ev.Type == "step.failed")) {
+			if isSemanticParityEvent(ev) || (drainRawTail && terminal) {
 				inactivity = time.After(inactivityFallback)
 			}
+		case <-terminalWait:
+			return events, nil
 		case <-inactivity:
 			return events, nil
 		case <-deadline:
