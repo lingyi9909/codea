@@ -28,6 +28,7 @@ $home = Join-Path $work 'home'
 New-Item -ItemType Directory -Force -Path $work | Out-Null
 $runtimeProcess = $null
 $codeaProcess = $null
+$originalPath = $env:PATH
 try {
   $env:CODEA_HOME = $home
   & $install -PackageDir $PackageDir
@@ -54,11 +55,29 @@ try {
     if (-not $shimText.Contains($key)) { throw "FAIL: codea.cmd missing $key" }
   }
 
+  # G2: trap external package-manager invocation. A release startup must not
+  # depend on npm/bun/pip/mvn installing anything at runtime.
+  $sentinelDir = Join-Path $work 'package-manager-sentinels'
+  $packageManagerMarker = Join-Path $work 'package-manager-invocations'
+  New-Item -ItemType Directory -Force -Path $sentinelDir | Out-Null
+  foreach ($commandName in @('npm','bun','pip','pip3','mvn')) {
+    $wrapper = Join-Path $sentinelDir ($commandName + '.cmd')
+    $wrapperText = "@echo off`r`n>>`"$packageManagerMarker`" echo $commandName`r`nexit /b 97`r`n"
+    [IO.File]::WriteAllText($wrapper, $wrapperText, (New-Object Text.UTF8Encoding($false)))
+  }
+  $env:PATH = "$sentinelDir;$originalPath"
+
   $port = if ($env:SMOKE_PORT) { [int]$env:SMOKE_PORT } else { 49332 }
   $username = 'codea-smoke'
   $password = 'codea-smoke-pass'
   $runtimeConfig = Join-Path $work 'runtime-config'
   New-Item -ItemType Directory -Force -Path $runtimeConfig | Out-Null
+  $pluginUri = ([Uri](Resolve-Path $plugin).Path).AbsoluteUri
+  $runtimeConfigPayload = [ordered]@{
+    plugin = @($pluginUri)
+    permission = @{ bash = 'ask' }
+  }
+  [IO.File]::WriteAllText((Join-Path $runtimeConfig 'opencode.json'), (($runtimeConfigPayload | ConvertTo-Json -Depth 5) + [Environment]::NewLine), (New-Object Text.UTF8Encoding($false)))
   $env:OPENCODE_CONFIG_DIR = $runtimeConfig
   $env:OPENCODE_SERVER_USERNAME = $username
   $env:OPENCODE_SERVER_PASSWORD = $password
@@ -88,6 +107,21 @@ try {
     throw "FAIL: packaged OpenCode health invalid: $($health | ConvertTo-Json -Compress)"
   }
 
+  # G2.1: live locked Runtime must register all 8 bundled enterprise tools while
+  # public HTTPS is unavailable and without package-manager invocation.
+  $encodedDirectory = [Uri]::EscapeDataString($work)
+  $toolIds = Invoke-RestMethod -Uri "http://127.0.0.1:$port/experimental/tool/ids?directory=$encodedDirectory" -Headers $headers -TimeoutSec 30
+  $expectedTools = @(
+    'collect_review_context','analyze_test_project','write_test_file','run_project_test',
+    'extract_api_spec','validate_api_example','write_document','dify-query'
+  )
+  $missingTools = @($expectedTools | Where-Object { $_ -notin $toolIds })
+  if ($missingTools.Count -gt 0) { throw "FAIL: missing enterprise plugin tools: $($missingTools -join ', ')" }
+  if (Test-Path $packageManagerMarker -PathType Leaf) {
+    $invocations = (Get-Content $packageManagerMarker -ErrorAction SilentlyContinue) -join ' '
+    if (-not [string]::IsNullOrWhiteSpace($invocations)) { throw "FAIL: Runtime invoked external package manager(s): $invocations" }
+  }
+
   # Launch through codea.cmd, not the raw executable, so this proves the installed
   # launcher injects bundled runtime/agent/skill/plugin paths. Attach to the
   # already-healthy packaged runtime to isolate launcher/TUI startup from process supervision.
@@ -101,6 +135,10 @@ try {
   if ($codeaProcess.HasExited) { throw "FAIL: installed Codea launcher exited during startup (exit=$($codeaProcess.ExitCode))" }
   Stop-Process -Id $codeaProcess.Id -Force -ErrorAction SilentlyContinue
   $codeaProcess = $null
+  if (Test-Path $packageManagerMarker -PathType Leaf) {
+    $invocations = (Get-Content $packageManagerMarker -ErrorAction SilentlyContinue) -join ' '
+    if (-not [string]::IsNullOrWhiteSpace($invocations)) { throw "FAIL: Codea startup invoked external package manager(s): $invocations" }
+  }
 
   $evidenceDir = Split-Path -Parent $EvidenceFile
   New-Item -ItemType Directory -Force -Path $evidenceDir | Out-Null
@@ -116,12 +154,15 @@ try {
     opencodeServeHealthy = $true
     openCodeVersion = '1.18.11'
     codeaLauncherStarted = $true
-    passedChecks = 8
-    totalChecks = 8
+    externalPackageManagerInvocations = 0
+    enterprisePluginToolsRegistered = 8
+    passedChecks = 10
+    totalChecks = 10
   }
   [IO.File]::WriteAllText($EvidenceFile, (($evidence | ConvertTo-Json -Depth 4) + [Environment]::NewLine), (New-Object Text.UTF8Encoding($false)))
-  Write-Host '[PASS] windows-x64 installed release: offline + install + OpenCode serve + Codea launcher; no WSL'
+  Write-Host '[PASS] windows-x64 installed release: offline + install + no startup package manager + 8/8 plugin tools + OpenCode serve + Codea launcher; no WSL'
 } finally {
+  $env:PATH = $originalPath
   if ($codeaProcess -and -not $codeaProcess.HasExited) { Stop-Process -Id $codeaProcess.Id -Force -ErrorAction SilentlyContinue }
   if ($runtimeProcess -and -not $runtimeProcess.HasExited) { Stop-Process -Id $runtimeProcess.Id -Force -ErrorAction SilentlyContinue }
   Remove-Item Env:OPENCODE_URL -ErrorAction SilentlyContinue
