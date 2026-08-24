@@ -54,7 +54,12 @@ base={
       "npm":"@ai-sdk/openai-compatible",
       "name":"Codea Release Parity Local Provider",
       "options":{"baseURL":f"http://127.0.0.1:{port}/v1","apiKey":"{env:CODEA_PARITY_API_KEY}"},
-      "models":{"release-parity":{"name":"Release Parity Fake Model","limit":{"context":32768,"output":4096}}}
+      "models":{"release-parity":{
+        "name":"Release Parity Fake Model",
+        "reasoning":True,
+        "interleaved":{"field":"reasoning_content"},
+        "limit":{"context":32768,"output":4096}
+      }}
     }
   }
 }
