@@ -6,6 +6,7 @@ on:
     branches: [develop]
     paths:
       - 'tui/internal/app/**'
+      - 'tui/internal/agent/**'
       - 'tui/internal/parity/**'
       - 'tui/internal/opencode/**'
       - 'tui/cmd/codea/**'
