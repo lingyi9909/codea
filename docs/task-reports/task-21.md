@@ -2,9 +2,18 @@
 
 ## Overview
 
-Task 21 core development and final closeout automation are complete. The latest fresh Task 20/21 acceptance gate before the closeout-only changes is green, including real distinct baseline/candidate Runtime parity with **12/12 Required scenarios PASS**.
+Task 21 implementation is complete and has no code blocker. The final missing process condition was a fresh Task 20/21 acceptance Gate on the latest exact-release-parity checkpoint.
 
-The only external evidence still missing is G15 from the approved company intranet. Final certification must aggregate the complete release gate set for one exact source commit and must not claim PASS without real G15 company-intranet mirror evidence.
+That condition is now satisfied:
+
+- Workflow: `Task 20-21 Acceptance Gates`
+- Run: `#77`
+- Run ID: `32719737844`
+- Source commit: `62c0c7038a6324c115a1be764379e83b21898090`
+- Result: **PASS**
+- Real distinct baseline/candidate Runtime parity: **12/12 Required scenarios PASS**
+
+G15 remains `deferred` by explicit acceptance decision. It does **not** block Task 21 acceptance.
 
 ## Completed core work
 
@@ -16,52 +25,54 @@ The only external evidence still missing is G15 from the approved company intran
 - Distinct vanilla baseline vs Codea candidate execution
 - 12/12 Required task-effect parity PASS
 - Strict release-certifier path and GitHub release-certification workflow
+- Exact 12/12 parity requirement enforced by the release certifier
 - Automatic GitHub preflight that keeps G15 deferred because GitHub cannot access approved company intranet mirrors
-- Windows G15 intranet mirror runner for real-environment evidence collection
+- Windows G15 intranet mirror runner for future real-environment evidence collection
+- Machine-driven final closeout generator for certification checklist/report when a strict release certification is eventually executed
 
-## Final closeout automation
+## Fresh Gate verification — run #77
 
-The final closeout path is now machine-driven instead of manually assembled:
+The fresh Gate executed against exact source commit `62c0c7038a6324c115a1be764379e83b21898090` and completed successfully.
 
-1. `scripts/merge-release-gates.py` requires the exact 17-gate set: G1-G15 plus G2.1/G12.1, all bound to one source commit.
-2. `tui/cmd/release-certifier` performs the strict final certification and refuses a deferred/failed gate.
-3. `scripts/generate-release-closeout.py` accepts only a passed strict certification artifact with **17/17 gate PASS** and **12/12 Runtime parity PASS**.
-4. Only after those checks does it generate:
-   - `release-certification-checklist.md`
-   - `release-certification-report.md`
-5. `.github/workflows/release-certification.yml` runs the generator after the strict certifier and uploads the checklist/report together with the machine evidence.
-6. Regression coverage explicitly rejects G15 `deferred` and verifies no final certification documents are written in that case.
+Verified steps include:
 
-Therefore the repository-side Release Certification closeout implementation is complete. The final workflow execution remains intentionally blocked until real G15 evidence exists.
+- Bun plugin regression/build — PASS
+- Release evidence tool regression — PASS
+- Go full regression — PASS
+- Locked OpenCode v1.18.11 download/checksum — PASS
+- Real distinct baseline/candidate parity — PASS
+- Runtime parity result — **12/12**
+- Parity evidence artifact upload — PASS
 
-## Remaining external certification evidence
+Artifact:
 
-### G15 — company intranet mirrors
+`task20-21-release-parity-62c0c7038a6324c115a1be764379e83b21898090`
 
-G15 must be executed in the approved company intranet environment against the real Maven/npm/PyPI/Go mirrors. GitHub-hosted CI cannot substitute for this evidence.
+## G15 acceptance boundary
 
-Until a real G15 PASS artifact exists for the exact source commit being certified:
+G15 remains deferred because it requires the approved company intranet and real Maven/npm/PyPI/Go mirrors.
 
-- automatic preflight may PASS with G15 `deferred`
-- final Release Certification must remain blocked
-- Task 21 must not be marked fully completed
-- Codea V1 must not be declared release-certified
-- the final closeout generator must not emit a RELEASE CERTIFIED checklist/report
+The formal acceptance decision for this round is:
 
-### Final execution after G15
+- G15 stays `deferred`;
+- G15 is not substituted with GitHub-hosted evidence;
+- G15 does **not** block Task 21 acceptance;
+- future strict V1 Release Certification may still consume real G15 evidence when that separate release-certification activity is performed.
 
-Once real G15 evidence is available for the final source commit:
+This separates **Task 21 acceptance** from the optional later completion of the real-intranet G15 release evidence.
 
-1. run `scripts/run-g15-intranet-gate.ps1` inside the approved company intranet;
-2. base64-encode the produced G15 gate artifact;
-3. dispatch `V1 Release Certification` with that exact `source_commit` and `g15_gate_b64`;
-4. require strict certifier PASS;
-5. obtain the uploaded machine evidence plus final checklist/report;
-6. update `docs/execution-state.yaml` and mark Task 21 / Codea V1 completed only after the strict final artifact is reviewed.
+## Final acceptance
+
+Formal human acceptance recorded on 2026-08-24:
+
+- **Implementation: A — PASS, no code blocker**
+- **Process acceptance: the only B-condition was fresh Gate on `62c0...`; run #77 is PASS, so the condition is satisfied**
+- **G15: deferred and explicitly non-blocking for Task 21 acceptance**
+- **Task 21: final acceptance PASS**
 
 ## Current status
 
-**Core development: PASS**  
-**Repository-side final closeout automation: COMPLETE**  
-**Fresh dual Runtime parity baseline: 12/12 PASS**  
-**Final Release Certification: BLOCKED ONLY BY REAL G15 COMPANY-INTRANET EVIDENCE**
+**Task 21: COMPLETED / ACCEPTED**  
+**Fresh Gate #77: PASS**  
+**Real dual Runtime parity: 12/12 PASS**  
+**G15: DEFERRED — NON-BLOCKING FOR TASK 21**
