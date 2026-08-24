@@ -23,6 +23,18 @@ func MapCreateSessionRequest(req runtime.CreateSessionRequest) OpenCodeSessionCr
 	}
 }
 
+// mapPromptAgent translates Codea-owned semantic agent names to the locked
+// OpenCode vendor role. Codea's "general" is the main general-purpose chat
+// agent; in OpenCode v1.18.11 the primary general-purpose agent is "build",
+// while the vendor's own "general" name denotes a subagent. Keeping this alias
+// here prevents vendor role names from leaking into Application/TUI code.
+func mapPromptAgent(agent string) string {
+	if agent == "general" {
+		return "build"
+	}
+	return agent
+}
+
 // MapPromptRequest maps a Codea prompt request and session ID to an OpenCode prompt-async request.
 func MapPromptRequest(sessionID runtime.SessionID, req runtime.PromptRequest) (string, OpenCodeSessionPromptAsyncRequest, error) {
 	parts := make([]any, 0, len(req.Parts))
@@ -43,7 +55,7 @@ func MapPromptRequest(sessionID runtime.SessionID, req runtime.PromptRequest) (s
 	}
 
 	return string(sessionID), OpenCodeSessionPromptAsyncRequest{
-		Agent:     req.Agent,
+		Agent:     mapPromptAgent(req.Agent),
 		MessageID: req.MessageID,
 		Model:     model,
 		Parts:     parts,
