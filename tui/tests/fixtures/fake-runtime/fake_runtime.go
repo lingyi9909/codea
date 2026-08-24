@@ -66,13 +66,14 @@ type FakeRuntime struct {
 	// with ApprovalOnce, simulating the runtime continuing after approval.
 	ApprovalOnceEvents []runtime.Event
 
-	mu                sync.Mutex
-	sessions          map[runtime.SessionID]*runtime.Session
-	prompts           []PromptRecord
-	approvals         []ApprovalRecord
-	cancelledSessions []runtime.SessionID
-	subscribers       map[chan runtime.Event]context.Context
-	nextSessionID     int
+	mu                  sync.Mutex
+	sessions            map[runtime.SessionID]*runtime.Session
+	prompts             []PromptRecord
+	approvals           []ApprovalRecord
+	cancelledSessions   []runtime.SessionID
+	subscribers         map[chan runtime.Event]context.Context
+	nextSessionID       int
+	lastPromptSessionID runtime.SessionID
 }
 
 // New returns an initialized FakeRuntime.
@@ -110,12 +111,15 @@ func (f *FakeRuntime) CreateSession(ctx context.Context, req runtime.CreateSessi
 func (f *FakeRuntime) Prompt(ctx context.Context, sessionID runtime.SessionID, req runtime.PromptRequest) error {
 	f.mu.Lock()
 	f.prompts = append(f.prompts, PromptRecord{SessionID: sessionID, Request: req})
+	f.lastPromptSessionID = sessionID
 	delay := f.EventDelay
 
 	if delay > 0 {
 		// Delayed publish: copy state, unlock, then sleep and send.
 		events := make([]runtime.Event, len(f.Events))
-		copy(events, f.Events)
+		for i, ev := range f.Events {
+			events[i] = eventForSession(ev, sessionID)
+		}
 		subs := make(map[chan runtime.Event]context.Context, len(f.subscribers))
 		for ch, sctx := range f.subscribers {
 			subs[ch] = sctx
@@ -140,7 +144,8 @@ func (f *FakeRuntime) Prompt(ctx context.Context, sessionID runtime.SessionID, r
 		return nil
 	}
 
-	for _, ev := range f.Events {
+	for _, configured := range f.Events {
+		ev := eventForSession(configured, sessionID)
 		for ch, sctx := range f.subscribers {
 			select {
 			case ch <- ev:
@@ -151,6 +156,17 @@ func (f *FakeRuntime) Prompt(ctx context.Context, sessionID runtime.SessionID, r
 	}
 	f.mu.Unlock()
 	return nil
+}
+
+// eventForSession mirrors the real runtime contract: events emitted as a
+// consequence of Prompt belong to that prompt's session. Tests may still set
+// an explicit SessionID to model foreign-session traffic; explicit IDs are
+// therefore never overwritten.
+func eventForSession(ev runtime.Event, sessionID runtime.SessionID) runtime.Event {
+	if ev.SessionID == "" {
+		ev.SessionID = string(sessionID)
+	}
+	return ev
 }
 
 func (f *FakeRuntime) Subscribe(ctx context.Context) (<-chan runtime.Event, error) {
@@ -187,7 +203,8 @@ func (f *FakeRuntime) ReplyApproval(ctx context.Context, approvalID runtime.Appr
 	// emits continuation events (e.g. tool calls). On "reject", no
 	// continuation events are emitted — the blocked operation does not run.
 	if reply.Decision == runtime.ApprovalOnce {
-		for _, ev := range f.ApprovalOnceEvents {
+		for _, configured := range f.ApprovalOnceEvents {
+			ev := eventForSession(configured, f.lastPromptSessionID)
 			for ch, sctx := range f.subscribers {
 				select {
 				case ch <- ev:
