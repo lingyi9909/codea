@@ -120,6 +120,7 @@ class ReleaseGateToolsTest(unittest.TestCase):
                 "certification": {
                     "sourceCommit": "abc123",
                     "generalCompletionRate": 1.0,
+                    "parity": {"total": 12, "passed": 12},
                 },
             }))
             checklist = root / "release-certification-checklist.md"
@@ -158,6 +159,7 @@ class ReleaseGateToolsTest(unittest.TestCase):
                 "certification": {
                     "sourceCommit": "abc123",
                     "generalCompletionRate": 1.0,
+                    "parity": {"total": 12, "passed": 12},
                 },
             }))
             checklist = root / "release-certification-checklist.md"
