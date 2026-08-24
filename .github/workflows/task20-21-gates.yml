@@ -11,17 +11,23 @@ on:
       - 'tui/internal/opencode/**'
       - 'tui/cmd/codea/**'
       - 'tui/cmd/parity-runner/**'
+      - 'tui/cmd/release-certifier/**'
       - 'tui/tests/parity/**'
       - 'tui/tests/fixtures/fake-runtime/**'
       - 'tests/fixtures/release-parity/**'
       - 'tests/release/**'
       - 'scripts/run-dual-runtime-parity.sh'
       - 'scripts/run-release-parity-gates.sh'
+      - 'scripts/run-g15-intranet-gate.ps1'
+      - 'scripts/write-release-gate.py'
+      - 'scripts/merge-release-gates.py'
+      - 'scripts/derive-native-release-gates.py'
       - 'distribution/plugins/**'
       - 'docs/release-checklist.md'
       - 'runtime/capabilities.yaml'
       - 'runtime/version.json'
       - '.github/workflows/task20-21-gates.yml'
+      - '.github/workflows/release-certification.yml'
 
 concurrency:
   group: task20-21-${{ github.ref }}
@@ -54,6 +60,9 @@ jobs:
         run: |
           bun test
           bun run build
+
+      - name: Release evidence tool regression
+        run: python3 tests/release/test_release_gate_tools.py
 
       - name: Go full regression
         working-directory: tui
