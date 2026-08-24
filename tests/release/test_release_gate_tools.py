@@ -9,6 +9,7 @@ import unittest
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 WRITE = ROOT / "scripts" / "write-release-gate.py"
 MERGE = ROOT / "scripts" / "merge-release-gates.py"
+DERIVE_NATIVE = ROOT / "scripts" / "derive-native-release-gates.py"
 GATES = ["G1","G2","G2.1","G3","G4","G5","G6","G7","G8","G9","G10","G11","G12","G12.1","G13","G14","G15"]
 
 
@@ -63,6 +64,41 @@ class ReleaseGateToolsTest(unittest.TestCase):
             p = subprocess.run([sys.executable, str(MERGE), "--source-commit", "abc123", "--input-dir", str(d), "--out", str(out)], text=True, capture_output=True)
             self.assertNotEqual(p.returncode, 0)
             self.assertIn("sourcecommit", (p.stdout + p.stderr).lower())
+
+    def test_native_derivation_requires_both_hosts_offline_fast_and_plugin_complete(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = pathlib.Path(td)
+            mac = root / "mac.json"
+            win = root / "win.json"
+            mac.write_text(json.dumps({
+                "platform": "darwin-arm64", "publicHttpsBlocked": True,
+                "installerPassed": True, "opencodeServeHealthy": True,
+                "codeaLauncherStarted": True, "externalPackageManagerInvocations": 0,
+                "enterprisePluginToolsRegistered": 8,
+            }))
+            win.write_text(json.dumps({
+                "platform": "windows-x64", "nativeWindows": True, "wslUsed": False,
+                "publicHttpsBlocked": True, "installerPassed": True,
+                "opencodeServeHealthy": True, "codeaLauncherStarted": True,
+                "externalPackageManagerInvocations": 0, "enterprisePluginToolsRegistered": 8,
+            }))
+            out = root / "gates"
+            self.run_cmd(DERIVE_NATIVE,
+                         "--source-commit", "abc123",
+                         "--mac-evidence", mac, "--mac-duration-ms", "120000",
+                         "--windows-evidence", win, "--windows-duration-ms", "130000",
+                         "--out-dir", out)
+            self.assertEqual(json.loads((out / "G1.json").read_text())["status"], "pass")
+            self.assertEqual(json.loads((out / "G2.json").read_text())["status"], "pass")
+            self.assertEqual(json.loads((out / "G2_1.json").read_text())["status"], "pass")
+
+            p = subprocess.run([sys.executable, str(DERIVE_NATIVE),
+                                "--source-commit", "abc123",
+                                "--mac-evidence", str(mac), "--mac-duration-ms", "300001",
+                                "--windows-evidence", str(win), "--windows-duration-ms", "130000",
+                                "--out-dir", str(root / "bad")], text=True, capture_output=True)
+            self.assertNotEqual(p.returncode, 0)
+            self.assertIn("5 minute", (p.stdout + p.stderr).lower())
 
 
 if __name__ == "__main__":
