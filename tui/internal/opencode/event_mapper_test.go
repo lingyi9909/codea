@@ -148,17 +148,6 @@ func TestEventMapperSemanticTypes(t *testing.T) {
 	}
 }
 
-func TestEventMapperUsesNestedPartSessionIDWhenTopLevelMissing(t *testing.T) {
-	raw := `{"directory":"/tmp","payload":{"type":"message.part.updated","properties":{"part":{"id":"p1","messageID":"m1","sessionID":"s-nested","type":"step-finish","reason":"stop"}}}}`
-	event, err := MapEvent([]byte(raw), 1)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if event.SessionID != "s-nested" {
-		t.Fatalf("SessionID=%q, want nested part session id", event.SessionID)
-	}
-}
-
 func TestEventMapperExtractsApprovalRequest(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -209,12 +198,12 @@ func TestEventMapperExtractsApprovalCommand(t *testing.T) {
 	}{
 		{
 			name:        "metadata.command preferred",
-			raw:      `{"directory":"/tmp","payload":{"type":"permission.asked","properties":{"id":"per_1","sessionID":"s1","permission":"bash","patterns":["rm -rf /"],"metadata":{"command":"rm -rf /build"}}}}`,
+			raw:         `{"directory":"/tmp","payload":{"type":"permission.asked","properties":{"id":"per_1","sessionID":"s1","permission":"bash","patterns":["rm -rf /"],"metadata":{"command":"rm -rf /build"}}}}`,
 			wantCommand: "rm -rf /build",
 		},
 		{
 			name:        "patterns fallback",
-			raw:      `{"directory":"/tmp","payload":{"type":"permission.asked","properties":{"id":"per_2","sessionID":"s1","permission":"bash","patterns":["git","status"]}}}`,
+			raw:         `{"directory":"/tmp","payload":{"type":"permission.asked","properties":{"id":"per_2","sessionID":"s1","permission":"bash","patterns":["git","status"]}}}`,
 			wantCommand: "git status",
 		},
 	}
@@ -231,4 +220,456 @@ func TestEventMapperExtractsApprovalCommand(t *testing.T) {
 	}
 }
 
-// The remaining mapper tests are intentionally kept in this file below.
+func TestEventMapperExtractsToolEvent(t *testing.T) {
+	raw := `{"directory":"/tmp","payload":{"type":"message.part.updated","properties":{"sessionID":"s1","part":{"id":"prt_001","messageID":"m1","sessionID":"s1","type":"tool","tool":"read","callID":"call_abc"}}}}`
+	event, err := MapEvent([]byte(raw), 1)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if event.Type != CodeaEventToolCalled {
+		t.Fatalf("expected tool.called, got %q", event.Type)
+	}
+	if event.Tool == nil {
+		t.Fatal("expected Tool to be non-nil")
+	}
+	if event.Tool.Name != "read" {
+		t.Fatalf("expected Tool.Name=read, got %q", event.Tool.Name)
+	}
+	if event.Tool.CallID != "call_abc" {
+		t.Fatalf("expected Tool.CallID=call_abc, got %q", event.Tool.CallID)
+	}
+}
+
+func TestEventMapperExtractsToolEventFallbackCallID(t *testing.T) {
+	raw := `{"directory":"/tmp","payload":{"type":"message.part.updated","properties":{"sessionID":"s1","part":{"id":"prt_002","messageID":"m1","sessionID":"s1","type":"tool","tool":"bash"}}}}`
+	event, err := MapEvent([]byte(raw), 1)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if event.Tool == nil {
+		t.Fatal("expected Tool to be non-nil")
+	}
+	if event.Tool.CallID != "prt_002" {
+		t.Fatalf("expected Tool.CallID=prt_002 (fallback to part.id), got %q", event.Tool.CallID)
+	}
+}
+
+func TestEventMapperExtractsSessionError(t *testing.T) {
+	raw := `{"directory":"/tmp","payload":{"type":"session.error","properties":{"sessionID":"s1","error":"something went wrong"}}}`
+	event, err := MapEvent([]byte(raw), 1)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if event.Type != CodeaEventSessionError {
+		t.Fatalf("expected session.error, got %q", event.Type)
+	}
+	if event.Error == nil {
+		t.Fatal("expected Error to be non-nil")
+	}
+	if event.Error.Code != string(CodeaEventSessionError) {
+		t.Fatalf("expected Error.Code=%q, got %q", CodeaEventSessionError, event.Error.Code)
+	}
+	if event.Error.Message != "something went wrong" {
+		t.Fatalf("expected Error.Message='something went wrong', got %q", event.Error.Message)
+	}
+}
+
+func TestEventMapperExtractsStructuredError(t *testing.T) {
+	raw := `{"directory":"/tmp","payload":{"type":"session.error","properties":{"sessionID":"s1","error":{"name":"UnknownError","data":{"message":"Error: No user message found"}}}}}`
+	event, err := MapEvent([]byte(raw), 1)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if event.Type != CodeaEventSessionError {
+		t.Fatalf("expected session.error, got %q", event.Type)
+	}
+	if event.Error == nil {
+		t.Fatal("expected Error to be non-nil for structured error")
+	}
+	if event.Error.Code != "UnknownError" {
+		t.Fatalf("expected Error.Code=UnknownError, got %q", event.Error.Code)
+	}
+	if !strings.Contains(event.Error.Message, "No user message found") {
+		t.Fatalf("expected Error.Message to contain 'No user message found', got %q", event.Error.Message)
+	}
+}
+
+func TestEventMapperErrorVendorDetails(t *testing.T) {
+	t.Run("structured session.error preserves raw vendor error", func(t *testing.T) {
+		raw := `{"directory":"/tmp","payload":{"type":"session.error","properties":{"sessionID":"s1","error":{"name":"UnknownError","data":{"message":"Error: No user message found"}}}}}`
+		event, err := MapEvent([]byte(raw), 1)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if event.Error == nil {
+			t.Fatal("expected Error to be non-nil")
+		}
+		if len(event.Error.VendorDetails) == 0 {
+			t.Fatal("VendorDetails must be auto-populated from the raw vendor error")
+		}
+		var vd map[string]any
+		if err := json.Unmarshal(event.Error.VendorDetails, &vd); err != nil {
+			t.Fatalf("VendorDetails is not valid JSON: %v", err)
+		}
+		if vd["name"] != "UnknownError" {
+			t.Errorf("VendorDetails.name = %v, want UnknownError", vd["name"])
+		}
+	})
+
+	t.Run("runtime_error preserves raw vendor error", func(t *testing.T) {
+		raw := `{"directory":"","payload":{"type":"runtime_error","properties":{"error":"scanner error: connection reset","code":"SCANNER_ERROR"}}}`
+		event, err := MapEvent([]byte(raw), 1)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if event.Error == nil {
+			t.Fatal("expected Error to be non-nil")
+		}
+		if len(event.Error.VendorDetails) == 0 {
+			t.Fatal("VendorDetails must be auto-populated from the raw vendor error")
+		}
+		var msg string
+		if err := json.Unmarshal(event.Error.VendorDetails, &msg); err != nil {
+			t.Fatalf("VendorDetails is not a JSON string: %v", err)
+		}
+		if msg != "scanner error: connection reset" {
+			t.Errorf("VendorDetails = %q, want the raw vendor message", msg)
+		}
+	})
+}
+
+func TestEventMapperToolEventOnlyWhenToolType(t *testing.T) {
+	// text part.updated should NOT have Tool set
+	raw := `{"directory":"/tmp","payload":{"type":"message.part.updated","properties":{"sessionID":"s1","part":{"id":"p1","messageID":"m1","sessionID":"s1","type":"text","text":"hello"}}}}`
+	event, err := MapEvent([]byte(raw), 1)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if event.Tool != nil {
+		t.Fatal("Tool must be nil for non-tool part.updated")
+	}
+}
+
+func TestEventMapperPreservesRawType(t *testing.T) {
+	raw := `{"directory":"/tmp","payload":{"type":"plugin.added","properties":{"id":"test"}}}`
+	event, err := MapEvent([]byte(raw), 1)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if event.Type != CodeaEventRaw {
+		t.Fatalf("expected Type=raw, got %q", event.Type)
+	}
+	if event.RawType != "plugin.added" {
+		t.Fatalf("expected RawType=plugin.added, got %q", event.RawType)
+	}
+}
+
+func TestEventMapperExtractsProjectID(t *testing.T) {
+	raw := `{"directory":"/tmp","payload":{"type":"session.updated","properties":{"sessionID":"s1","info":{"projectID":"proj_abc","id":"s1"}}}}`
+	event, err := MapEvent([]byte(raw), 1)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if event.ProjectID != "proj_abc" {
+		t.Fatalf("expected ProjectID=proj_abc, got %q", event.ProjectID)
+	}
+}
+
+func TestEventMapperExtractsCreatedAt(t *testing.T) {
+	raw := `{"directory":"/tmp","payload":{"type":"session.status","properties":{"sessionID":"s1","time":1785756134158}}}`
+	event, err := MapEvent([]byte(raw), 1)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if event.CreatedAt.IsZero() {
+		t.Fatal("expected non-zero CreatedAt")
+	}
+}
+
+func TestEventMapperMalformedJSON(t *testing.T) {
+	raw := []byte(`not json`)
+	event, err := MapEvent(raw, 1)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if event.Type != "_unparseable_" {
+		t.Fatalf("expected Type=_unparseable_, got %q", event.Type)
+	}
+	if string(event.Raw) != `not json` {
+		t.Fatalf("expected Raw to preserve exact bytes, got %q", event.Raw)
+	}
+}
+
+func TestEventMapperOversizedRaw(t *testing.T) {
+	payload := strings.Repeat("x", 20*1024)
+	raw := []byte(`{"directory":"/tmp","payload":{"type":"test","properties":{"data":"` + payload + `"}}}`)
+	event, err := MapEvent(raw, 1)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !event.RawTruncated {
+		t.Fatal("expected RawTruncated=true for oversized payload")
+	}
+	if event.RawOriginalSize != len(raw) {
+		t.Fatalf("expected RawOriginalSize=%d, got %d", len(raw), event.RawOriginalSize)
+	}
+	if len(event.Raw) > 16*1024 {
+		t.Fatalf("expected Raw <= 16KB, got %d", len(event.Raw))
+	}
+}
+
+func TestEventMapperExtractsSessionID(t *testing.T) {
+	raw := []byte(`{"directory":"/tmp","payload":{"type":"session.status","properties":{"sessionID":"ses_abc123","status":{"type":"busy"}}}}`)
+	event, err := MapEvent(raw, 1)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if event.SessionID != "ses_abc123" {
+		t.Fatalf("expected SessionID=ses_abc123, got %q", event.SessionID)
+	}
+}
+
+func TestEventMapperExtractsMessagePartIDs(t *testing.T) {
+	raw := []byte(`{"directory":"/tmp","payload":{"type":"message.part.delta","properties":{"sessionID":"s1","messageID":"m1","partID":"p1","field":"text","delta":"hello"}}}`)
+	event, err := MapEvent(raw, 1)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if event.SessionID != "s1" {
+		t.Fatalf("expected SessionID=s1, got %q", event.SessionID)
+	}
+	if event.MessageID != "m1" {
+		t.Fatalf("expected MessageID=m1, got %q", event.MessageID)
+	}
+	if event.PartID != "p1" {
+		t.Fatalf("expected PartID=p1, got %q", event.PartID)
+	}
+}
+
+func TestEventMapperExtractsNestedIDs(t *testing.T) {
+	t.Run("message.updated nests id under info", func(t *testing.T) {
+		raw := []byte(`{"directory":"/tmp","payload":{"type":"message.updated","properties":{"sessionID":"s1","info":{"id":"msg_nested","role":"assistant"}}}}`)
+		event, err := MapEvent(raw, 1)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if event.MessageID != "msg_nested" {
+			t.Fatalf("expected MessageID=msg_nested, got %q", event.MessageID)
+		}
+	})
+
+	t.Run("message.part.updated nests ids under part", func(t *testing.T) {
+		raw := []byte(`{"directory":"/tmp","payload":{"type":"message.part.updated","properties":{"sessionID":"s1","part":{"id":"prt_nested","messageID":"msg_nested","type":"text"}}}}`)
+		event, err := MapEvent(raw, 1)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if event.MessageID != "msg_nested" {
+			t.Fatalf("expected MessageID=msg_nested, got %q", event.MessageID)
+		}
+		if event.PartID != "prt_nested" {
+			t.Fatalf("expected PartID=prt_nested, got %q", event.PartID)
+		}
+	})
+
+	t.Run("session.updated info.id is not treated as message id", func(t *testing.T) {
+		raw := []byte(`{"directory":"/tmp","payload":{"type":"session.updated","properties":{"sessionID":"s1","info":{"id":"s1","projectID":"p1"}}}}`)
+		event, err := MapEvent(raw, 1)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if event.MessageID != "" {
+			t.Fatalf("expected empty MessageID for session.updated, got %q", event.MessageID)
+		}
+	})
+}
+
+func TestEventMapperExtractsContentFromDelta(t *testing.T) {
+	raw := []byte(`{"directory":"/tmp","payload":{"type":"message.part.delta","properties":{"sessionID":"s1","messageID":"m1","partID":"p1","field":"text","delta":"hello world"}}}`)
+	event, err := MapEvent(raw, 1)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if event.Content != "hello world" {
+		t.Fatalf("expected Content='hello world', got %q", event.Content)
+	}
+}
+
+func TestEventMapperRuntimeError(t *testing.T) {
+	raw := `{"directory":"","payload":{"type":"runtime_error","properties":{"error":"scanner error: connection reset","code":"SCANNER_ERROR"}}}`
+	event, err := MapEvent([]byte(raw), 1)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if event.Type != CodeaEventRuntimeError {
+		t.Fatalf("expected runtime.error, got %q", event.Type)
+	}
+	if event.Error == nil {
+		t.Fatal("expected Error to be non-nil for runtime_error")
+	}
+	if event.Error.Code != "SCANNER_ERROR" {
+		t.Fatalf("expected Error.Code=SCANNER_ERROR, got %q", event.Error.Code)
+	}
+	if event.Error.Message != "scanner error: connection reset" {
+		t.Fatalf("expected Error.Message='scanner error: connection reset', got %q", event.Error.Message)
+	}
+}
+
+func TestEventMapperRuntimeErrorDefaultCode(t *testing.T) {
+	raw := `{"directory":"","payload":{"type":"runtime_error","properties":{"error":"something failed"}}}`
+	event, err := MapEvent([]byte(raw), 1)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if event.Error == nil {
+		t.Fatal("expected Error to be non-nil")
+	}
+	if event.Error.Code != string(CodeaEventRuntimeError) {
+		t.Fatalf("expected default Error.Code=runtime.error, got %q", event.Error.Code)
+	}
+	if event.Error.Message != "something failed" {
+		t.Fatalf("expected Error.Message='something failed', got %q", event.Error.Message)
+	}
+}
+
+func TestEventMapperPreservesRawJSON(t *testing.T) {
+	raw := []byte(`{"directory":"/tmp","payload":{"type":"session.status","properties":{"sessionID":"s1"}}}`)
+	event, err := MapEvent(raw, 1)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	var rawJSON map[string]any
+	if err := json.Unmarshal(event.Raw, &rawJSON); err != nil {
+		t.Fatalf("Raw is not valid JSON: %v", err)
+	}
+}
+
+func TestEventMapperRealToolLifecycleViaPartUpdated(t *testing.T) {
+	// The real locked OpenCode (v1.18.11) /global/event stream carries the tool
+	// lifecycle as message.part.updated events with part.type=tool whose
+	// state.status transitions pending → running → completed | error, all
+	// sharing one callID. The terminal statuses must surface as tool.success /
+	// tool.failed so the Application can close the lifecycle; without this the
+	// "tool.called exists but tool.success is lost" gap re-opens on the real
+	// runtime path (session.next.tool.* is a different/future channel).
+	tests := []struct {
+		name       string
+		status     string
+		wantType   runtime.EventType
+		wantName   string
+		wantCallID string
+	}{
+		{"pending → tool.called", "pending", CodeaEventToolCalled, "read", "call_read"},
+		{"running → tool.called", "running", CodeaEventToolCalled, "read", "call_read"},
+		{"completed → tool.success", "completed", CodeaEventToolSuccess, "read", "call_read"},
+		{"error → tool.failed", "error", CodeaEventToolFailed, "read", "call_read"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			raw := `{"directory":"/tmp","payload":{"type":"message.part.updated","properties":{"sessionID":"s1","part":{"id":"prt_1","messageID":"m1","sessionID":"s1","type":"tool","tool":"read","callID":"call_read","state":{"status":"` + tt.status + `"}}}}}`
+			event, err := MapEvent([]byte(raw), 1)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if event.Type != tt.wantType {
+				t.Fatalf("expected Type=%q, got %q", tt.wantType, event.Type)
+			}
+			if event.Tool == nil {
+				t.Fatal("expected Tool to be non-nil")
+			}
+			if event.Tool.CallID != tt.wantCallID {
+				t.Fatalf("expected Tool.CallID=%q, got %q", tt.wantCallID, event.Tool.CallID)
+			}
+			if tt.wantName != "" && event.Tool.Name != tt.wantName {
+				t.Fatalf("expected Tool.Name=%q, got %q", tt.wantName, event.Tool.Name)
+			}
+		})
+	}
+}
+
+func TestEventMapperRealToolLifecycleCallIDCorrelation(t *testing.T) {
+	// A single tool invocation observed on the real runtime must correlate its
+	// called (running) and success (completed) events by callID.
+	rawEvents := []string{
+		`{"directory":"/tmp","payload":{"type":"message.part.updated","properties":{"sessionID":"s1","part":{"id":"prt_1","messageID":"m1","sessionID":"s1","type":"tool","tool":"bash","callID":"call_bash","state":{"status":"running"}}}}}`,
+		`{"directory":"/tmp","payload":{"type":"message.part.updated","properties":{"sessionID":"s1","part":{"id":"prt_1","messageID":"m1","sessionID":"s1","type":"tool","tool":"bash","callID":"call_bash","state":{"status":"completed"}}}}}`,
+	}
+	var calledCallID, successCallID string
+	for i, raw := range rawEvents {
+		ev, err := MapEvent([]byte(raw), int64(i+1))
+		if err != nil {
+			t.Fatalf("map event %d: %v", i, err)
+		}
+		if ev.Tool == nil {
+			t.Fatalf("event %d has nil Tool", i)
+		}
+		switch ev.Type {
+		case CodeaEventToolCalled:
+			calledCallID = ev.Tool.CallID
+		case CodeaEventToolSuccess:
+			successCallID = ev.Tool.CallID
+		}
+	}
+	if calledCallID == "" || successCallID == "" {
+		t.Fatalf("incomplete real tool lifecycle: called=%q success=%q", calledCallID, successCallID)
+	}
+	if calledCallID != successCallID {
+		t.Fatalf("real-path CallID not correlated: called=%q success=%q", calledCallID, successCallID)
+	}
+}
+
+func TestEventMapperSessionNextToolLifecycle(t *testing.T) {
+	tests := []struct {
+		name       string
+		raw        string
+		wantType   runtime.EventType
+		wantTool   bool
+		wantName   string
+		wantCallID string
+	}{
+		{
+			name:       "session.next.tool.called → tool.called",
+			raw:        `{"directory":"/tmp","payload":{"type":"session.next.tool.called","properties":{"sessionID":"s1","callID":"call_1","tool":"read"}}}`,
+			wantType:   CodeaEventToolCalled,
+			wantTool:   true,
+			wantName:   "read",
+			wantCallID: "call_1",
+		},
+		{
+			name:       "session.next.tool.success → tool.success",
+			raw:        `{"directory":"/tmp","payload":{"type":"session.next.tool.success","properties":{"sessionID":"s1","callID":"call_1"}}}`,
+			wantType:   CodeaEventToolSuccess,
+			wantTool:   true,
+			wantCallID: "call_1",
+		},
+		{
+			name:       "session.next.tool.failed → tool.failed",
+			raw:        `{"directory":"/tmp","payload":{"type":"session.next.tool.failed","properties":{"sessionID":"s1","callID":"call_1"}}}`,
+			wantType:   CodeaEventToolFailed,
+			wantTool:   true,
+			wantCallID: "call_1",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			event, err := MapEvent([]byte(tt.raw), 1)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if event.Type != tt.wantType {
+				t.Fatalf("expected Type=%q, got %q", tt.wantType, event.Type)
+			}
+			if tt.wantTool != (event.Tool != nil) {
+				t.Fatalf("expected Tool non-nil=%v, got %v", tt.wantTool, event.Tool)
+			}
+			if tt.wantTool && event.Tool != nil {
+				if event.Tool.CallID != tt.wantCallID {
+					t.Fatalf("expected Tool.CallID=%q, got %q", tt.wantCallID, event.Tool.CallID)
+				}
+				if tt.wantName != "" && event.Tool.Name != tt.wantName {
+					t.Fatalf("expected Tool.Name=%q, got %q", tt.wantName, event.Tool.Name)
+				}
+			}
+		})
+	}
+}
