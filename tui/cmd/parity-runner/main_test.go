@@ -1,6 +1,11 @@
 package main
 
-import "testing"
+import (
+	"strings"
+	"testing"
+
+	"codea/tui/internal/parity"
+)
 
 func TestLoadRunnerConfigRequiresTwoDistinctExplicitEndpoints(t *testing.T) {
 	get := func(values map[string]string) func(string) string {
@@ -48,5 +53,36 @@ func TestLoadRunnerConfigDefaultsEvidencePathButNotRuntimeEndpoints(t *testing.T
 	}
 	if cfg.EvidencePath == "" {
 		t.Fatal("evidence path must have a deterministic default")
+	}
+}
+
+func TestFormatFailureSummaryIncludesScenarioSilentLossAndReasons(t *testing.T) {
+	result := &parity.Result{
+		RequiredFailed: 1,
+		Scenarios: []parity.ScenarioResult{
+			{
+				Name:       "RawEventHandling",
+				Required:   true,
+				Passed:     false,
+				SilentLoss: true,
+				Failures: []parity.Failure{
+					{Reason: "candidate missing raw event"},
+					{Reason: "candidate missing session.idle"},
+				},
+			},
+		},
+	}
+
+	got := formatFailureSummary(result)
+	for _, want := range []string{
+		"RawEventHandling",
+		"required=true",
+		"silentLoss=true",
+		"candidate missing raw event",
+		"candidate missing session.idle",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("failure summary missing %q:\n%s", want, got)
+		}
 	}
 }
