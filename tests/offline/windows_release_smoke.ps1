@@ -24,16 +24,16 @@ try {
 if ($publicReachable) { throw 'FAIL: public HTTPS is reachable' }
 
 $work = Join-Path ([IO.Path]::GetTempPath()) ('codea-win-release-' + [Guid]::NewGuid().ToString('N'))
-$home = Join-Path $work 'home'
+$codeaHome = Join-Path $work 'home'
 New-Item -ItemType Directory -Force -Path $work | Out-Null
 $runtimeProcess = $null
 $codeaProcess = $null
 $originalPath = $env:PATH
 try {
-  $env:CODEA_HOME = $home
+  $env:CODEA_HOME = $codeaHome
   & $install -PackageDir $PackageDir
 
-  $current = Join-Path $home 'current'
+  $current = Join-Path $codeaHome 'current'
   $currentItem = Get-Item -LiteralPath $current
   if ($currentItem.LinkType -ne 'Junction' -and -not ($currentItem.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
     throw 'FAIL: current is not a Junction/ReparsePoint'
@@ -43,7 +43,7 @@ try {
   $plugin = Join-Path $current 'plugins\index.js'
   $agents = Join-Path $current 'agents'
   $skills = Join-Path $current 'skills'
-  $shim = Join-Path $home 'bin\codea.cmd'
+  $shim = Join-Path $codeaHome 'bin\codea.cmd'
   foreach ($path in @($codeaExe,$opencodeExe,$plugin,$shim)) {
     if (-not (Test-Path $path -PathType Leaf)) { throw "FAIL: installed file missing: $path" }
   }
