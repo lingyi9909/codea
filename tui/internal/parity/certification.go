@@ -11,14 +11,16 @@ const (
 )
 
 type ReleaseGateEvidence struct {
-	ID       string            `json:"id"`
-	Status   ReleaseGateStatus `json:"status"`
-	Evidence string            `json:"evidence"`
+	ID           string            `json:"id"`
+	Status       ReleaseGateStatus `json:"status"`
+	Evidence     string            `json:"evidence"`
+	SourceCommit string            `json:"sourceCommit"`
 }
 
 // Certification is the machine-checkable Task 21 release verdict. Final V1
 // certification is stricter than earlier task-level deferrals: every G1-G15
-// gate (including G2.1 and G12.1) must have fresh PASS evidence.
+// gate (including G2.1 and G12.1) must have fresh PASS evidence from the same
+// source commit being certified.
 type Certification struct {
 	SourceCommit          string                `json:"sourceCommit"`
 	Gates                 []ReleaseGateEvidence `json:"gates"`
@@ -67,6 +69,12 @@ func (c Certification) Validate() error {
 		}
 		if gate.Evidence == "" {
 			return fmt.Errorf("release gate %s has no evidence", gate.ID)
+		}
+		if gate.SourceCommit == "" {
+			return fmt.Errorf("release gate %s has no sourceCommit", gate.ID)
+		}
+		if gate.SourceCommit != c.SourceCommit {
+			return fmt.Errorf("release gate %s sourceCommit %s does not match certification sourceCommit %s", gate.ID, gate.SourceCommit, c.SourceCommit)
 		}
 	}
 	for _, id := range requiredReleaseGateIDs {
