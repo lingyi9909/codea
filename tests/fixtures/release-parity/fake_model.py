@@ -45,14 +45,29 @@ class Handler(BaseHTTPRequestHandler):
         messages = req.get("messages", [])
         prompt = last_user(messages).upper()
         last_role = messages[-1].get("role") if messages else ""
+        print(
+            json.dumps(
+                {
+                    "kind": "release-parity-request",
+                    "prompt": prompt,
+                    "lastRole": last_role,
+                    "stream": bool(req.get("stream")),
+                    "tools": len(req.get("tools") or []),
+                },
+                separators=(",", ":"),
+            ),
+            file=sys.stderr,
+            flush=True,
+        )
 
         chunks = [self.chunk({"role": "assistant"}, None)]
         if last_role == "tool":
             chunks.append(self.chunk({"content": "tool-done"}, None))
             chunks.append(self.chunk({}, "stop", usage=True))
         elif "REASONING TEST" in prompt:
-            # OpenAI-compatible providers commonly expose reasoning via the
-            # reasoning_content delta; OpenCode converts it to a reasoning part.
+            # OpenAI-compatible providers expose reasoning via the
+            # reasoning_content delta; OpenCode v1.18.11 maps it to a
+            # reasoning part when the provider/model capabilities allow it.
             chunks.append(self.chunk({"reasoning_content": "parity-thinking"}, None))
             chunks.append(self.chunk({"content": "parity-answer"}, None))
             chunks.append(self.chunk({}, "stop", usage=True))
