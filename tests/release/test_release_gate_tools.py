@@ -10,6 +10,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 WRITE = ROOT / "scripts" / "write-release-gate.py"
 MERGE = ROOT / "scripts" / "merge-release-gates.py"
 DERIVE_NATIVE = ROOT / "scripts" / "derive-native-release-gates.py"
+GENERATE_CLOSEOUT = ROOT / "scripts" / "generate-release-closeout.py"
 GATES = ["G1","G2","G2.1","G3","G4","G5","G6","G7","G8","G9","G10","G11","G12","G12.1","G13","G14","G15"]
 
 
@@ -99,6 +100,79 @@ class ReleaseGateToolsTest(unittest.TestCase):
                                 "--out-dir", str(root / "bad")], text=True, capture_output=True)
             self.assertNotEqual(p.returncode, 0)
             self.assertIn("5 minute", (p.stdout + p.stderr).lower())
+
+    def test_closeout_generates_final_checklist_and_report_only_for_strict_pass(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = pathlib.Path(td)
+            gates = [{
+                "id": gate,
+                "status": "pass",
+                "evidence": f"evidence:{gate}",
+                "sourceCommit": "abc123",
+            } for gate in GATES]
+            gates_path = root / "release-gates.json"
+            gates_path.write_text(json.dumps(gates))
+            cert_path = root / "release-certification.json"
+            cert_path.write_text(json.dumps({
+                "schemaVersion": 1,
+                "timestamp": "2026-08-24T10:00:00Z",
+                "passed": True,
+                "certification": {
+                    "sourceCommit": "abc123",
+                    "generalCompletionRate": 1.0,
+                },
+            }))
+            checklist = root / "release-certification-checklist.md"
+            report = root / "release-certification-report.md"
+            self.run_cmd(GENERATE_CLOSEOUT,
+                         "--certification", cert_path,
+                         "--gates", gates_path,
+                         "--checklist-out", checklist,
+                         "--report-out", report)
+            checklist_text = checklist.read_text()
+            report_text = report.read_text()
+            self.assertIn("17/17", checklist_text)
+            self.assertIn("G15", checklist_text)
+            self.assertIn("abc123", checklist_text)
+            self.assertIn("RELEASE CERTIFIED", report_text)
+            self.assertIn("abc123", report_text)
+            self.assertIn("12/12", report_text)
+
+    def test_closeout_rejects_deferred_g15_and_writes_no_final_documents(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = pathlib.Path(td)
+            gates = [{
+                "id": gate,
+                "status": "pass",
+                "evidence": f"evidence:{gate}",
+                "sourceCommit": "abc123",
+            } for gate in GATES]
+            gates[-1]["status"] = "deferred"
+            gates_path = root / "release-gates.json"
+            gates_path.write_text(json.dumps(gates))
+            cert_path = root / "release-certification.json"
+            cert_path.write_text(json.dumps({
+                "schemaVersion": 1,
+                "timestamp": "2026-08-24T10:00:00Z",
+                "passed": True,
+                "certification": {
+                    "sourceCommit": "abc123",
+                    "generalCompletionRate": 1.0,
+                },
+            }))
+            checklist = root / "release-certification-checklist.md"
+            report = root / "release-certification-report.md"
+            p = subprocess.run([
+                sys.executable, str(GENERATE_CLOSEOUT),
+                "--certification", str(cert_path),
+                "--gates", str(gates_path),
+                "--checklist-out", str(checklist),
+                "--report-out", str(report),
+            ], text=True, capture_output=True)
+            self.assertNotEqual(p.returncode, 0)
+            self.assertIn("g15", (p.stdout + p.stderr).lower())
+            self.assertFalse(checklist.exists())
+            self.assertFalse(report.exists())
 
 
 if __name__ == "__main__":
