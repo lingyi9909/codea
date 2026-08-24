@@ -129,11 +129,11 @@ func (r *Runner) runPrompt(ctx context.Context, s Scenario, sr *ScenarioResult) 
 		timeout = defaultTimeout
 	}
 	drainRawTail := s.Assertions.RequireRaw
-	bEvents, bErr := r.collectEvents(ctx, r.Baseline, s.Prompt, s.ApprovalDecision, timeout, drainRawTail)
+	bEvents, bErr := r.collectEvents(ctx, r.Baseline, s.Prompt, s.ApprovalDecision, s.Assertions, timeout, drainRawTail)
 	if bErr != nil {
 		sr.Failures = append(sr.Failures, Failure{Reason: "baseline prompt failed: " + bErr.Error()})
 	}
-	cEvents, cErr := r.collectEvents(ctx, r.Candidate, s.Prompt, s.ApprovalDecision, timeout, drainRawTail)
+	cEvents, cErr := r.collectEvents(ctx, r.Candidate, s.Prompt, s.ApprovalDecision, s.Assertions, timeout, drainRawTail)
 	if cErr != nil {
 		sr.Failures = append(sr.Failures, Failure{Reason: "candidate prompt failed: " + cErr.Error()})
 	}
@@ -323,7 +323,7 @@ func hasEventType(events []runtime.Event, typ runtime.EventType) bool {
 	return false
 }
 
-func (r *Runner) collectEvents(ctx context.Context, rt runtime.AgentRuntime, req *runtime.PromptRequest, approvalDecision *runtime.ApprovalDecision, timeout time.Duration, drainRawTail bool) ([]runtime.Event, error) {
+func (r *Runner) collectEvents(ctx context.Context, rt runtime.AgentRuntime, req *runtime.PromptRequest, approvalDecision *runtime.ApprovalDecision, assertions Assertion, timeout time.Duration, drainRawTail bool) ([]runtime.Event, error) {
 	session, err := rt.CreateSession(ctx, runtime.CreateSessionRequest{Title: "parity-prompt"})
 	if err != nil {
 		return nil, err
@@ -355,19 +355,31 @@ func (r *Runner) collectEvents(ctx context.Context, rt runtime.AgentRuntime, req
 				continue
 			}
 			events = append(events, ev)
-			if isSemanticParityEvent(ev) || (drainRawTail && (ev.Type == "step.finished" || ev.Type == "step.failed")) {
-				inactivity = time.After(inactivityFallback)
-			}
+
 			if approvalDecision != nil && ev.Type == "approval.requested" && ev.Approval != nil && ev.Approval.ID != "" {
 				if err := rt.ReplyApproval(ctx, runtime.ApprovalID(ev.Approval.ID), runtime.ApprovalReply{Decision: *approvalDecision}); err != nil {
 					return events, fmt.Errorf("ReplyApproval(%s): %w", ev.Approval.ID, err)
 				}
 			}
+
+			requiredSatisfied := checkAssertions(events, assertions).ok
+			if !requiredSatisfied {
+				// A terminal/lifecycle event can race ahead of the semantic
+				// event we are certifying (for example session.idle from
+				// title/small-model work). Until all Required assertions are
+				// present, neither terminal nor inactivity may end collection.
+				inactivity = nil
+				continue
+			}
+
 			if ev.RawType == "session.idle" {
 				return events, nil
 			}
 			if (ev.Type == "step.finished" || ev.Type == "step.failed") && !drainRawTail {
 				return events, nil
+			}
+			if isSemanticParityEvent(ev) || (drainRawTail && (ev.Type == "step.finished" || ev.Type == "step.failed")) {
+				inactivity = time.After(inactivityFallback)
 			}
 		case <-inactivity:
 			return events, nil
