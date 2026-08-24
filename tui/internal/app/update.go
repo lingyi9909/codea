@@ -130,6 +130,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case eventStreamClosedMsg:
+		m.completeTaskMetric(MetricStatusFailed, "event_stream_closed", false)
 		if m.runtimeStatus != runtime.RuntimeCrashed {
 			m.runtimeStatus = runtime.RuntimeStopped
 			m.markDirty()
@@ -160,6 +161,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // priority over chat keys so typing/Enter/shortcuts cannot leak through.
 func (m *Model) handleKey(msg tea.KeyMsg) tea.Cmd {
 	if key.Matches(msg, m.keys.Quit) {
+		m.completeTaskMetric(MetricStatusFailed, "user_quit", false)
 		return tea.Quit
 	}
 	if m.permission.Visible() {
