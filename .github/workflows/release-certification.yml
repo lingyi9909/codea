@@ -9,6 +9,7 @@ on:
       - 'scripts/write-release-gate.py'
       - 'scripts/merge-release-gates.py'
       - 'scripts/derive-native-release-gates.py'
+      - 'scripts/generate-release-closeout.py'
       - 'tests/release/**'
       - 'tests/offline/**'
       - 'packaging/**'
@@ -345,6 +346,15 @@ jobs:
           CODEA_RELEASE_GATES: ../tests/evidence/release-gates.json
           CODEA_CERTIFICATION_EVIDENCE: ../tests/evidence/release-certification.json
         run: GOTOOLCHAIN=local go run ./cmd/release-certifier
+      - name: Generate final certification checklist and report
+        if: github.event_name == 'workflow_dispatch'
+        shell: bash
+        run: |
+          python3 scripts/generate-release-closeout.py \
+            --certification tests/evidence/release-certification.json \
+            --gates tests/evidence/release-gates.json \
+            --checklist-out tests/evidence/release-certification-checklist.md \
+            --report-out tests/evidence/release-certification-report.md
       - name: Upload certification/preflight evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -354,4 +364,6 @@ jobs:
             tests/evidence/release-gates.json
             tests/evidence/release-parity.json
             tests/evidence/release-certification.json
+            tests/evidence/release-certification-checklist.md
+            tests/evidence/release-certification-report.md
           if-no-files-found: warn
