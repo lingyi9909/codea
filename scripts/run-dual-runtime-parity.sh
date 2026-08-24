@@ -121,6 +121,7 @@ wait_runtime "$baseline_port" "$baseline_pid" "$run_root/baseline.log" baseline
 wait_runtime "$candidate_port" "$candidate_pid" "$run_root/candidate.log" candidate
 
 cd "$repo_root/tui"
+set +e
 CODEA_PARITY_BASELINE_URL="http://127.0.0.1:$baseline_port" \
 CODEA_PARITY_CANDIDATE_URL="http://127.0.0.1:$candidate_port" \
 CODEA_PARITY_BASELINE_USERNAME="$username" \
@@ -129,6 +130,17 @@ CODEA_PARITY_CANDIDATE_USERNAME="$username" \
 CODEA_PARITY_CANDIDATE_PASSWORD="$password" \
 CODEA_PARITY_EVIDENCE="$evidence_file" \
 GOTOOLCHAIN=local go run ./cmd/parity-runner
+parity_status=$?
+set -e
+if [ "$parity_status" -ne 0 ]; then
+  echo "--- release parity fake-model trace ---" >&2
+  tail -n 400 "$run_root/fake.log" >&2 || true
+  echo "--- baseline OpenCode log ---" >&2
+  tail -n 400 "$run_root/baseline.log" >&2 || true
+  echo "--- candidate OpenCode log ---" >&2
+  tail -n 400 "$run_root/candidate.log" >&2 || true
+  exit "$parity_status"
+fi
 
 python3 - "$evidence_file" <<'PY'
 import json, pathlib, sys
