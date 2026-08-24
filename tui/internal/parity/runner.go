@@ -347,11 +347,11 @@ func (r *Runner) collectEvents(ctx context.Context, rt runtime.AgentRuntime, req
 			if !ok {
 				return events, nil
 			}
-			// Subscribe is a global event stream. Parity evidence must be scoped
-			// strictly to the session created for this scenario; otherwise stale
-			// terminal/lifecycle events from earlier sessions can terminate or
-			// pollute the current baseline/candidate comparison.
-			if ev.SessionID != session.ID {
+			// Subscribe is a global event stream. Events carrying a different
+			// session ID are foreign and must not terminate or pollute this
+			// scenario. Empty SessionID is retained for backwards compatibility
+			// with legacy/fake runtimes that do not populate correlation fields.
+			if ev.SessionID != "" && ev.SessionID != session.ID {
 				continue
 			}
 			events = append(events, ev)
