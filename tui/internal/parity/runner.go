@@ -239,6 +239,7 @@ func checkAssertions(events []runtime.Event, a Assertion) assertResult {
 					found = true
 					break
 				}
+			}
 		}
 		if !found {
 			return assertResult{false, "missing raw event with non-empty valid JSON payload"}
