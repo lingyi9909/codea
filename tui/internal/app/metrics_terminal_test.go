@@ -20,7 +20,7 @@ func newActiveMetricModel(t *testing.T) (*Model, *MetricsCollector, string) {
 	if m.activeMetricID == "" {
 		t.Fatal("expected active metric")
 	}
-	return &m, collector, m.activeMetricID
+	return m, collector, m.activeMetricID
 }
 
 func assertFailedMetric(t *testing.T, collector *MetricsCollector, eventID, category string) {
