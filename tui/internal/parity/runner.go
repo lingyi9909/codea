@@ -239,7 +239,6 @@ func checkAssertions(events []runtime.Event, a Assertion) assertResult {
 					found = true
 					break
 				}
-			}
 		}
 		if !found {
 			return assertResult{false, "missing raw event with non-empty valid JSON payload"}
@@ -355,7 +354,9 @@ func (r *Runner) collectEvents(ctx context.Context, rt runtime.AgentRuntime, req
 				continue
 			}
 			events = append(events, ev)
-			inactivity = time.After(inactivityFallback)
+			if isSemanticParityEvent(ev) || (drainRawTail && (ev.Type == "step.finished" || ev.Type == "step.failed")) {
+				inactivity = time.After(inactivityFallback)
+			}
 			if approvalDecision != nil && ev.Type == "approval.requested" && ev.Approval != nil && ev.Approval.ID != "" {
 				if err := rt.ReplyApproval(ctx, runtime.ApprovalID(ev.Approval.ID), runtime.ApprovalReply{Decision: *approvalDecision}); err != nil {
 					return events, fmt.Errorf("ReplyApproval(%s): %w", ev.Approval.ID, err)
@@ -374,6 +375,15 @@ func (r *Runner) collectEvents(ctx context.Context, rt runtime.AgentRuntime, req
 		case <-ctx.Done():
 			return events, ctx.Err()
 		}
+	}
+}
+
+func isSemanticParityEvent(ev runtime.Event) bool {
+	switch ev.Type {
+	case "answer.delta", "reasoning.delta", "tool.called", "tool.success", "tool.failed", "approval.requested", "approval.resolved", "raw":
+		return true
+	default:
+		return false
 	}
 }
 
