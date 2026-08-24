@@ -130,6 +130,7 @@ func (a *OpenCodeAdapter) Subscribe(ctx context.Context) (<-chan runtime.Event, 
 	ch := make(chan runtime.Event, 16)
 	go func() {
 		defer close(ch)
+		mapper := newEventMapState()
 		for raw := range rawCh {
 			// Recovery events injected by ReconnectHook — unwrap directly.
 			if ev, ok := unwrapRecoveryEvent(raw.Data); ok {
@@ -150,8 +151,10 @@ func (a *OpenCodeAdapter) Subscribe(ctx context.Context) (<-chan runtime.Event, 
 				continue
 			}
 
-			// Live event — map, record, forward.
-			ev, _ := MapEvent(raw.Data, raw.Sequence)
+			// Live event — map, record, forward. OpenCode part deltas require
+			// per-stream state because v1.18.11 uses field=text for both text and
+			// reasoning parts; the preceding part.updated event carries the kind.
+			ev, _ := mapper.Map(raw.Data, raw.Sequence)
 			// Dedup boundary: a live event that raced into the reconnect buffer
 			// during recovery and duplicates a just-compensated message/part is
 			// suppressed so the Application sees it exactly once.
