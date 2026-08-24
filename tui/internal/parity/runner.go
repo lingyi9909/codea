@@ -347,6 +347,13 @@ func (r *Runner) collectEvents(ctx context.Context, rt runtime.AgentRuntime, req
 			if !ok {
 				return events, nil
 			}
+			// Subscribe is a global event stream. Parity evidence must be scoped
+			// strictly to the session created for this scenario; otherwise stale
+			// terminal/lifecycle events from earlier sessions can terminate or
+			// pollute the current baseline/candidate comparison.
+			if ev.SessionID != session.ID {
+				continue
+			}
 			events = append(events, ev)
 			inactivity = time.After(inactivityFallback)
 			if approvalDecision != nil && ev.Type == "approval.requested" && ev.Approval != nil && ev.Approval.ID != "" {
