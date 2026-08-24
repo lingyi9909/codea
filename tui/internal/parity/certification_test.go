@@ -15,11 +15,16 @@ func TestRequiredReleaseGateIDsCoversG1ThroughG15IncludingSubgates(t *testing.T)
 	}
 }
 
-func TestCertificationValidateRequiresEveryGateAndParity(t *testing.T) {
+func freshGates(sourceCommit string) []ReleaseGateEvidence {
 	gates := make([]ReleaseGateEvidence, 0, len(RequiredReleaseGateIDs()))
 	for _, id := range RequiredReleaseGateIDs() {
-		gates = append(gates, ReleaseGateEvidence{ID: id, Status: ReleaseGatePass, Evidence: "fresh"})
+		gates = append(gates, ReleaseGateEvidence{ID: id, Status: ReleaseGatePass, Evidence: "fresh", SourceCommit: sourceCommit})
 	}
+	return gates
+}
+
+func TestCertificationValidateRequiresEveryGateAndParity(t *testing.T) {
+	gates := freshGates("abc123")
 	cert := Certification{
 		SourceCommit:          "abc123",
 		Gates:                 gates,
@@ -57,10 +62,7 @@ func TestCertificationValidateRequiresEveryGateAndParity(t *testing.T) {
 }
 
 func TestCertificationRejectsDuplicateAndUnknownGateIDs(t *testing.T) {
-	gates := make([]ReleaseGateEvidence, 0, len(RequiredReleaseGateIDs()))
-	for _, id := range RequiredReleaseGateIDs() {
-		gates = append(gates, ReleaseGateEvidence{ID: id, Status: ReleaseGatePass, Evidence: "fresh"})
-	}
+	gates := freshGates("abc123")
 	base := Certification{
 		SourceCommit:          "abc123",
 		Gates:                 gates,
@@ -79,5 +81,28 @@ func TestCertificationRejectsDuplicateAndUnknownGateIDs(t *testing.T) {
 	unknown.Gates[0].ID = "G99"
 	if err := unknown.Validate(); err == nil {
 		t.Fatal("unknown gate must fail certification")
+	}
+}
+
+func TestCertificationRejectsStaleOrUnattributedGateEvidence(t *testing.T) {
+	cert := Certification{
+		SourceCommit:          "abc123",
+		Gates:                 freshGates("abc123"),
+		Parity:                &Result{Total: 12, Passed: 12},
+		GeneralCompletionRate: 1.0,
+	}
+
+	stale := cert
+	stale.Gates = append([]ReleaseGateEvidence(nil), cert.Gates...)
+	stale.Gates[0].SourceCommit = "old456"
+	if err := stale.Validate(); err == nil {
+		t.Fatal("gate evidence from a different source commit must fail certification")
+	}
+
+	missing := cert
+	missing.Gates = append([]ReleaseGateEvidence(nil), cert.Gates...)
+	missing.Gates[0].SourceCommit = ""
+	if err := missing.Validate(); err == nil {
+		t.Fatal("gate evidence without sourceCommit must fail certification")
 	}
 }
