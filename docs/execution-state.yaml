@@ -5,26 +5,35 @@ taskOrder: ["0", "1", "2", "2A", "3", "4", "5", "6", "7", "8", "9", "10", "11", 
 current:
   task: "21"
   step: 3
-  status: in_progress
-  nextAction: 对当前 Task 21 closeout checkpoint 运行 fresh Gate；通过后，在公司内网对最终 source commit 执行 G15 真实 Maven/npm/PyPI/Go 镜像验证，并携带 G15 PASS 证据 dispatch V1 Release Certification。严格认证 PASS 后取得机器 evidence + final checklist/report，再更新 execution-state 为 completed。
+  status: completed
+  nextAction: Task 0-21 已全部完成并通过人工验收。G15 按正式验收决定继续 deferred，作为后续公司内网真实 Release Certification 证据项保留，不阻塞 Task 21；如未来执行正式 V1 Release Certification，再在公司内网对目标 source commit 运行 G15 并 dispatch 严格认证。
 checkpoint:
-  commit: c240ccc3a76cfee62a2f6558cd966fbcb4fce4bf
-  updatedAt: "2026-08-24T18:47:13+08:00"
+  commit: 62c0c7038a6324c115a1be764379e83b21898090
+  updatedAt: "2026-08-24T21:33:00+08:00"
 verification:
-  status: not_run
-  commands: []
+  status: pass
+  commands:
+    - Task 20-21 Acceptance Gates run #77 / run ID 32719737844 / source 62c0c7038a6324c115a1be764379e83b21898090
+    - Bun plugin regression/build PASS
+    - Release evidence tool regression PASS
+    - Go full regression PASS
+    - Locked OpenCode v1.18.11 download/checksum PASS
+    - Real distinct baseline/candidate Runtime parity 12/12 Required scenarios PASS
+    - Parity evidence artifact task20-21-release-parity-62c0c7038a6324c115a1be764379e83b21898090 uploaded
   errorSummary: ""
-  recoveryAdvice: "上一 fresh 核心 Gate（run #71）与真实双 Runtime parity 12/12 PASS 已成立；当前 closeout checkpoint 尚需 fresh Gate。最终认证仍必须等待 G15 公司内网真实镜像证据，不得使用 GitHub 环境或伪造证据替代。"
+  recoveryAdvice: "G15 继续 deferred；不得使用 GitHub 环境或伪造证据替代公司内网真实镜像验证。该 deferred 状态不阻塞 Task 21 验收。"
 taskGate:
-  status: not_evaluated
+  status: pass
   gateItems:
-    previousTask20_21FreshGate: pass
-    previousDualRuntimeParity12of12: pass
-    finalCloseoutAutomation: implemented_pending_fresh_gate
-    g15CompanyIntranetMirror: deferred
-    finalReleaseCertification: blocked_on_g15
+    latestTask20_21FreshGate: pass
+    exactReleaseParityCertification: pass
+    dualRuntimeParity12of12: pass
+    task20FinalAcceptance: pass
+    task21ImplementationAcceptance: pass
+    task21ProcessAcceptance: pass
+    g15CompanyIntranetMirror: deferred_non_blocking
 humanAcceptance:
-  accepted: false
+  accepted: true
 task17Gate:
   task17PackagingContract: pass
   task17ThreePlatformBuildEvidence: pass
@@ -52,5 +61,5 @@ tasks:
   "17": {status: completed, completedSteps: [], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: 057ad70d0f5bb4242147fd468b1e904ce1414aae, report: docs/task-reports/task-17.md}
   "18": {status: completed, completedSteps: [], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: 372aa8387257f3018f11d4404d3888fbc5136e0c, report: docs/task-reports/task-18.md}
   "19": {status: completed, completedSteps: [], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: 372aa8387257f3018f11d4404d3888fbc5136e0c, report: docs/task-reports/task-19.md}
-  "20": {status: awaiting_acceptance, completedSteps: [], verificationStatus: pass, taskGateStatus: pass, humanAccepted: false, checkpoint: e2a97095acc58dc0c95c4a091738181504d35f42, report: docs/task-reports/task-20.md}
-  "21": {status: in_progress, completedSteps: [1, 2], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: c240ccc3a76cfee62a2f6558cd966fbcb4fce4bf, report: docs/task-reports/task-21.md}
+  "20": {status: completed, completedSteps: [], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: e2a97095acc58dc0c95c4a091738181504d35f42, report: docs/task-reports/task-20.md}
+  "21": {status: completed, completedSteps: [1, 2, 3], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: 62c0c7038a6324c115a1be764379e83b21898090, report: docs/task-reports/task-21.md}
