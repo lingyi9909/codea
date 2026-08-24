@@ -36,6 +36,15 @@ grep -q 'UTF8Encoding($false)' "$repo_root/packaging/platform/windows/install.ps
 grep -q 'CODEA_POINTER=.*current.txt' "$repo_root/packaging/platform/windows/install.ps1" || { echo "Windows launcher must resolve current.txt" >&2; exit 1; }
 grep -q 'set /p "CODEA_CURRENT="' "$repo_root/packaging/platform/windows/install.ps1" || { echo "Windows launcher must read atomic current pointer" >&2; exit 1; }
 
+# Final G2/G2.1 native smokes must prove more than packaged-file presence:
+# package-manager processes are trapped, and the live locked Runtime must expose
+# every enterprise plugin tool while public HTTPS is unavailable.
+for smoke in tests/offline/macos_release_smoke.sh tests/offline/windows_release_smoke.ps1; do
+  grep -q 'package-manager-invocations' "$repo_root/$smoke" || { echo "$smoke must trap package-manager invocation" >&2; exit 1; }
+  grep -q 'experimental/tool/ids' "$repo_root/$smoke" || { echo "$smoke must query live plugin tool registry" >&2; exit 1; }
+  grep -q 'collect_review_context' "$repo_root/$smoke" || { echo "$smoke must verify enterprise plugin tools" >&2; exit 1; }
+done
+
 # Installed launchers must point Codea at resources inside the selected version.
 for key in OPENCODE_BIN CODEA_AGENTS_DIR CODEA_SKILLS_DIR CODEA_PLUGIN_BUNDLE; do
   grep -q "$key" "$repo_root/packaging/platform/macos/install.sh" || { echo "macOS launcher missing $key" >&2; exit 1; }
