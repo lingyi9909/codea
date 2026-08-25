@@ -15,6 +15,7 @@ jobs:
     runs-on: windows-2025
     env:
       GOTOOLCHAIN: local
+      CODEA_LLM_API_KEY: diagnostic-key
     steps:
       - uses: actions/checkout@v4
 
@@ -42,14 +43,38 @@ jobs:
           "REAL_OC=$($oc.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           & $oc.FullName --version
 
-      - name: Prepare Codea-equivalent runtime environment
+      - name: Prepare Codea-equivalent private-provider and plugin config
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           $cfg = Join-Path $env:RUNNER_TEMP 'codea-real-runtime-config'
           Remove-Item -Recurse -Force $cfg -ErrorAction SilentlyContinue
           New-Item -ItemType Directory -Force -Path $cfg | Out-Null
-          Set-Content -LiteralPath (Join-Path $cfg 'opencode.json') -Value '{}' -Encoding utf8
+
+          $pluginPath = (Resolve-Path (Join-Path $env:GITHUB_WORKSPACE 'distribution/plugins/dist/index.js')).Path
+          $pluginUri = ([System.Uri]$pluginPath).AbsoluteUri
+          if (-not $pluginUri.StartsWith('file:///')) { throw "invalid Windows plugin URI: $pluginUri" }
+
+          $config = [ordered]@{
+            '$schema' = 'https://opencode.ai/config.json'
+            model = 'company/qwen3-coder-480b'
+            provider = [ordered]@{
+              company = [ordered]@{
+                npm = '@ai-sdk/openai-compatible'
+                name = 'Company Private Model'
+                options = [ordered]@{
+                  baseURL = 'http://127.0.0.1:65534/v1'
+                  apiKey = '{env:CODEA_LLM_API_KEY}'
+                }
+                models = [ordered]@{
+                  'qwen3-coder-480b' = [ordered]@{ name = 'Qwen3 Coder 480B' }
+                }
+              }
+            }
+            plugin = @($pluginUri)
+          }
+          $config | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath (Join-Path $cfg 'opencode.json') -Encoding utf8
+          Get-Content -LiteralPath (Join-Path $cfg 'opencode.json') -Raw
           "REAL_CFG=$cfg" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Direct OpenCode serve with Codea environment
@@ -101,7 +126,7 @@ jobs:
             if (-not $p.HasExited) { Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue }
           }
 
-      - name: Codea RuntimeSupervisor with same OpenCode binary
+      - name: Codea RuntimeSupervisor with same private-provider and plugin config
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
