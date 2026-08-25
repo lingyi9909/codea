@@ -61,7 +61,7 @@ jobs:
           checksum="${archive}.sha256"
           test -s "$archive"
           test -s "$checksum"
-          sha256sum -c "$checksum"
+          (cd dist-release && sha256sum -c "codea-${version}-windows-x64.zip.sha256")
           unzip -l "$archive" > "$RUNNER_TEMP/archive-list.txt"
           prefix="codea-${version}-windows-x64"
           grep -Fq "$prefix/bin/codea.exe" "$RUNNER_TEMP/archive-list.txt"
