@@ -189,7 +189,7 @@ jobs:
 
           if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
             gh release upload "$RELEASE_TAG" "$archive" "$checksum" --clobber
-            gh release edit "$RELEASE_TAG" --title "$RELEASE_TITLE" --notes-file "$notes"
+            gh release edit "$RELEASE_TAG" --target "$GITHUB_SHA" --title "$RELEASE_TITLE" --notes-file "$notes"
           else
             args=(release create "$RELEASE_TAG" "$archive" "$checksum" --target "$GITHUB_SHA" --title "$RELEASE_TITLE" --notes-file "$notes")
             if [[ "$RELEASE_PRERELEASE" == "true" ]]; then
