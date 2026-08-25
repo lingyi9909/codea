@@ -26,7 +26,51 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  windows-installer-smoke:
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Execute install.ps1 on a real Windows runner
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $pkg = Join-Path $env:RUNNER_TEMP 'codea-installer-smoke-package'
+          $home = Join-Path $env:RUNNER_TEMP 'codea-installer-smoke-home'
+          Remove-Item -Recurse -Force $pkg,$home -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Force -Path $pkg,(Join-Path $pkg 'bin'),(Join-Path $pkg 'plugins') | Out-Null
+
+          Set-Content -LiteralPath (Join-Path $pkg 'VERSION') -Value '0.1.0-smoke' -NoNewline
+          Set-Content -LiteralPath (Join-Path $pkg 'bin/codea.exe') -Value 'smoke-codea' -NoNewline
+          Set-Content -LiteralPath (Join-Path $pkg 'bin/opencode.exe') -Value 'smoke-opencode' -NoNewline
+          Set-Content -LiteralPath (Join-Path $pkg 'plugins/index.js') -Value 'export default {};' -NoNewline
+
+          $entries = Get-ChildItem -LiteralPath $pkg -Recurse -File | ForEach-Object {
+            $rel = [IO.Path]::GetRelativePath($pkg, $_.FullName) -replace '\\','/'
+            [pscustomobject]@{
+              path = $rel
+              size = $_.Length
+              sha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath $_.FullName).Hash.ToLowerInvariant()
+            }
+          }
+          [pscustomobject]@{
+            schemaVersion = 1
+            algorithm = 'sha256'
+            files = @($entries)
+          } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $pkg 'manifest.json') -Encoding UTF8
+
+          $env:CODEA_HOME = $home
+          & ./packaging/platform/windows/install.ps1 -PackageDir $pkg
+
+          $installed = Join-Path $home 'versions/0.1.0-smoke'
+          if (-not (Test-Path (Join-Path $installed 'bin/codea.exe') -PathType Leaf)) { throw 'installed codea.exe missing' }
+          if (-not (Test-Path (Join-Path $home 'bin/codea.cmd') -PathType Leaf)) { throw 'codea.cmd shim missing' }
+          if (-not (Test-Path (Join-Path $home 'current.txt') -PathType Leaf)) { throw 'current.txt missing' }
+          if (-not (Test-Path (Join-Path $home 'current') -PathType Container)) { throw 'current junction missing' }
+          Write-Host 'Windows installer smoke passed.'
+
   build-and-publish:
+    needs: windows-installer-smoke
     runs-on: ubuntu-24.04
     env:
       GOTOOLCHAIN: local
