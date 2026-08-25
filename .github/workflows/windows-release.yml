@@ -43,7 +43,7 @@ jobs:
           Set-Content -LiteralPath (Join-Path $pkg 'VERSION') -Value '0.1.0-smoke' -NoNewline
           Set-Content -LiteralPath (Join-Path $pkg 'bin/codea.exe') -Value 'smoke-codea' -NoNewline
           Set-Content -LiteralPath (Join-Path $pkg 'bin/opencode.exe') -Value 'smoke-opencode' -NoNewline
-          Set-Content -LiteralPath (Join-Path $pkg 'plugins/index.js') -Value 'export default {};' -NoNewline
+          Copy-Item -LiteralPath './distribution/plugins/dist/index.js' -Destination (Join-Path $pkg 'plugins/index.js')
 
           $entries = Get-ChildItem -LiteralPath $pkg -Recurse -File | ForEach-Object {
             $rel = [IO.Path]::GetRelativePath($pkg, $_.FullName) -replace '\\','/'
