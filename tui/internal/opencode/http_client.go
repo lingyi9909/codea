@@ -25,18 +25,28 @@ func (e *HTTPError) Error() string {
 }
 
 type HTTPClient struct {
-	baseURL  string
-	username string
-	password string
-	client   *http.Client
+	baseURL   string
+	username  string
+	password  string
+	directory string
+	client    *http.Client
 }
 
 func NewHTTPClient(baseURL, username, password string) *HTTPClient {
+	return NewHTTPClientForDirectory(baseURL, username, password, "")
+}
+
+// NewHTTPClientForDirectory creates a vendor client whose instance-scoped
+// requests are explicitly bound to directory. OpenCode otherwise falls back to
+// the server process cwd, which can accidentally treat a user's home directory
+// as the project when Codea Doctor is launched outside a repository.
+func NewHTTPClientForDirectory(baseURL, username, password, directory string) *HTTPClient {
 	return &HTTPClient{
-		baseURL:  strings.TrimRight(baseURL, "/"),
-		username: username,
-		password: password,
-		client:   &http.Client{Timeout: 30 * time.Second},
+		baseURL:   strings.TrimRight(baseURL, "/"),
+		username:  username,
+		password:  password,
+		directory: directory,
+		client:    &http.Client{Timeout: 30 * time.Second},
 	}
 }
 
@@ -187,6 +197,9 @@ func (client *HTTPClient) doJSON(ctx context.Context, method, path string, input
 
 func (client *HTTPClient) do(req *http.Request, expectedStatus ...int) (*http.Response, error) {
 	req.Header.Set("Accept", "application/json")
+	if client.directory != "" && !strings.HasPrefix(req.URL.Path, "/global/") {
+		req.Header.Set("x-opencode-directory", client.directory)
+	}
 	if client.username != "" {
 		req.SetBasicAuth(client.username, client.password)
 	}
