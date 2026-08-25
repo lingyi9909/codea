@@ -23,8 +23,15 @@ type OpenCodeAdapter struct {
 
 // NewOpenCodeAdapter creates an adapter backed by an OpenCode server at baseURL.
 func NewOpenCodeAdapter(baseURL, username, password string) *OpenCodeAdapter {
+	return NewOpenCodeAdapterForDirectory(baseURL, username, password, "")
+}
+
+// NewOpenCodeAdapterForDirectory creates an adapter whose instance-scoped
+// OpenCode requests are explicitly bound to directory. Global SSE and health
+// endpoints remain global and do not need directory routing.
+func NewOpenCodeAdapterForDirectory(baseURL, username, password, directory string) *OpenCodeAdapter {
 	a := &OpenCodeAdapter{
-		httpClient: NewHTTPClient(baseURL, username, password),
+		httpClient: NewHTTPClientForDirectory(baseURL, username, password, directory),
 		reconnect:  NewReconnectingSSEClient(NewSSEClient(baseURL, username, password)),
 		tracker:    NewSessionTracker(),
 	}
