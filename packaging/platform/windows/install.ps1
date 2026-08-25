@@ -90,6 +90,15 @@ try {
   if (Test-Path $tmp) { Remove-Item -Recurse -Force -LiteralPath $tmp }
 }
 
+# Browser-downloaded ZIPs can propagate the Zone.Identifier (Mark of the Web)
+# to extracted executables. At this point every packaged file has already passed
+# manifest hash/size verification, so remove only the Windows download-block
+# metadata from the installed copy. This prevents CreateProcess from returning
+# Access is denied for the bundled opencode.exe while preserving content bytes.
+Get-ChildItem -LiteralPath $target -Recurse -File | ForEach-Object {
+  Unblock-File -LiteralPath $_.FullName -ErrorAction Stop
+}
+
 $currentTxt = Join-Path $codeaHome 'current.txt'
 [IO.File]::WriteAllText($currentTxt, $target + [Environment]::NewLine, (New-Object Text.UTF8Encoding($false)))
 $currentDir = Join-Path $codeaHome 'current'
