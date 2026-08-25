@@ -136,15 +136,12 @@ jobs:
           archive="dist-release/codea-${RELEASE_VERSION}-windows-x64.zip"
           checksum="${archive}.sha256"
           notes="$RUNNER_TEMP/release-notes.md"
-          cat > "$notes" <<EOF
-          Windows x64 downloadable package for Codea ${RELEASE_VERSION}.
-
-          Package contents include Codea, locked OpenCode runtime, plugins, agents, skills, configuration, checksum manifest, and Windows installer.
-
-          Download `codea-${RELEASE_VERSION}-windows-x64.zip`, extract it, then run `install/install.ps1` from PowerShell.
-
-          This preview package is for product trial before final company-intranet G15 release certification. A stable `v${RELEASE_VERSION}` release should only be published after final certification passes.
-          EOF
+          {
+            printf 'Windows x64 downloadable package for Codea %s.\n\n' "$RELEASE_VERSION"
+            printf 'Package contents include Codea, locked OpenCode runtime, plugins, agents, skills, configuration, checksum manifest, and Windows installer.\n\n'
+            printf 'Download `codea-%s-windows-x64.zip`, extract it, then run `install/install.ps1` from PowerShell.\n\n' "$RELEASE_VERSION"
+            printf 'This preview package is for product trial before final company-intranet G15 release certification. A stable `v%s` release should only be published after final certification passes.\n' "$RELEASE_VERSION"
+          } > "$notes"
 
           if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
             gh release upload "$RELEASE_TAG" "$archive" "$checksum" --clobber
