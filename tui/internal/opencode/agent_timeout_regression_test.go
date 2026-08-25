@@ -28,6 +28,7 @@ func TestListAgentsUsesDedicatedColdStartTimeout(t *testing.T) {
 		server.URL,
 		"",
 		"",
+		"",
 		40*time.Millisecond,
 		500*time.Millisecond,
 	)
