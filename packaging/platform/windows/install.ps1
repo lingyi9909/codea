@@ -27,9 +27,10 @@ foreach ($entry in $manifest.files) {
   $manifestFiles[$rel] = $true
 }
 
+$trimChars = [char[]]@([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
 $actualFiles = Get-ChildItem -LiteralPath $PackageDir -Recurse -File | ForEach-Object {
   $full = $_.FullName
-  $rel = $full.Substring($PackageDir.Length).TrimStart('\\','/') -replace '\\','/'
+  $rel = $full.Substring($PackageDir.Length).TrimStart($trimChars) -replace '\\','/'
   if ($rel -ne 'manifest.json') { $rel }
 }
 foreach ($rel in $actualFiles) {
