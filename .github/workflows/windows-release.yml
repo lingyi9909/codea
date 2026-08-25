@@ -51,6 +51,9 @@ jobs:
           Set-Content -LiteralPath (Join-Path $pkg 'bin/opencode.exe') -Value 'smoke-opencode' -NoNewline
           Copy-Item -LiteralPath './distribution/plugins/dist/index.js' -Destination (Join-Path $pkg 'plugins/index.js')
 
+          # Simulate a browser-downloaded archive whose executable carries MOTW.
+          Set-Content -LiteralPath (Join-Path $pkg 'bin/opencode.exe') -Stream Zone.Identifier -Value "[ZoneTransfer]`r`nZoneId=3" -NoNewline
+
           $entries = Get-ChildItem -LiteralPath $pkg -Recurse -File | ForEach-Object {
             $rel = [IO.Path]::GetRelativePath($pkg, $_.FullName) -replace '\\','/'
             [pscustomobject]@{
@@ -69,10 +72,15 @@ jobs:
           & ./packaging/platform/windows/install.ps1 -PackageDir $pkg
 
           $installed = Join-Path $smokeHome 'versions/0.1.0-smoke'
+          $installedOpenCode = Join-Path $installed 'bin/opencode.exe'
           if (-not (Test-Path (Join-Path $installed 'bin/codea.exe') -PathType Leaf)) { throw 'installed codea.exe missing' }
+          if (-not (Test-Path $installedOpenCode -PathType Leaf)) { throw 'installed opencode.exe missing' }
           if (-not (Test-Path (Join-Path $smokeHome 'bin/codea.cmd') -PathType Leaf)) { throw 'codea.cmd shim missing' }
           if (-not (Test-Path (Join-Path $smokeHome 'current.txt') -PathType Leaf)) { throw 'current.txt missing' }
           if (-not (Test-Path (Join-Path $smokeHome 'current') -PathType Container)) { throw 'current junction missing' }
+          if (Get-Item -LiteralPath $installedOpenCode -Stream Zone.Identifier -ErrorAction SilentlyContinue) {
+            throw 'installed opencode.exe still carries Zone.Identifier/MOTW'
+          }
           Write-Host 'Windows installer smoke passed.'
 
   build-and-publish:
@@ -91,6 +99,10 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: '1.3.14'
+
+      - name: Gate Windows plugin file URL encoding
+        working-directory: tui
+        run: GOTOOLCHAIN=local go test ./internal/opencode -run 'TestPluginFileURLWindowsDrive' -count=1
 
       - name: Install plugin dependencies
         working-directory: distribution/plugins
