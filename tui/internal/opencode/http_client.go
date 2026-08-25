@@ -12,6 +12,11 @@ import (
 	"time"
 )
 
+const (
+	defaultHTTPTimeout        = 30 * time.Second
+	agentColdStartHTTPTimeout = 90 * time.Second
+)
+
 // HTTPError carries a typed HTTP error with status code for classification.
 type HTTPError struct {
 	StatusCode int
@@ -25,11 +30,12 @@ func (e *HTTPError) Error() string {
 }
 
 type HTTPClient struct {
-	baseURL   string
-	username  string
-	password  string
-	directory string
-	client    *http.Client
+	baseURL     string
+	username    string
+	password    string
+	directory   string
+	client      *http.Client
+	agentClient *http.Client
 }
 
 func NewHTTPClient(baseURL, username, password string) *HTTPClient {
@@ -41,12 +47,29 @@ func NewHTTPClient(baseURL, username, password string) *HTTPClient {
 // the server process cwd, which can accidentally treat a user's home directory
 // as the project when Codea Doctor is launched outside a repository.
 func NewHTTPClientForDirectory(baseURL, username, password, directory string) *HTTPClient {
+	return newHTTPClientWithTimeouts(
+		baseURL,
+		username,
+		password,
+		directory,
+		defaultHTTPTimeout,
+		agentColdStartHTTPTimeout,
+	)
+}
+
+// newHTTPClientWithTimeouts keeps the ordinary request budget independent from
+// the /agent cold-start budget. OpenCode initializes the instance/plugin/agent
+// stack on the first /agent request, which is materially slower on Windows than
+// health and steady-state calls. Keeping a dedicated client prevents a slow
+// cold start from weakening timeouts for every Runtime operation.
+func newHTTPClientWithTimeouts(baseURL, username, password, directory string, requestTimeout, agentTimeout time.Duration) *HTTPClient {
 	return &HTTPClient{
-		baseURL:   strings.TrimRight(baseURL, "/"),
-		username:  username,
-		password:  password,
-		directory: directory,
-		client:    &http.Client{Timeout: 30 * time.Second},
+		baseURL:     strings.TrimRight(baseURL, "/"),
+		username:    username,
+		password:    password,
+		directory:   directory,
+		client:      &http.Client{Timeout: requestTimeout},
+		agentClient: &http.Client{Timeout: agentTimeout},
 	}
 }
 
@@ -152,7 +175,13 @@ func (client *HTTPClient) GetSession(ctx context.Context, sessionID string) (*Op
 
 func (client *HTTPClient) ListAgents(ctx context.Context) ([]OpenCodeAgent, error) {
 	var agents OpenCodeAppAgentsResponse
-	if err := client.doJSON(ctx, http.MethodGet, "/agent", nil, &agents, http.StatusOK); err != nil {
+	requestClient := client.agentClient
+	if requestClient == nil {
+		requestClient = client.client
+	}
+	scoped := *client
+	scoped.client = requestClient
+	if err := scoped.doJSON(ctx, http.MethodGet, "/agent", nil, &agents, http.StatusOK); err != nil {
 		return nil, err
 	}
 	return []OpenCodeAgent(agents), nil
