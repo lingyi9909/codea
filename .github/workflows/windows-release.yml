@@ -5,6 +5,12 @@ on:
     branches: [develop]
     paths:
       - '.github/workflows/windows-release.yml'
+      - 'tui/**'
+      - 'distribution/plugins/**'
+      - 'distribution/agents/**'
+      - 'distribution/skills/**'
+      - 'distribution/config/**'
+      - 'runtime/**'
       - 'packaging/**'
       - 'VERSION'
   workflow_dispatch:
