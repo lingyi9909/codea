@@ -40,6 +40,10 @@ func recoverInterruptedUpdateIfNeeded(ctx context.Context) error {
 	return nil
 }
 
+func doctorWorkspaceDir() string {
+	return filepath.Join(codeaHomeDir(), "doctor-workspace")
+}
+
 func runDoctorCommand() error {
 	if err := recoverInterruptedUpdateIfNeeded(context.Background()); err != nil {
 		return err
@@ -57,14 +61,17 @@ func runDoctorCommand() error {
 		roots := skillRoots()
 		store := skill.NewFileStore(filepath.Join(cfgDir, "codea", "skills.json"))
 		targetDir := filepath.Join(cfgDir, "skills")
+		doctorRoot := doctorWorkspaceDir()
 		if err := skill.SyncEnabled(roots, store, targetDir, policy); err != nil {
 			runtimeErr = fmt.Errorf("同步 Skills: %w", err)
 		} else if err := writePluginConfig(cfgDir); err != nil {
 			runtimeErr = fmt.Errorf("写入 Plugin 配置: %w", err)
 		} else if err := agent.Materialize(agentRoot(), filepath.Join(cfgDir, "agents")); err != nil {
 			runtimeErr = fmt.Errorf("物化 Agents: %w", err)
+		} else if err := os.MkdirAll(doctorRoot, 0o700); err != nil {
+			runtimeErr = fmt.Errorf("创建 Doctor 工作区: %w", err)
 		} else {
-			startedAdapter, startedCleanup, startErr := bootstrapRuntime(cfgDir, mode)
+			startedAdapter, startedCleanup, startErr := bootstrapRuntimeAt(cfgDir, mode, doctorRoot)
 			adapter = startedAdapter
 			runtimeErr = startErr
 			if startedCleanup != nil { cleanup = startedCleanup }
