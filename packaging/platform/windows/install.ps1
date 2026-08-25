@@ -44,9 +44,12 @@ foreach ($name in @('package.json','bun.lock','bun.lockb')) {
 }
 $pluginFiles = Get-ChildItem -LiteralPath $pluginDir -Filter '*.js' -File
 if (-not $pluginFiles) { throw 'no plugin bundle found' }
+# The bundle is generated ESM. Match only actual line-start module statements;
+# never search for a bare `from` token inside arbitrary JavaScript strings/code.
 $importPatterns = @(
-  '(?:from\s*|import\s*\(|require\s*\()\s*["'']([^"'']+)["'']',
-  '(?:^|[;\r\n])\s*import\s*["'']([^"'']+)["'']'
+  '^\s*import\s+(?:[^"''\r\n]+?\s+from\s+)?["'']([^"'']+)["'']',
+  '^\s*export\s+(?:\*|\{[^}\r\n]*\})\s+from\s+["'']([^"'']+)["'']',
+  '^\s*(?:(?:const|let|var)\s+[^=\r\n]+?=\s*)?require\s*\(\s*["'']([^"'']+)["'']\s*\)'
 )
 # Bun --target bun normalizes standard node: imports (for example node:fs and
 # node:path) to their legacy bare specifiers in the emitted bundle. These are
