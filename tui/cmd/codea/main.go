@@ -1,7 +1,7 @@
 // Command codea launches the Codea TUI against an OpenCode runtime.
 //
 // The composition root owns the runtime process lifecycle: by default it starts
-// a supervised `opencode serve` process, waits for it to become healthy, and
+// a supervised `opencode serve` process, waits until it becomes healthy, and
 // hands the resulting base URL and credentials to the vendor adapter. The app
 // package itself depends only on the Codea runtime domain contract.
 package main
@@ -79,13 +79,13 @@ func run() error {
 		return fmt.Errorf("materialize agents: %w", err)
 	}
 
-	adapter, cleanup, err := bootstrapRuntime(cfgDir, mode)
+	projectDir, _ := os.Getwd()
+	adapter, cleanup, err := bootstrapRuntimeAt(cfgDir, mode, projectDir)
 	if err != nil {
 		return err
 	}
 	defer cleanup()
 
-	projectDir, _ := os.Getwd()
 	model := app.NewModel(adapter)
 	model.SetSkillManager(skill.NewManager(roots, store, targetDir, projectDir, adapter, policy))
 	// Pilot metrics are deliberately best-effort. An unwritable metrics location
@@ -100,39 +100,50 @@ func run() error {
 	return nil
 }
 
-// bootstrapRuntime resolves the runtime connection. The product default starts
-// a supervised `opencode serve` process and returns an adapter wired to the
-// supervisor's auto-generated base URL and credentials, with a cleanup func
-// that stops the process. When OPENCODE_URL is set (dev/test override), the
-// process is assumed to be managed externally and cleanup is a no-op.
+// bootstrapRuntime resolves the runtime connection for the current working
+// directory. Call bootstrapRuntimeAt when the caller needs a controlled project
+// root, such as Doctor.
 func bootstrapRuntime(cfgDir string, mode skill.SkillMode) (adapter *opencode.OpenCodeAdapter, cleanup func(), err error) {
+	projectRoot, _ := os.Getwd()
+	return bootstrapRuntimeAt(cfgDir, mode, projectRoot)
+}
+
+// bootstrapRuntimeAt resolves the runtime connection and explicitly binds both
+// the supervised OpenCode process and the vendor HTTP adapter to projectRoot.
+// This avoids OpenCode's process.cwd() fallback for instance-scoped APIs.
+func bootstrapRuntimeAt(cfgDir string, mode skill.SkillMode, projectRoot string) (adapter *opencode.OpenCodeAdapter, cleanup func(), err error) {
 	if baseURL := os.Getenv("OPENCODE_URL"); baseURL != "" {
-		adapter = opencode.NewOpenCodeAdapter(
+		adapter = opencode.NewOpenCodeAdapterForDirectory(
 			baseURL,
 			os.Getenv("OPENCODE_USERNAME"),
 			os.Getenv("OPENCODE_PASSWORD"),
+			projectRoot,
 		)
 		return adapter, func() {}, nil
 	}
 
-	sup := supervisor.NewSupervisor(supervisorConfig(cfgDir, mode))
+	sup := supervisor.NewSupervisor(supervisorConfigAt(cfgDir, mode, projectRoot))
 	if err := sup.Start(context.Background()); err != nil {
 		return nil, nil, fmt.Errorf("start runtime: %w", err)
 	}
 
-	adapter = opencode.NewOpenCodeAdapter(sup.BaseURL(), sup.Username(), sup.Password())
+	adapter = opencode.NewOpenCodeAdapterForDirectory(sup.BaseURL(), sup.Username(), sup.Password(), projectRoot)
 	return adapter, func() { _ = sup.Stop() }, nil
 }
 
-// supervisorConfig builds the supervisor config. OPENCODE_BIN selects the
-// OpenCode binary (default "opencode" on PATH); cfgDir is Codea's controlled
-// config directory, exported to OpenCode as OPENCODE_CONFIG_DIR.
+// supervisorConfig builds the supervisor config for the current working
+// directory. OPENCODE_BIN selects the OpenCode binary (default "opencode" on
+// PATH); cfgDir is Codea's controlled config directory.
 func supervisorConfig(cfgDir string, mode skill.SkillMode) supervisor.Config {
+	projectRoot, _ := os.Getwd()
+	return supervisorConfigAt(cfgDir, mode, projectRoot)
+}
+
+func supervisorConfigAt(cfgDir string, mode skill.SkillMode, projectRoot string) supervisor.Config {
 	bin := os.Getenv("OPENCODE_BIN")
 	if bin == "" {
 		bin = "opencode"
 	}
-	projectRoot, _ := os.Getwd()
 	return supervisor.Config{
 		OpenCodeBin:     bin,
 		ConfigDir:       cfgDir,
