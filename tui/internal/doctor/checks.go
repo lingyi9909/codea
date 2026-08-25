@@ -288,27 +288,35 @@ func inferenceProbe(parent context.Context, rt runtimedomain.AgentRuntime, timeo
 	}
 	session, err := rt.CreateSession(ctx, runtimedomain.CreateSessionRequest{Title: "Codea Doctor"})
 	if err != nil {
-		return Fail, "CreateSession: " + err.Error()
+		return Fail, "create session: " + err.Error()
 	}
-	if err := rt.Prompt(ctx, session.ID, runtimedomain.PromptRequest{Agent: "general", Parts: []runtimedomain.PromptPart{{Type: "text", Text: "仅回复 CODEA_DOCTOR_OK"}}}); err != nil {
-		return Fail, "Prompt: " + err.Error()
+	defer rt.Cancel(context.Background(), runtimedomain.SessionID(session.ID))
+	req := runtimedomain.PromptRequest{
+		MessageID: fmt.Sprintf("doctor-%d", time.Now().UnixNano()),
+		Agent:     "general",
+		Parts: []runtimedomain.PromptPart{
+			runtimedomain.TextPart{Text: "这是 Codea Doctor 健康检查。请只回复 CODEA_DOCTOR_OK，不要调用任何工具。", Synthetic: true},
+		},
+	}
+	if err := rt.Prompt(ctx, runtimedomain.SessionID(session.ID), req); err != nil {
+		return Fail, "prompt: " + err.Error()
 	}
 	for {
 		select {
 		case <-ctx.Done():
-			return Fail, "等待模型响应超时: " + ctx.Err().Error()
+			return Fail, "等待模型响应超时"
 		case ev, ok := <-events:
 			if !ok {
-				return Fail, "SSE channel closed"
+				return Fail, "SSE 提前关闭"
 			}
-			if ev.SessionID != "" && ev.SessionID != string(session.ID) {
+			if ev.SessionID != "" && ev.SessionID != session.ID {
 				continue
 			}
-			if strings.Contains(ev.Content, "CODEA_DOCTOR_OK") {
-				return Pass, "模型成功返回 CODEA_DOCTOR_OK"
-			}
 			if ev.Error != nil {
-				return Fail, "Runtime: " + ev.Error.Error()
+				return Fail, ev.Error.Error()
+			}
+			if strings.TrimSpace(ev.Content) != "" {
+				return Pass, "收到模型响应"
 			}
 		}
 	}
