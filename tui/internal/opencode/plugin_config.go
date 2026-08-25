@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 // MergePluginConfig preserves every existing OpenCode configuration field and
@@ -30,8 +31,7 @@ func MergePluginConfig(configDir, bundle string, mode os.FileMode) error {
 	if err != nil {
 		return err
 	}
-	u := &url.URL{Scheme: "file", Path: filepath.ToSlash(abs)}
-	cfg["plugin"] = []string{u.String()}
+	cfg["plugin"] = []string{pluginFileURL(abs)}
 
 	data, err := json.MarshalIndent(cfg, "", "  ")
 	if err != nil {
@@ -42,4 +42,33 @@ func MergePluginConfig(configDir, bundle string, mode os.FileMode) error {
 		return err
 	}
 	return os.WriteFile(cfgPath, data, mode)
+}
+
+// pluginFileURL converts a local filesystem path into a standards-compliant
+// file URL on every host. In particular, a Windows drive path must be encoded
+// as file:///C:/... rather than file://C:/..., where C: would incorrectly be
+// interpreted as the URL authority/host. The conversion is intentionally
+// platform-independent so Windows semantics stay covered by CI on non-Windows
+// runners too.
+func pluginFileURL(localPath string) string {
+	slash := strings.ReplaceAll(localPath, `\`, "/")
+
+	// Windows local drive: C:/x -> /C:/x so net/url emits file:///C:/x.
+	if len(slash) >= 3 && isASCIIAlpha(slash[0]) && slash[1] == ':' && slash[2] == '/' {
+		slash = "/" + slash
+	}
+
+	// UNC path: //server/share/x -> file://server/share/x.
+	if strings.HasPrefix(slash, "//") {
+		rest := strings.TrimPrefix(slash, "//")
+		if host, pathPart, ok := strings.Cut(rest, "/"); ok && host != "" {
+			return (&url.URL{Scheme: "file", Host: host, Path: "/" + pathPart}).String()
+		}
+	}
+
+	return (&url.URL{Scheme: "file", Path: slash}).String()
+}
+
+func isASCIIAlpha(b byte) bool {
+	return (b >= 'A' && b <= 'Z') || (b >= 'a' && b <= 'z')
 }
