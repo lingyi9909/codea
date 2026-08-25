@@ -60,11 +60,11 @@ foreach ($plugin in $pluginFiles) {
   }
 }
 
-$home = if ($env:CODEA_HOME) { $env:CODEA_HOME } else { Join-Path $env:USERPROFILE '.codea' }
-$versions = Join-Path $home 'versions'
+$codeaHome = if ($env:CODEA_HOME) { $env:CODEA_HOME } else { Join-Path $env:USERPROFILE '.codea' }
+$versions = Join-Path $codeaHome 'versions'
 $target = Join-Path $versions $version
 if (Test-Path $target) { throw "version already installed: $version" }
-$binDir = Join-Path $home 'bin'
+$binDir = Join-Path $codeaHome 'bin'
 New-Item -ItemType Directory -Force -Path $versions,$binDir | Out-Null
 $tmp = Join-Path $versions ('.install-' + $version + '-' + $PID)
 try {
@@ -74,9 +74,9 @@ try {
   if (Test-Path $tmp) { Remove-Item -Recurse -Force -LiteralPath $tmp }
 }
 
-$currentTxt = Join-Path $home 'current.txt'
+$currentTxt = Join-Path $codeaHome 'current.txt'
 [IO.File]::WriteAllText($currentTxt, $target + [Environment]::NewLine, (New-Object Text.UTF8Encoding($false)))
-$currentDir = Join-Path $home 'current'
+$currentDir = Join-Path $codeaHome 'current'
 if (Test-Path $currentDir) { Remove-Item -Force -Recurse $currentDir }
 New-Item -ItemType Junction -Path $currentDir -Target $target | Out-Null
 
