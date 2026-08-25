@@ -48,12 +48,25 @@ $importPatterns = @(
   '(?:from\s*|import\s*\(|require\s*\()\s*["'']([^"'']+)["'']',
   '(?:^|[;\r\n])\s*import\s*["'']([^"'']+)["'']'
 )
+# Bun --target bun normalizes standard node: imports (for example node:fs and
+# node:path) to their legacy bare specifiers in the emitted bundle. These are
+# runtime builtins, not external npm dependencies, so allow only the known Node
+# builtin roots while continuing to reject arbitrary bare package imports.
+$nodeBuiltinRoots = @(
+  'assert','async_hooks','buffer','child_process','cluster','console','constants',
+  'crypto','dgram','diagnostics_channel','dns','domain','events','fs','http','http2',
+  'https','inspector','module','net','os','path','perf_hooks','process','punycode',
+  'querystring','readline','repl','stream','string_decoder','sys','timers','tls',
+  'trace_events','tty','url','util','v8','vm','wasi','worker_threads','zlib'
+)
 foreach ($plugin in $pluginFiles) {
   $text = Get-Content -LiteralPath $plugin.FullName -Raw
   foreach ($pattern in $importPatterns) {
     foreach ($match in [regex]::Matches($text, $pattern, [Text.RegularExpressions.RegexOptions]::Multiline)) {
       $spec = $match.Groups[1].Value
-      if (-not ($spec.StartsWith('.') -or $spec.StartsWith('/') -or $spec.StartsWith('node:') -or $spec.StartsWith('bun:') -or $spec.StartsWith('data:'))) {
+      $specRoot = ($spec -split '/', 2)[0]
+      $isNodeBuiltin = $nodeBuiltinRoots -contains $specRoot
+      if (-not ($spec.StartsWith('.') -or $spec.StartsWith('/') -or $spec.StartsWith('node:') -or $spec.StartsWith('bun:') -or $spec.StartsWith('data:') -or $isNodeBuiltin)) {
         throw "external import '$spec' in $($plugin.Name)"
       }
     }
