@@ -62,13 +62,30 @@ jobs:
           test -s "$archive"
           test -s "$checksum"
           (cd dist-release && sha256sum -c "codea-${version}-windows-x64.zip.sha256")
-          unzip -l "$archive" > "$RUNNER_TEMP/archive-list.txt"
-          prefix="codea-${version}-windows-x64"
-          grep -Fq "$prefix/bin/codea.exe" "$RUNNER_TEMP/archive-list.txt"
-          grep -Fq "$prefix/bin/opencode.exe" "$RUNNER_TEMP/archive-list.txt"
-          grep -Fq "$prefix/install/install.ps1" "$RUNNER_TEMP/archive-list.txt"
-          grep -Fq "$prefix/manifest.json" "$RUNNER_TEMP/archive-list.txt"
-          grep -Fq "$prefix/VERSION" "$RUNNER_TEMP/archive-list.txt"
+          python3 - "$archive" "$version" <<'PY'
+          import sys, zipfile
+          archive, version = sys.argv[1:]
+          prefix = f"codea-{version}-windows-x64"
+          required = {
+              f"{prefix}/bin/codea.exe",
+              f"{prefix}/bin/opencode.exe",
+              f"{prefix}/install/install.ps1",
+              f"{prefix}/manifest.json",
+              f"{prefix}/VERSION",
+          }
+          with zipfile.ZipFile(archive) as z:
+              names = set(z.namelist())
+          missing = sorted(required - names)
+          if missing:
+              print("missing required release entries:", file=sys.stderr)
+              for name in missing:
+                  print(f"  - {name}", file=sys.stderr)
+              print("archive entries:", file=sys.stderr)
+              for name in sorted(names):
+                  print(f"  {name}", file=sys.stderr)
+              raise SystemExit(1)
+          print(f"archive content verified: {len(names)} files")
+          PY
           echo "Windows release archive verified: $archive"
 
       - name: Upload workflow artifact
