@@ -32,12 +32,22 @@ func defaultChecks(c defaultCheckConfig) []Check {
 		return update.NewPlatformSwitcher(c.home).Current()
 	}
 
+	runtimeUnavailable := func() (bool, string) {
+		if c.runtimeStartErr != nil {
+			return true, "Runtime 启动失败，跳过依赖 Runtime 的检查"
+		}
+		if c.runtime == nil {
+			return true, "未连接 Runtime"
+		}
+		return false, ""
+	}
+
 	var modelOnce sync.Once
 	var modelStatus Status
 	var modelDetail string
 	modelProbe := func(ctx context.Context) (Status, string) {
-		if c.runtimeStartErr != nil || c.runtime == nil {
-			return Skip, "未连接 Runtime，无法验证模型"
+		if unavailable, detail := runtimeUnavailable(); unavailable {
+			return Skip, detail
 		}
 		modelOnce.Do(func() {
 			modelStatus, modelDetail = inferenceProbe(ctx, c.runtime, c.behaviorTimeout)
@@ -173,8 +183,8 @@ func defaultChecks(c defaultCheckConfig) []Check {
 			return Pass, "OpenCode " + h.Version + " healthy"
 		}),
 		connectionCheck("企业 Agent", func(ctx context.Context) (Status, string) {
-			if c.runtime == nil {
-				return Skip, "未连接 Runtime"
+			if unavailable, detail := runtimeUnavailable(); unavailable {
+				return Skip, detail
 			}
 			agents, err := c.runtime.ListAgents(ctx)
 			if err != nil {
@@ -197,8 +207,8 @@ func defaultChecks(c defaultCheckConfig) []Check {
 		}),
 		connectionCheck("模型连接", modelProbe),
 		behaviorCheck("SSE", func(ctx context.Context) (Status, string) {
-			if c.runtime == nil {
-				return Skip, "未连接 Runtime"
+			if unavailable, detail := runtimeUnavailable(); unavailable {
+				return Skip, detail
 			}
 			ch, err := c.runtime.Subscribe(ctx)
 			if err != nil {
@@ -278,35 +288,27 @@ func inferenceProbe(parent context.Context, rt runtimedomain.AgentRuntime, timeo
 	}
 	session, err := rt.CreateSession(ctx, runtimedomain.CreateSessionRequest{Title: "Codea Doctor"})
 	if err != nil {
-		return Fail, "create session: " + err.Error()
+		return Fail, "CreateSession: " + err.Error()
 	}
-	defer rt.Cancel(context.Background(), runtimedomain.SessionID(session.ID))
-	req := runtimedomain.PromptRequest{
-		MessageID: fmt.Sprintf("doctor-%d", time.Now().UnixNano()),
-		Agent:     "general",
-		Parts: []runtimedomain.PromptPart{
-			runtimedomain.TextPart{Text: "这是 Codea Doctor 健康检查。请只回复 CODEA_DOCTOR_OK，不要调用任何工具。", Synthetic: true},
-		},
-	}
-	if err := rt.Prompt(ctx, runtimedomain.SessionID(session.ID), req); err != nil {
-		return Fail, "prompt: " + err.Error()
+	if err := rt.Prompt(ctx, session.ID, runtimedomain.PromptRequest{Agent: "general", Parts: []runtimedomain.PromptPart{{Type: "text", Text: "仅回复 CODEA_DOCTOR_OK"}}}); err != nil {
+		return Fail, "Prompt: " + err.Error()
 	}
 	for {
 		select {
 		case <-ctx.Done():
-			return Fail, "等待模型响应超时"
+			return Fail, "等待模型响应超时: " + ctx.Err().Error()
 		case ev, ok := <-events:
 			if !ok {
-				return Fail, "SSE 提前关闭"
+				return Fail, "SSE channel closed"
 			}
-			if ev.SessionID != "" && ev.SessionID != session.ID {
+			if ev.SessionID != "" && ev.SessionID != string(session.ID) {
 				continue
 			}
-			if ev.Error != nil {
-				return Fail, ev.Error.Error()
+			if strings.Contains(ev.Content, "CODEA_DOCTOR_OK") {
+				return Pass, "模型成功返回 CODEA_DOCTOR_OK"
 			}
-			if strings.TrimSpace(ev.Content) != "" {
-				return Pass, "收到模型响应"
+			if ev.Error != nil {
+				return Fail, "Runtime: " + ev.Error.Error()
 			}
 		}
 	}
