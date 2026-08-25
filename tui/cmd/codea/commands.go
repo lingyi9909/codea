@@ -10,6 +10,7 @@ import (
 	"codea/tui/internal/agent"
 	"codea/tui/internal/doctor"
 	"codea/tui/internal/opencode"
+	runtimedomain "codea/tui/internal/runtime"
 	"codea/tui/internal/skill"
 	"codea/tui/internal/update"
 )
@@ -71,10 +72,14 @@ func runDoctorCommand() error {
 	}
 	defer cleanup()
 
+	var doctorRuntime runtimedomain.AgentRuntime
+	if adapter != nil {
+		doctorRuntime = adapter
+	}
 	runtimeURL := os.Getenv("OPENCODE_URL")
 	if runtimeURL == "" { runtimeURL = "http://127.0.0.1" }
 	svc, err := doctor.NewDefaultService(doctor.Config{
-		HomeDir: codeaHomeDir(), ConfigDir: cfgDir, Runtime: adapter,
+		HomeDir: codeaHomeDir(), ConfigDir: cfgDir, Runtime: doctorRuntime,
 		RuntimeStartError: runtimeErr, RuntimeURL: runtimeURL,
 		ExpectedOpenCodeVersion: "1.18.11", BehaviorTimeout: 30 * time.Second,
 	})
