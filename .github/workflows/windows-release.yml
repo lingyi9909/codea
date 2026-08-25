@@ -5,6 +5,8 @@ on:
     branches: [develop]
     paths:
       - '.github/workflows/windows-release.yml'
+      - 'packaging/**'
+      - 'VERSION'
   workflow_dispatch:
     inputs:
       channel:
