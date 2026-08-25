@@ -13,6 +13,12 @@ case "$platform" in
   *) echo "unsupported V1 platform: $platform" >&2; exit 2 ;;
 esac
 
+# Resolve the output root before changing directories below. Without this,
+# a relative output path would make go build write into tui/<output-dir>
+# while the packager later reads from <repo>/<output-dir>.
+mkdir -p "$out_root"
+out_root=$(cd "$out_root" && pwd)
+
 name="codea-$version-$platform"
 stage="$out_root/$name"
 rm -rf "$stage"
@@ -49,7 +55,6 @@ esac
 "$repo_root/packaging/scripts/verify-checksum.sh" "$stage"
 "$repo_root/packaging/scripts/verify-offline.sh" "$stage"
 
-mkdir -p "$out_root"
 archive="$out_root/$name.$archive_ext"
 rm -f "$archive" "$archive.sha256"
 if [ "$archive_ext" = "tar.gz" ]; then
