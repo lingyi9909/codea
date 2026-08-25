@@ -126,7 +126,7 @@ jobs:
             if (-not $p.HasExited) { Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue }
           }
 
-      - name: Codea RuntimeSupervisor with same private-provider and plugin config
+      - name: Codea RuntimeSupervisor and adapter agent discovery
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -141,14 +141,16 @@ jobs:
             "os"
             "time"
 
+            "codea/tui/internal/opencode"
             "codea/tui/internal/supervisor"
           )
 
           func main() {
+            projectRoot := os.Getenv("GITHUB_WORKSPACE")
             s := supervisor.NewSupervisor(supervisor.Config{
               OpenCodeBin: os.Getenv("REAL_OC"),
               ConfigDir: os.Getenv("REAL_CFG"),
-              ProjectRoot: os.Getenv("GITHUB_WORKSPACE"),
+              ProjectRoot: projectRoot,
               StartupTimeout: 30 * time.Second,
               StopTimeout: 5 * time.Second,
             })
@@ -158,11 +160,18 @@ jobs:
               fmt.Printf("SUPERVISOR_START FAIL status=%s err=%v last=%v\n", s.Status(), err, s.LastError())
               os.Exit(1)
             }
+            defer s.Stop()
             fmt.Printf("SUPERVISOR_START PASS status=%s url=%s\n", s.Status(), s.BaseURL())
-            if err := s.Stop(); err != nil {
-              fmt.Printf("SUPERVISOR_STOP FAIL err=%v\n", err)
+
+            adapter := opencode.NewOpenCodeAdapterForDirectory(s.BaseURL(), s.Username(), s.Password(), projectRoot)
+            agentCtx, agentCancel := context.WithTimeout(context.Background(), 30*time.Second)
+            defer agentCancel()
+            agents, err := adapter.ListAgents(agentCtx)
+            if err != nil {
+              fmt.Printf("ADAPTER_LIST_AGENTS FAIL err=%v\n", err)
               os.Exit(1)
             }
+            fmt.Printf("ADAPTER_LIST_AGENTS PASS count=%d\n", len(agents))
           }
           '@ | Set-Content -LiteralPath (Join-Path $probeDir 'main.go') -Encoding utf8
           Push-Location (Join-Path $env:GITHUB_WORKSPACE 'tui')
