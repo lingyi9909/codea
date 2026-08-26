@@ -5,11 +5,12 @@ package supervisor
 import (
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 )
 
-func TestPrepareRuntimeBinaryRemovesZoneIdentifier(t *testing.T) {
+func TestConfigureProcessRemovesRuntimeZoneIdentifier(t *testing.T) {
 	dir := t.TempDir()
 	binary := filepath.Join(dir, "opencode.exe")
 	if err := os.WriteFile(binary, []byte("test-binary"), 0o600); err != nil {
@@ -20,13 +21,13 @@ func TestPrepareRuntimeBinaryRemovesZoneIdentifier(t *testing.T) {
 		t.Fatalf("create Zone.Identifier ADS: %v", err)
 	}
 	if _, err := os.Stat(zone); err != nil {
-		t.Fatalf("Zone.Identifier should exist before preparation: %v", err)
+		t.Fatalf("Zone.Identifier should exist before process configuration: %v", err)
 	}
 
-	if err := prepareRuntimeBinary(binary); err != nil {
-		t.Fatalf("prepareRuntimeBinary: %v", err)
-	}
+	cmd := exec.Command(binary)
+	configureProcess(cmd)
+
 	if _, err := os.Stat(zone); !errors.Is(err, os.ErrNotExist) {
-		t.Fatalf("Zone.Identifier still exists after preparation: %v", err)
+		t.Fatalf("Zone.Identifier still exists after process configuration: %v", err)
 	}
 }
