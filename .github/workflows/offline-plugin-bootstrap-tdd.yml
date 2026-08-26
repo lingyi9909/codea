@@ -1,0 +1,21 @@
+name: Offline Plugin Bootstrap TDD
+
+on:
+  push:
+    branches:
+      - fix/offline-plugin-bootstrap
+
+jobs:
+  red-green:
+    runs-on: windows-2025
+    defaults:
+      run:
+        working-directory: tui
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: tui/go.mod
+      - name: Run targeted offline plugin bootstrap test
+        shell: pwsh
+        run: go test ./cmd/codea -run TestPrepareOfflinePluginDependencies -count=1
