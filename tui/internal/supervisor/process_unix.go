@@ -7,6 +7,10 @@ import (
 	"syscall"
 )
 
+// prepareRuntimeBinary is a no-op off Windows; Mark-of-the-Web alternate data
+// streams are a Windows-specific launch concern.
+func prepareRuntimeBinary(string) error { return nil }
+
 // configureProcess places opencode in its own process group so the whole
 // process tree (opencode + children) can be signalled as one unit.
 func configureProcess(cmd *exec.Cmd) {
