@@ -4,6 +4,7 @@ package supervisor
 
 import (
 	"context"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -89,6 +90,29 @@ func TestStartRuntimeCommandRetriesTransientAccessDenied(t *testing.T) {
 	}
 	if cmd != commands[2] {
 		t.Fatal("returned command is not the successful attempt")
+	}
+}
+
+func TestStartRuntimeCommandDoesNotRetryOtherErrors(t *testing.T) {
+	attempts := 0
+	wantErr := errors.New("bad executable format")
+
+	cmd, err := startRuntimeCommandWith(
+		func() *exec.Cmd { return &exec.Cmd{} },
+		func(*exec.Cmd) error {
+			attempts++
+			return wantErr
+		},
+		func(time.Duration) {},
+	)
+	if cmd != nil {
+		t.Fatal("command should be nil after failed start")
+	}
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("err = %v, want %v", err, wantErr)
+	}
+	if attempts != 1 {
+		t.Fatalf("attempts = %d, want exactly 1 for non-access-denied error", attempts)
 	}
 }
 
