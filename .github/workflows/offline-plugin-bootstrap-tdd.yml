@@ -6,16 +6,45 @@ on:
       - fix/offline-plugin-bootstrap
 
 jobs:
-  red-green:
+  windows-offline-plugin:
     runs-on: windows-2025
-    defaults:
-      run:
-        working-directory: tui
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
           go-version-file: tui/go.mod
-      - name: Run targeted offline plugin bootstrap test
+          cache-dependency-path: tui/go.sum
+
+      - name: Download locked OpenCode v1.18.11 Windows runtime
         shell: pwsh
-        run: go test ./cmd/codea -run TestPrepareOfflinePluginDependencies -count=1
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $meta = Get-Content -LiteralPath runtime/version.json -Raw | ConvertFrom-Json
+          if ($meta.openCodeVersion -ne '1.18.11') { throw "unexpected OpenCode version: $($meta.openCodeVersion)" }
+          $p = $meta.platforms.'windows-x64'
+          $archive = Join-Path $env:RUNNER_TEMP $p.asset
+          Invoke-WebRequest -Uri $p.url -OutFile $archive
+          $actual = (Get-FileHash -Algorithm SHA256 -LiteralPath $archive).Hash.ToLowerInvariant()
+          $expected = ([string]$p.checksum) -replace '^sha256:', ''
+          if ($actual -ne $expected) { throw "OpenCode checksum mismatch: $actual != $expected" }
+          $extract = Join-Path $env:RUNNER_TEMP 'opencode-1.18.11'
+          Expand-Archive -LiteralPath $archive -DestinationPath $extract -Force
+          $bin = Get-ChildItem -LiteralPath $extract -Recurse -Filter opencode.exe -File | Select-Object -First 1
+          if (-not $bin) { throw 'opencode.exe not found' }
+          "CODEA_REAL_OPENCODE_BIN=$($bin.FullName)" >> $env:GITHUB_ENV
+          "CODEA_REAL_PLUGIN_BUNDLE=$((Resolve-Path 'distribution/plugins/dist/index.js').Path)" >> $env:GITHUB_ENV
+          & $bin.FullName --version
+
+      - name: Run offline bootstrap unit and real runtime gates
+        working-directory: tui
+        shell: pwsh
+        run: |
+          go test ./cmd/codea -run 'TestPrepareOfflinePluginDependencies|TestRealOpenCodePluginAgentLoadDoesNotTouchNpmRegistry' -count=1 -v
+
+      - name: Full Go regression
+        working-directory: tui
+        shell: pwsh
+        run: |
+          go test ./... -count=1
+          go vet ./...
+          go build ./...
