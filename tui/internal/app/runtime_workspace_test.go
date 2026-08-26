@@ -20,10 +20,10 @@ func (task23DoctorCheck) Run(context.Context) doctor.Result {
 
 func TestTask23ModelSelectionIsSessionScopedAndAppliedToPrompt(t *testing.T) {
     fake := fakeruntime.New()
-    fake.Models = []runtime.Model{
+    fake.SetModels([]runtime.Model{
         {Ref: runtime.ModelRef{ProviderID: "company", ModelID: "kimi"}, Name: "Kimi", ProviderName: "Company AI", Default: true},
         {Ref: runtime.ModelRef{ProviderID: "company", ModelID: "coder"}, Name: "Coder", ProviderName: "Company AI"},
-    }
+    })
     m := NewModel(fake)
     m.sessionID = runtime.SessionID("s1")
     m.input = "/model"
