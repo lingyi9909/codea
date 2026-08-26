@@ -5,6 +5,7 @@ package supervisor
 import (
 	"context"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -53,6 +54,42 @@ func waitChildPID(t *testing.T, pidFile string, timeout time.Duration) int {
 	}
 	t.Fatalf("child PID file %s never appeared", pidFile)
 	return 0
+}
+
+func TestStartRuntimeCommandRetriesTransientAccessDenied(t *testing.T) {
+	attempts := 0
+	var commands []*exec.Cmd
+
+	cmd, err := startRuntimeCommandWith(
+		func() *exec.Cmd {
+			cmd := &exec.Cmd{}
+			commands = append(commands, cmd)
+			return cmd
+		},
+		func(*exec.Cmd) error {
+			attempts++
+			if attempts < 3 {
+				return &os.PathError{Op: "fork/exec", Path: "opencode.exe", Err: syscall.ERROR_ACCESS_DENIED}
+			}
+			return nil
+		},
+		func(time.Duration) {},
+	)
+	if err != nil {
+		t.Fatalf("startRuntimeCommandWith: %v", err)
+	}
+	if attempts != 3 {
+		t.Fatalf("attempts = %d, want 3", attempts)
+	}
+	if len(commands) != 3 {
+		t.Fatalf("commands = %d, want a fresh command per attempt", len(commands))
+	}
+	if commands[0] == commands[1] || commands[1] == commands[2] {
+		t.Fatal("retry reused exec.Cmd; each Start attempt must use a fresh command")
+	}
+	if cmd != commands[2] {
+		t.Fatal("returned command is not the successful attempt")
+	}
 }
 
 // TestStopTerminatesProcessTree is the Windows真机 gate for Blocking 1: the Job
