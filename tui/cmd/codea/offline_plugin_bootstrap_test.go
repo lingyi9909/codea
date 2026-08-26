@@ -14,11 +14,22 @@ func TestPrepareOfflinePluginDependenciesPreventsOpenCodeNetworkInstall(t *testi
 		t.Fatalf("prepareOfflinePluginDependencies: %v", err)
 	}
 
-	if st, err := os.Stat(filepath.Join(cfgDir, "node_modules")); err != nil || !st.IsDir() {
-		t.Fatalf("node_modules sentinel missing: stat=%v err=%v", st, err)
+	for _, root := range []string{
+		cfgDir,
+		filepath.Join(cfgDir, "xdg", "config", "opencode"),
+	} {
+		assertOfflinePluginDependencyRoot(t, root)
+	}
+}
+
+func assertOfflinePluginDependencyRoot(t *testing.T, root string) {
+	t.Helper()
+
+	if st, err := os.Stat(filepath.Join(root, "node_modules")); err != nil || !st.IsDir() {
+		t.Fatalf("node_modules sentinel missing under %s: stat=%v err=%v", root, st, err)
 	}
 
-	pkgData, err := os.ReadFile(filepath.Join(cfgDir, "package.json"))
+	pkgData, err := os.ReadFile(filepath.Join(root, "package.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -30,10 +41,10 @@ func TestPrepareOfflinePluginDependenciesPreventsOpenCodeNetworkInstall(t *testi
 		t.Fatal(err)
 	}
 	if !pkg.Private || pkg.Dependencies["@opencode-ai/plugin"] != "1.18.11" {
-		t.Fatalf("unexpected package.json: %s", pkgData)
+		t.Fatalf("unexpected package.json under %s: %s", root, pkgData)
 	}
 
-	lockData, err := os.ReadFile(filepath.Join(cfgDir, "package-lock.json"))
+	lockData, err := os.ReadFile(filepath.Join(root, "package-lock.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -47,7 +58,7 @@ func TestPrepareOfflinePluginDependenciesPreventsOpenCodeNetworkInstall(t *testi
 		t.Fatal(err)
 	}
 	if lock.LockfileVersion != 3 || lock.Packages[""].Dependencies["@opencode-ai/plugin"] != "1.18.11" {
-		t.Fatalf("unexpected package-lock.json: %s", lockData)
+		t.Fatalf("unexpected package-lock.json under %s: %s", root, lockData)
 	}
 }
 
