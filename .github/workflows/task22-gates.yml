@@ -27,7 +27,9 @@ jobs:
           cache-dependency-path: tui/go.sum
       - name: Task 22 focused tests
         working-directory: tui
-        run: GOTOOLCHAIN=local go test ./internal/command ./internal/app -count=1
+        run: |
+          GOTOOLCHAIN=local go test ./internal/command -count=1
+          GOTOOLCHAIN=local go test ./internal/app -run 'TestSlashOpensPaletteAndFiltersLive|TestPaletteNavigationAndEscapeAreModal|TestUnknownSlashCommandNeverCreatesModelPrompt|TestDirectClearCommandExecutesWithoutModelPrompt|TestPaletteEnterExecutesSelectedCommand' -count=1
       - name: Full Go regression
         working-directory: tui
         run: GOTOOLCHAIN=local go test ./... -count=1
@@ -53,4 +55,5 @@ jobs:
         shell: pwsh
         run: |
           $env:GOTOOLCHAIN='local'
-          go test ./internal/command ./internal/app -count=1
+          go test ./internal/command -count=1
+          go test ./internal/app -run 'TestSlashOpensPaletteAndFiltersLive|TestPaletteNavigationAndEscapeAreModal|TestUnknownSlashCommandNeverCreatesModelPrompt|TestDirectClearCommandExecutesWithoutModelPrompt|TestPaletteEnterExecutesSelectedCommand' -count=1
