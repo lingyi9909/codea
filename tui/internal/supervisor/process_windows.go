@@ -78,6 +78,12 @@ func prepareRuntimeBinary(path string) error {
 }
 
 func configureProcess(cmd *exec.Cmd) {
+	if err := prepareRuntimeBinary(cmd.Path); err != nil {
+		// exec.Cmd.Start returns Cmd.Err before attempting CreateProcess, so a
+		// failed self-heal is surfaced explicitly instead of collapsing into a
+		// generic Windows "Access is denied" launch error.
+		cmd.Err = fmt.Errorf("prepare opencode binary: %w", err)
+	}
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		CreationFlags: syscall.CREATE_NEW_PROCESS_GROUP,
 	}
