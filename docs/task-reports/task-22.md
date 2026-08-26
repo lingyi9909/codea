@@ -6,18 +6,18 @@ Task 22 implementation is complete and ready for human acceptance against the ap
 
 `docs/superpowers/specs/2026-08-26-codea-v1.1-agent-workspace-design.md`
 
-Implementation checkpoint:
+Implementation/checkpoint after Task 22 acceptance-state hardening:
 
-`381ba1a9aceac6a8ea3ed42dcd42635b7cacbb25`
+`a1a0ee8384e4b071192bcd18d2f130e8ce4c5473`
 
 Fresh acceptance Gate:
 
 - Workflow: `Task 22 Command Workspace Gates`
-- Run ID: `32981152117`
-- Source commit: `381ba1a9aceac6a8ea3ed42dcd42635b7cacbb25`
+- Run ID: `32983059022`
+- Source commit: `a1a0ee8384e4b071192bcd18d2f130e8ce4c5473`
 - Result: **PASS**
 
-Task 23–26 have not been started.
+Task 23–26 have not been started. Their execution-state entries are explicitly `status: pending`, `verificationStatus: not_run`, `taskGateStatus: not_evaluated`, and `humanAccepted: false`.
 
 ## Delivered scope
 
@@ -107,6 +107,16 @@ The full approved V1.1 controlled namespace is reserved now so Enterprise/Projec
 
 This is namespace protection only. Their behavior remains owned by Task 23/24.
 
+## Execution-state validation hardening
+
+Task 22 closeout now validates the V1.1 execution-state contract in CI:
+
+- `scripts/check-execution-state.sh` expects the full Task 0–26 order.
+- Existing verification enum remains `not_run/pass/fail/unable_to_run`; no `pending` verification enum was added.
+- Existing taskGate enum remains `not_evaluated/pass/fail/unable_to_evaluate`; no `pending` taskGate enum was added.
+- Task 23–26 are represented as pending work with `verificationStatus: not_run` and `taskGateStatus: not_evaluated`.
+- `.github/workflows/task22-gates.yml` runs `bash scripts/check-execution-state.sh` and is triggered by changes to both the validator and `docs/execution-state.yaml`.
+
 ## Architecture boundaries preserved
 
 Task 22 does not change the `AgentRuntime` interface.
@@ -117,10 +127,11 @@ Existing Windows, pure-intranet, DLP, approval, Runtime lifecycle, and offline P
 
 ## Verification evidence
 
-Fresh Gate `32981152117` executed against exact implementation checkpoint `381ba1a9aceac6a8ea3ed42dcd42635b7cacbb25`.
+Fresh Gate `32983059022` executed against exact Task 22 hardening checkpoint `a1a0ee8384e4b071192bcd18d2f130e8ce4c5473`.
 
 Results:
 
+- `bash scripts/check-execution-state.sh` — **PASS**
 - Task 22 focused tests on Linux — **PASS**
 - Full `go test ./... -count=1` — **PASS**
 - `go vet ./...` — **PASS**
@@ -128,7 +139,7 @@ Results:
 - Windows x64 cross-build — **PASS**
 - Task 22 focused tests on Windows — **PASS**
 
-The existing Windows release workflow also independently completed its `windows-installer-smoke` job successfully on the same source commit, including the locked OpenCode `v1.18.11` and offline Plugin startup gates. This is supplemental evidence; Task 22 acceptance is based on the dedicated Task 22 Gate above.
+The execution-state validator printed a valid Task 22 `awaiting_acceptance` state and accepted the Task 23–26 `pending/not_run/not_evaluated/false` entries without adding new enum values.
 
 ## Acceptance mapping
 
@@ -145,9 +156,12 @@ The existing Windows release workflow also independently completed its `windows-
 - future controlled built-in namespace protection — PASS
 - existing shortcuts/general chat regression — PASS
 - Windows build and focused behavior — PASS
+- V1.1 execution-state validator through Task 26 — PASS
 
 ## Current status
 
 **Task 22: IMPLEMENTATION COMPLETE / AWAITING HUMAN ACCEPTANCE**
+
+`humanAccepted` remains `false`.
 
 Do not start Task 23 until Task 22 is explicitly accepted.
