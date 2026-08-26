@@ -6,7 +6,29 @@ on:
       - fix/offline-plugin-dependency-bootstrap
 
 jobs:
-  red-green:
+  linux-full:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        shell: bash
+        working-directory: tui
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: tui/go.mod
+      - name: Full Go regression
+        run: go test ./... -count=1
+      - name: Race regression
+        run: go test -race ./internal/opencode ./internal/supervisor ./cmd/codea -count=1
+      - name: Vet
+        run: go vet ./...
+      - name: Native build
+        run: go build ./...
+      - name: Windows x64 cross-build
+        run: CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build ./...
+
+  windows-full:
     runs-on: windows-2025
     defaults:
       run:
@@ -17,6 +39,8 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: tui/go.mod
+      - name: Full Windows Go regression
+        run: go test ./... -count=1
       - name: Targeted offline plugin dependency tests
         run: go test ./internal/opencode -run 'Test(PrepareOfflinePluginDependency|MergePluginConfigSeedsBoth)' -count=1
       - name: Bounded npm environment test
