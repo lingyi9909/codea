@@ -210,7 +210,9 @@ func defaultChecks(c defaultCheckConfig) []Check {
 			if unavailable, detail := runtimeUnavailable(); unavailable {
 				return Skip, detail
 			}
-			ch, err := c.runtime.Subscribe(ctx)
+			probeCtx, cancel := context.WithTimeout(ctx, c.behaviorTimeout)
+			defer cancel()
+			ch, err := c.runtime.Subscribe(probeCtx)
 			if err != nil {
 				return Fail, err.Error()
 			}
@@ -290,7 +292,15 @@ func inferenceProbe(parent context.Context, rt runtimedomain.AgentRuntime, timeo
 	if err != nil {
 		return Fail, "create session: " + err.Error()
 	}
-	defer rt.Cancel(context.Background(), runtimedomain.SessionID(session.ID))
+	defer func() {
+		cleanupTimeout := timeout
+		if cleanupTimeout <= 0 || cleanupTimeout > 2*time.Second {
+			cleanupTimeout = 2 * time.Second
+		}
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), cleanupTimeout)
+		defer cleanupCancel()
+		_ = rt.Cancel(cleanupCtx, runtimedomain.SessionID(session.ID))
+	}()
 	req := runtimedomain.PromptRequest{
 		MessageID: fmt.Sprintf("doctor-%d", time.Now().UnixNano()),
 		Agent:     "general",
