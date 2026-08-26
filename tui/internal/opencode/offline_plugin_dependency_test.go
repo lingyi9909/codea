@@ -10,7 +10,7 @@ import (
 func assertOfflinePluginSentinel(t *testing.T, cfgDir string) {
 	t.Helper()
 	if st, err := os.Stat(filepath.Join(cfgDir, "node_modules")); err != nil || !st.IsDir() {
-		t.Fatalf("node_modules sentinel missing: stat=%v err=%v", st, err)
+		t.Fatalf("node_modules sentinel missing in %s: stat=%v err=%v", cfgDir, st, err)
 	}
 
 	data, err := os.ReadFile(filepath.Join(cfgDir, "package-lock.json"))
@@ -46,7 +46,54 @@ func TestPrepareOfflinePluginDependencySeedsOpenCodeInstallSentinel(t *testing.T
 	assertOfflinePluginSentinel(t, cfgDir)
 }
 
-func TestMergePluginConfigSeedsOfflineOpenCodeInstallSentinel(t *testing.T) {
+func TestPrepareOfflinePluginDependencyIsIdempotentOnWindows(t *testing.T) {
+	cfgDir := t.TempDir()
+	for i := 0; i < 2; i++ {
+		if err := PrepareOfflinePluginDependency(cfgDir, "1.18.11"); err != nil {
+			t.Fatalf("PrepareOfflinePluginDependency call %d: %v", i+1, err)
+		}
+	}
+	assertOfflinePluginSentinel(t, cfgDir)
+}
+
+func TestPrepareOfflinePluginDependencyPreservesExistingRootDependencies(t *testing.T) {
+	cfgDir := t.TempDir()
+	before := `{
+  "name": "existing",
+  "lockfileVersion": 3,
+  "packages": {
+    "": {
+      "dependencies": {
+        "existing-package": "2.3.4"
+      }
+    }
+  }
+}` + "\n"
+	if err := os.WriteFile(filepath.Join(cfgDir, "package-lock.json"), []byte(before), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := PrepareOfflinePluginDependency(cfgDir, "1.18.11"); err != nil {
+		t.Fatalf("PrepareOfflinePluginDependency: %v", err)
+	}
+	data, err := os.ReadFile(filepath.Join(cfgDir, "package-lock.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var lock struct {
+		Packages map[string]struct {
+			Dependencies map[string]string `json:"dependencies"`
+		} `json:"packages"`
+	}
+	if err := json.Unmarshal(data, &lock); err != nil {
+		t.Fatal(err)
+	}
+	if got := lock.Packages[""].Dependencies["existing-package"]; got != "2.3.4" {
+		t.Fatalf("existing dependency changed: %q", got)
+	}
+	assertOfflinePluginSentinel(t, cfgDir)
+}
+
+func TestMergePluginConfigSeedsBothOpenCodeDependencyDirectories(t *testing.T) {
 	cfgDir := t.TempDir()
 	bundle := filepath.Join(t.TempDir(), "index.js")
 	if err := os.WriteFile(bundle, []byte("export default {};\n"), 0o644); err != nil {
@@ -55,5 +102,10 @@ func TestMergePluginConfigSeedsOfflineOpenCodeInstallSentinel(t *testing.T) {
 	if err := MergePluginConfig(cfgDir, bundle, 0o644); err != nil {
 		t.Fatalf("MergePluginConfig: %v", err)
 	}
+	// OpenCode v1.18.11 always installs dependencies in Global.Path.config
+	// ($XDG_CONFIG_HOME/opencode) and also in OPENCODE_CONFIG_DIR. Codea sets
+	// XDG_CONFIG_HOME to <cfgDir>/xdg/config, so both Codea-owned locations must
+	// be pre-seeded or /agent can still wait on an external npm request.
 	assertOfflinePluginSentinel(t, cfgDir)
+	assertOfflinePluginSentinel(t, filepath.Join(cfgDir, "xdg", "config", "opencode"))
 }
