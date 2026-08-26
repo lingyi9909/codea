@@ -18,4 +18,4 @@ jobs:
         with:
           go-version-file: tui/go.mod
       - name: Targeted offline plugin dependency tests
-        run: go test ./internal/opencode -run 'Test(PrepareOfflinePluginDependencySeedsOpenCodeInstallSentinel|MergePluginConfigSeedsOfflineOpenCodeInstallSentinel)' -count=1
+        run: go test ./internal/opencode -run 'Test(PrepareOfflinePluginDependency|MergePluginConfigSeedsBoth)' -count=1
