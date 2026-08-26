@@ -1,0 +1,30 @@
+name: Deep Agent Diagnostic Verify
+
+on:
+  push:
+    branches:
+      - diag/agent-timeout-root-cause
+
+permissions:
+  contents: read
+
+jobs:
+  windows-syntax:
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v4
+      - name: Parse diagnostic script
+        shell: pwsh
+        run: |
+          $errors = $null
+          $tokens = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path 'scripts/windows/deep-agent-diagnostic.ps1'),
+            [ref]$tokens,
+            [ref]$errors
+          ) | Out-Null
+          if ($errors.Count -gt 0) {
+            $errors | Format-List | Out-String | Write-Error
+            exit 1
+          }
+          Write-Host 'PowerShell parse PASS'
