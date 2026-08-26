@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"codea/tui/internal/command"
 	"codea/tui/internal/components"
 	"codea/tui/internal/reasoning"
 	"codea/tui/internal/runtime"
@@ -85,6 +86,11 @@ type Model struct {
 
 	tools []ToolActivity
 
+	// commandRegistry owns terminal-independent parsing/execution definitions;
+	// commandPalette is only presentation/navigation state.
+	commandRegistry *command.Registry
+	commandPalette  commandPaletteModel
+
 	// sessionPanel is the session list/resume overlay. It owns cursor and
 	// visibility; the Application feeds it Codea-domain session items.
 	sessionPanel components.SessionModel
@@ -144,18 +150,21 @@ type Model struct {
 // markDirty invalidates the cached View output.
 func (m *Model) markDirty() { m.dirty = true }
 
-// NewModel constructs the Task 7 application model around the given Runtime.
+// NewModel constructs the application model around the given Runtime. Task 22
+// installs the built-in command workspace by default; cmd/codea may replace it
+// with the composed enterprise/project registry before the TUI starts.
 func NewModel(client runtime.AgentRuntime) *Model {
 	return &Model{
-		currentPage:   PageChat,
-		runtimeStatus: runtime.RuntimeStopped,
-		runtimeClient: client,
-		keys:          DefaultKeyMap(),
-		messages:      make([]ChatMessage, 0),
-		proc:          reasoning.NewProcessor(),
-		tools:         make([]ToolActivity, 0),
-		loadedSkillIDs: make([]string, 0),
-		dirty:         true,
+		currentPage:     PageChat,
+		runtimeStatus:   runtime.RuntimeStopped,
+		runtimeClient:   client,
+		keys:            DefaultKeyMap(),
+		messages:        make([]ChatMessage, 0),
+		proc:            reasoning.NewProcessor(),
+		tools:           make([]ToolActivity, 0),
+		commandRegistry: defaultCommandRegistry(),
+		loadedSkillIDs:  make([]string, 0),
+		dirty:           true,
 	}
 }
 

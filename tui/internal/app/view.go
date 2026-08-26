@@ -83,6 +83,10 @@ func (m *Model) renderView() string {
 
 	b.WriteString(m.renderBody())
 	b.WriteString("\n\n")
+	if m.commandPalette.Visible {
+		b.WriteString(m.renderCommandPalette())
+		b.WriteString("\n")
+	}
 	b.WriteString(status)
 	b.WriteString("\n")
 	b.WriteString(rule)
@@ -91,6 +95,34 @@ func (m *Model) renderView() string {
 	b.WriteString("\n")
 	b.WriteString(footer)
 	return b.String()
+}
+
+// renderCommandPalette renders a compact filtered command list above the input.
+func (m *Model) renderCommandPalette() string {
+	if !m.commandPalette.Visible {
+		return ""
+	}
+	if len(m.commandPalette.Items) == 0 {
+		return theme.MutedStyle().Render("Commands  no matches")
+	}
+	lines := []string{theme.MutedStyle().Render("Commands")}
+	for i, def := range m.commandPalette.Items {
+		prefix := "  "
+		if i == m.commandPalette.Cursor {
+			prefix = "› "
+		}
+		line := prefix + "/" + def.Name
+		if strings.TrimSpace(def.Description) != "" {
+			line += "  " + def.Description
+		}
+		if i == m.commandPalette.Cursor {
+			line = theme.AccentStyle().Render(line)
+		} else {
+			line = theme.MutedStyle().Render(line)
+		}
+		lines = append(lines, line)
+	}
+	return strings.Join(lines, "\n")
 }
 
 // renderBody assembles the chat area: messages, then the reasoning block, then
@@ -157,7 +189,7 @@ func (m *Model) renderInput() string {
 
 // renderFooter returns the one-line shortcut hint.
 func (m *Model) renderFooter() string {
-	return "enter submit · alt+enter newline · ctrl+t thinking · ctrl+s sessions · ctrl+k skills · ctrl+l clear · ctrl+c quit"
+	return "/ commands · enter submit · alt+enter newline · ctrl+t thinking · ctrl+s sessions · ctrl+k skills · ctrl+l clear · ctrl+c quit"
 }
 
 // formatDuration renders a duration compactly for the reasoning summary.

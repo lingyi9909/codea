@@ -80,6 +80,51 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.markDirty()
 		return m, nil
 
+	case listAgentsResultMsg:
+		if msg.err != nil {
+			m.appendInfo("Failed to load agents: " + msg.err.Error())
+			return m, nil
+		}
+		lines := []string{"Agents:"}
+		for _, agent := range msg.agents {
+			label := "- " + agent.Name
+			if strings.TrimSpace(agent.Mode) != "" {
+				label += " (" + agent.Mode + ")"
+			}
+			lines = append(lines, label)
+		}
+		if len(msg.agents) == 0 {
+			lines = append(lines, "- none")
+		}
+		m.appendInfo(strings.Join(lines, "\n"))
+		return m, nil
+
+	case runtimeHealthResultMsg:
+		if msg.err != nil {
+			m.appendInfo("Doctor quick check: FAIL\n" + msg.err.Error())
+			return m, nil
+		}
+		result := "FAIL"
+		if msg.health.Healthy {
+			result = "PASS"
+		}
+		m.appendInfo(fmt.Sprintf("Doctor quick check: %s\nRuntime version: %s", result, msg.health.Version))
+		return m, nil
+
+	case cancelResponseResultMsg:
+		if msg.sessionID != m.sessionID {
+			return m, nil
+		}
+		if msg.err != nil {
+			m.appendInfo("Cancel failed: " + msg.err.Error())
+			return m, nil
+		}
+		if m.isStreaming {
+			m.finishStreamingWithOutcome(MetricStatusFailed, "cancelled", false)
+		}
+		m.appendInfo("Cancelled current response.")
+		return m, nil
+
 	case loadHistoryResultMsg:
 		// A result only applies to the resume currently in flight. A stale result
 		// (the panel was closed or a different resume started) is ignored.
@@ -177,6 +222,9 @@ func (m *Model) handleKey(msg tea.KeyMsg) tea.Cmd {
 		// always dismiss it with Esc.
 		return nil
 	}
+	if m.commandPalette.Visible {
+		return m.handleCommandPaletteKey(msg)
+	}
 	if m.sessionPanel.Visible {
 		return m.handleSessionKey(msg)
 	}
@@ -188,6 +236,7 @@ func (m *Model) handleKey(msg tea.KeyMsg) tea.Cmd {
 		return m.submit()
 	case key.Matches(msg, m.keys.Newline):
 		m.input += "\n"
+		m.refreshCommandPalette()
 		return nil
 	case key.Matches(msg, m.keys.Sessions):
 		return m.toggleSessions()
@@ -350,7 +399,8 @@ func sessionItems(sessions []runtime.Session) []components.SessionItem {
 	return items
 }
 
-// handleTyping appends printable runes and handles backspace.
+// handleTyping appends printable runes and handles backspace, then refreshes
+// the command palette from the updated input buffer.
 func (m *Model) handleTyping(msg tea.KeyMsg) {
 	switch msg.Type {
 	case tea.KeyBackspace:
@@ -360,47 +410,23 @@ func (m *Model) handleTyping(msg tea.KeyMsg) {
 	case tea.KeySpace:
 		m.input += " "
 	}
+	m.refreshCommandPalette()
 }
 
-// submit sends the current input as a prompt. An empty (whitespace-only) input
-// is ignored. A new session is created on the first submit; subsequent submits
-// reuse it.
+// submit executes slash commands locally before the normal model path. Unknown
+// slash commands fail closed and never become a general-agent prompt.
 func (m *Model) submit() tea.Cmd {
-	if m.isStreaming {
-		return nil
-	}
 	if strings.TrimSpace(m.input) == "" {
 		return nil
 	}
-	m.messages = append(m.messages,
-		ChatMessage{Role: RoleUser, Content: m.input, Finished: true},
-		ChatMessage{Role: RoleAssistant},
-	)
-	m.isStreaming = true
-	m.proc.Reset()
-	m.reasoningActive = false
-	m.reasoningContent = ""
-	m.reasoningDuration = 0
-	m.reasoningExpanded = false
-	m.streamBuf.Reset()
-	m.reasoningBuf.Reset()
-	m.tools = make([]ToolActivity, 0)
-
 	raw := m.input
-	req := runtime.PromptRequest{
-		MessageID: fmt.Sprintf("msg-%d", m.msgCounter),
-		Agent:     "general",
-		Parts:     []runtime.PromptPart{runtime.TextPart{Text: raw}},
+	if strings.HasPrefix(raw, "/") {
+		return m.submitCommand(raw)
 	}
-	m.msgCounter++
-	m.input = ""
-	m.startTaskMetric(req.Agent)
-
-	if m.sessionID == "" {
-		m.pendingPrompt = &req
-		return CreateSessionCmd(m.runtimeClient, strings.TrimSpace(raw))
+	if m.isStreaming {
+		return nil
 	}
-	return PromptCmd(m.runtimeClient, m.sessionID, req)
+	return m.startPrompt(raw, raw, "general")
 }
 
 // processRuntimeEvent consumes one runtime event, updating streaming answer and

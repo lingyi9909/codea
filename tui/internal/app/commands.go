@@ -78,6 +78,32 @@ func ListSessionsCmd(client runtime.AgentRuntime) tea.Cmd {
 	}
 }
 
+// ListAgentsCmd fetches Codea-domain agents for the /agents workspace action.
+func ListAgentsCmd(client runtime.AgentRuntime) tea.Cmd {
+	return func() tea.Msg {
+		agents, err := client.ListAgents(context.Background())
+		return listAgentsResultMsg{agents: agents, err: err}
+	}
+}
+
+// RuntimeHealthCmd reuses the existing AgentRuntime health contract for Task
+// 22's /doctor quick check. Task 23 owns the shared full Doctor service.
+func RuntimeHealthCmd(client runtime.AgentRuntime) tea.Cmd {
+	return func() tea.Msg {
+		health, err := client.Health(context.Background())
+		return runtimeHealthResultMsg{health: health, err: err}
+	}
+}
+
+// CancelResponseCmd cancels the active session response without bypassing the
+// Codea-owned runtime contract.
+func CancelResponseCmd(client runtime.AgentRuntime, sessionID runtime.SessionID) tea.Cmd {
+	return func() tea.Msg {
+		err := client.Cancel(context.Background(), sessionID)
+		return cancelResponseResultMsg{sessionID: sessionID, err: err}
+	}
+}
+
 // ReplyApprovalCmd sends an approval decision to the Runtime. It never blocks
 // the Bubble Tea event loop; the result is delivered as approvalResultMsg.
 func ReplyApprovalCmd(client runtime.AgentRuntime, approvalID runtime.ApprovalID, reply runtime.ApprovalReply) tea.Cmd {

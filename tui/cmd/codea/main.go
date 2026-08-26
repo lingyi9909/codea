@@ -14,6 +14,7 @@ import (
 
 	"codea/tui/internal/agent"
 	"codea/tui/internal/app"
+	"codea/tui/internal/command"
 	"codea/tui/internal/opencode"
 	"codea/tui/internal/skill"
 	"codea/tui/internal/supervisor"
@@ -80,6 +81,11 @@ func run() error {
 	}
 
 	projectDir, _ := os.Getwd()
+	commandRegistry, err := command.LoadWorkspaceRegistry(commandRoot(), filepath.Join(projectDir, ".codea", "commands"))
+	if err != nil {
+		return fmt.Errorf("load command workspace: %w", err)
+	}
+
 	adapter, cleanup, err := bootstrapRuntimeAt(cfgDir, mode, projectDir)
 	if err != nil {
 		return err
@@ -87,6 +93,7 @@ func run() error {
 	defer cleanup()
 
 	model := app.NewModel(adapter)
+	model.SetCommandRegistry(commandRegistry)
 	model.SetSkillManager(skill.NewManager(roots, store, targetDir, projectDir, adapter, policy))
 	// Pilot metrics are deliberately best-effort. An unwritable metrics location
 	// must never prevent Codea or the Runtime from starting.
@@ -110,7 +117,6 @@ func bootstrapRuntime(cfgDir string, mode skill.SkillMode) (adapter *opencode.Op
 
 // bootstrapRuntimeAt resolves the runtime connection and explicitly binds both
 // the supervised OpenCode process and the vendor HTTP adapter to projectRoot.
-// This avoids OpenCode's process.cwd() fallback for instance-scoped APIs.
 func bootstrapRuntimeAt(cfgDir string, mode skill.SkillMode, projectRoot string) (adapter *opencode.OpenCodeAdapter, cleanup func(), err error) {
 	if baseURL := os.Getenv("OPENCODE_URL"); baseURL != "" {
 		adapter = opencode.NewOpenCodeAdapterForDirectory(
@@ -131,9 +137,6 @@ func bootstrapRuntimeAt(cfgDir string, mode skill.SkillMode, projectRoot string)
 	return adapter, func() { _ = sup.Stop() }, nil
 }
 
-// supervisorConfig builds the supervisor config for the current working
-// directory. OPENCODE_BIN selects the OpenCode binary (default "opencode" on
-// PATH); cfgDir is Codea's controlled config directory.
 func supervisorConfig(cfgDir string, mode skill.SkillMode) supervisor.Config {
 	projectRoot, _ := os.Getwd()
 	return supervisorConfigAt(cfgDir, mode, projectRoot)
@@ -152,10 +155,6 @@ func supervisorConfigAt(cfgDir string, mode skill.SkillMode, projectRoot string)
 	}
 }
 
-// codeaConfigDir returns the Codea-owned controlled config directory. It is a
-// dedicated location (never OpenCode's native ~/.config/opencode), so the skill
-// sync's RemoveAll can only ever affect Codea's own files and never delete a
-// user's existing OpenCode skills.
 func codeaConfigDir() string {
 	if d := os.Getenv("CODEA_RUNTIME_CONFIG_DIR"); d != "" {
 		return d
@@ -163,9 +162,6 @@ func codeaConfigDir() string {
 	return filepath.Join(codeaHomeDir(), "runtime-config")
 }
 
-// agentRoot returns the filesystem root that holds the Codea enterprise agents
-// (each a <name>/manifest.yaml + agent.md directory). CODEA_AGENTS_DIR overrides
-// the default (the distribution agents directory relative to the launch dir).
 func agentRoot() string {
 	if d := os.Getenv("CODEA_AGENTS_DIR"); d != "" {
 		return d
@@ -174,9 +170,17 @@ func agentRoot() string {
 	return filepath.Join(projectDir, "..", "distribution", "agents")
 }
 
-// pluginBundlePath returns the path to the self-contained enterprise plugin
-// bundle. CODEA_PLUGIN_BUNDLE overrides the default (the distribution build
-// output relative to the launch directory).
+// commandRoot is the enterprise custom-command layer. Packaging may bind an
+// explicit CODEA_COMMANDS_DIR; source/dev execution falls back to the approved
+// distribution/commands directory adjacent to tui, matching existing roots.
+func commandRoot() string {
+	if d := os.Getenv("CODEA_COMMANDS_DIR"); d != "" {
+		return d
+	}
+	projectDir, _ := os.Getwd()
+	return filepath.Join(projectDir, "..", "distribution", "commands")
+}
+
 func pluginBundlePath() string {
 	if p := os.Getenv("CODEA_PLUGIN_BUNDLE"); p != "" {
 		return p
@@ -185,16 +189,11 @@ func pluginBundlePath() string {
 	return filepath.Join(projectDir, "..", "distribution", "plugins", "dist", "index.js")
 }
 
-// writePluginConfig registers the enterprise plugin without replacing existing
-// OpenCode model/provider/custom configuration. Invalid existing JSON is
-// rejected before any write so normal startup and Doctor fail closed.
 func writePluginConfig(cfgDir string) error {
 	bundle := pluginBundlePath()
 	if bundle == "" {
 		return nil
 	}
-	// Require the bundle to exist so a stale/missing override degrades to
-	// General mode rather than registering a dead plugin URL.
 	if _, err := os.Stat(bundle); err != nil {
 		return nil
 	}
@@ -204,9 +203,6 @@ func writePluginConfig(cfgDir string) error {
 	return prepareOfflinePluginDependencies(cfgDir, lockedOpenCodeVersion)
 }
 
-// skillRoots returns the filesystem roots Codea scans to display skills. Codea
-// skills live in the distribution; project/user roots are read-only and are
-// scanned only so they can be shown, never managed.
 func skillRoots() []skill.Root {
 	home, _ := os.UserHomeDir()
 	projectDir, _ := os.Getwd()
@@ -224,8 +220,6 @@ func skillRoots() []skill.Root {
 	if home != "" {
 		roots = append(roots,
 			skill.Root{Dir: filepath.Join(home, ".claude", "skills"), Source: skill.SourceUser},
-			// The user's default OpenCode skills dir is always a read-only User
-			// root now that Codea's controlled dir is isolated under ~/.codea.
 			skill.Root{Dir: filepath.Join(home, ".config", "opencode", "skills"), Source: skill.SourceUser},
 		)
 	}
