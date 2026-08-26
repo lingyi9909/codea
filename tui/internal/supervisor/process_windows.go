@@ -3,7 +3,9 @@
 package supervisor
 
 import (
+	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	"sync"
 	"syscall"
@@ -61,6 +63,19 @@ type jobObjectExtendedLimitInformation struct {
 // jobHandles maps each started *exec.Cmd to its Job Object handle so
 // detachProcess/killProcess can reach it after start.
 var jobHandles sync.Map // *exec.Cmd -> syscall.Handle
+
+// prepareRuntimeBinary removes the Mark-of-the-Web alternate data stream from
+// the verified bundled runtime immediately before execution. The installer also
+// unblocks verified files, but some Windows environments can preserve or
+// re-apply Zone.Identifier after extraction/copy. Runtime launch therefore
+// enforces the invariant again at the final execution boundary.
+func prepareRuntimeBinary(path string) error {
+	zoneIdentifier := path + ":Zone.Identifier"
+	if err := os.Remove(zoneIdentifier); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("remove Zone.Identifier from %s: %w", path, err)
+	}
+	return nil
+}
 
 func configureProcess(cmd *exec.Cmd) {
 	cmd.SysProcAttr = &syscall.SysProcAttr{
