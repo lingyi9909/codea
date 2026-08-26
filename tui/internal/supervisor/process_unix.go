@@ -7,6 +7,14 @@ import (
 	"syscall"
 )
 
+// startRuntimeCommand starts once on Unix. The bounded access-denied retry is
+// Windows-specific because it addresses transient CreateProcess denial after a
+// newly installed executable is scanned by endpoint protection.
+func startRuntimeCommand(makeCmd func() *exec.Cmd) (*exec.Cmd, error) {
+	cmd := makeCmd()
+	return cmd, cmd.Start()
+}
+
 // configureProcess places opencode in its own process group so the whole
 // process tree (opencode + children) can be signalled as one unit.
 func configureProcess(cmd *exec.Cmd) {
