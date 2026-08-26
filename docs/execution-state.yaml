@@ -8,21 +8,21 @@ current:
   status: awaiting_acceptance
   nextAction: 等待用户验收 Task 22 Command Workspace；只有人工验收通过后才开始 Task 23 Runtime Workspace。
 checkpoint:
-  commit: 381ba1a9aceac6a8ea3ed42dcd42635b7cacbb25
-  updatedAt: "2026-08-26T14:40:00Z"
+  commit: a1a0ee8384e4b071192bcd18d2f130e8ce4c5473
+  updatedAt: "2026-08-26T14:56:00Z"
 verification:
   status: pass
   commands:
-    - Task 22 Command Workspace Gates run ID 32981152117 / source 381ba1a9aceac6a8ea3ed42dcd42635b7cacbb25
+    - Task 22 Command Workspace Gates run ID 32983059022 / source a1a0ee8384e4b071192bcd18d2f130e8ce4c5473
+    - bash scripts/check-execution-state.sh PASS
     - Task 22 focused tests on Linux PASS
     - Go full regression PASS
     - go vet ./... PASS
     - go build ./... PASS
     - Windows x64 cross-build PASS
     - Task 22 focused tests on Windows PASS
-    - Existing Windows release windows-installer-smoke on the same source commit PASS
   errorSummary: ""
-  recoveryAdvice: "Task 22 已具备 fresh Gate 证据，当前只等待人工验收；不得提前启动 Task 23。"
+  recoveryAdvice: "Task 22 已具备 fresh Gate 与 execution-state 校验证据，当前只等待人工验收；不得提前启动 Task 23。"
 taskGate:
   status: pass
   gateItems:
@@ -36,6 +36,7 @@ taskGate:
     controlledBuiltinNamespaceProtection: pass
     generalChatRegression: pass
     windowsCommandWorkspace: pass
+    executionStateValidation: pass
 humanAcceptance:
   accepted: false
 task17Gate:
@@ -67,7 +68,7 @@ tasks:
   "19": {status: completed, completedSteps: [], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: 372aa8387257f3018f11d4404d3888fbc5136e0c, report: docs/task-reports/task-19.md}
   "20": {status: completed, completedSteps: [], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: e2a97095acc58dc0c95c4a091738181504d35f42, report: docs/task-reports/task-20.md}
   "21": {status: completed, completedSteps: [1, 2, 3], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: 62c0c7038a6324c115a1be764379e83b21898090, report: docs/task-reports/task-21.md}
-  "22": {status: awaiting_acceptance, completedSteps: [1, 2, 3, 4, 5, 6, 7, 8], verificationStatus: pass, taskGateStatus: pass, humanAccepted: false, checkpoint: 381ba1a9aceac6a8ea3ed42dcd42635b7cacbb25, report: docs/task-reports/task-22.md}
+  "22": {status: awaiting_acceptance, completedSteps: [1, 2, 3, 4, 5, 6, 7, 8], verificationStatus: pass, taskGateStatus: pass, humanAccepted: false, checkpoint: a1a0ee8384e4b071192bcd18d2f130e8ce4c5473, report: docs/task-reports/task-22.md}
   "23": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false}
   "24": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false}
   "25": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false}
