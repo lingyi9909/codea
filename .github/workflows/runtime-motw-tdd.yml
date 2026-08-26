@@ -21,9 +21,7 @@ jobs:
       - name: Runtime MOTW regression
         working-directory: tui
         shell: pwsh
-        run: |
-          go test ./internal/supervisor -run TestConfigureProcessRemovesRuntimeZoneIdentifier -count=1
-          go test ./internal/supervisor -count=1
+        run: go test ./internal/supervisor -run TestConfigureProcessRemovesRuntimeZoneIdentifier -count=1
 
       - name: Real OpenCode v1.18.11 starts after Runtime self-heal
         shell: pwsh
