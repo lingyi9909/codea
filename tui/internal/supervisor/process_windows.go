@@ -29,8 +29,10 @@ const (
 	jobObjectExtendedLimitInformationClass = 9
 	jobObjectLimitKillOnJobClose           = 0x00002000
 	processAllAccess                       = 0x001F0FFF
-	runtimeStartMaxAttempts                = 4
-	runtimeStartRetryDelay                 = 250 * time.Millisecond
+	// Endpoint protection can briefly hold a newly installed executable while
+	// scanning it. Retry only ERROR_ACCESS_DENIED for up to ~5 seconds.
+	runtimeStartMaxAttempts = 6
+	runtimeStartRetryDelay  = 1 * time.Second
 )
 
 type ioCounters struct {
@@ -143,7 +145,7 @@ func attachProcess(cmd *exec.Cmd) error {
 	)
 	if r1 == 0 {
 		_ = closeHandle(job)
-		return win32Err("SetInformationJobObjectW", lastErr)
+		return win32Err("SetInformationJobObject", lastErr)
 	}
 
 	process, _, lastErr := procOpenProcess.Call(processAllAccess, 0, uintptr(cmd.Process.Pid))
