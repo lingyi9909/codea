@@ -51,9 +51,6 @@ func (p *commandPaletteModel) Selected() (command.Definition, bool) {
 func defaultCommandRegistry() *command.Registry {
 	reg := command.NewRegistry()
 	for _, def := range command.BuiltinCommands() {
-		// Builtins are compile-time constants; a conflict here would be a
-		// programming error. Keep NewModel non-panicking and fall back to the
-		// definitions successfully registered before it.
 		_ = reg.Register(def)
 	}
 	return reg
@@ -89,9 +86,6 @@ func (m *Model) refreshCommandPalette() {
 	}
 }
 
-// handleCommandPaletteKey is modal: navigation and command-input keys are
-// consumed here; unrelated shortcuts are swallowed so they cannot leak into
-// sessions/skills/chat while the palette is open.
 func (m *Model) handleCommandPaletteKey(msg tea.KeyMsg) tea.Cmd {
 	switch {
 	case key.Matches(msg, m.keys.Up):
@@ -170,18 +164,37 @@ func (m *Model) executeWorkspaceAction(action command.Action) tea.Cmd {
 		m.clearChat()
 		return nil
 	case command.ActionStatus:
-		session := "none"
-		if m.sessionID != "" {
-			session = string(m.sessionID)
-		}
-		m.appendInfo(fmt.Sprintf("Runtime: %s\nSession: %s\nStreaming: %t", m.runtimeStatus, session, m.isStreaming))
-		return nil
+		return RuntimeWorkspaceStatusCmd(m.runtimeClient)
 	case command.ActionSessions:
 		return m.toggleSessions()
 	case command.ActionSkills:
 		return m.toggleSkills()
 	case command.ActionAgents:
 		return ListAgentsCmd(m.runtimeClient)
+	case command.ActionModel:
+		if m.sessionID == "" {
+			m.appendInfo("No active session. Start a conversation before selecting a model.")
+			return nil
+		}
+		if m.isStreaming {
+			m.appendInfo("Finish or cancel the current response before changing models.")
+			return nil
+		}
+		return ListModelsCmd(m.runtimeClient, m.sessionID)
+	case command.ActionCompact:
+		if m.sessionID == "" {
+			m.appendInfo("No active session to compact.")
+			return nil
+		}
+		if !m.runtimeClient.Capabilities().ContextCompaction {
+			m.appendInfo("Context compaction is unsupported by the current Runtime.")
+			return nil
+		}
+		if m.isStreaming {
+			m.appendInfo("Finish or cancel the current response before compacting context.")
+			return nil
+		}
+		return CompactSessionCmd(m.runtimeClient, m.sessionID)
 	case command.ActionCancel:
 		if !m.isStreaming || m.sessionID == "" {
 			m.appendInfo("No active response to cancel.")
@@ -189,7 +202,11 @@ func (m *Model) executeWorkspaceAction(action command.Action) tea.Cmd {
 		}
 		return CancelResponseCmd(m.runtimeClient, m.sessionID)
 	case command.ActionDoctor:
-		return RuntimeHealthCmd(m.runtimeClient)
+		if m.doctorService == nil {
+			m.appendInfo("Codea Doctor is unavailable in this workspace.")
+			return nil
+		}
+		return DoctorServiceCmd(m.doctorService)
 	default:
 		m.appendInfo("Command error: unsupported workspace action " + string(action))
 		return nil
@@ -218,9 +235,6 @@ func (m *Model) appendInfo(content string) {
 	m.markDirty()
 }
 
-// startPrompt is the shared normal/custom prompt path. displayText is what the
-// user sees; promptText is what crosses AgentRuntime. Keeping them separate lets
-// Markdown commands expand templates without hiding the user's slash command.
 func (m *Model) startPrompt(displayText, promptText, agent string) tea.Cmd {
 	m.messages = append(m.messages,
 		ChatMessage{Role: RoleUser, Content: displayText, Finished: true},
@@ -235,11 +249,18 @@ func (m *Model) startPrompt(displayText, promptText, agent string) tea.Cmd {
 	m.streamBuf.Reset()
 	m.reasoningBuf.Reset()
 	m.tools = make([]ToolActivity, 0)
+	m.currentAgent = agent
 
 	req := runtime.PromptRequest{
 		MessageID: fmt.Sprintf("msg-%d", m.msgCounter),
 		Agent:     agent,
 		Parts:     []runtime.PromptPart{runtime.TextPart{Text: promptText}},
+	}
+	if m.sessionID != "" {
+		if selected, ok := m.sessionModels[m.sessionID]; ok {
+			model := selected
+			req.Model = &model
+		}
 	}
 	m.msgCounter++
 	m.input = ""
