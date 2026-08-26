@@ -41,7 +41,25 @@ func MergePluginConfig(configDir, bundle string, mode os.FileMode) error {
 	if err := os.MkdirAll(configDir, 0o700); err != nil {
 		return err
 	}
-	return os.WriteFile(cfgPath, data, mode)
+	if err := os.WriteFile(cfgPath, data, mode); err != nil {
+		return err
+	}
+
+	// OpenCode v1.18.11 schedules @opencode-ai/plugin installation for every
+	// config directory and /agent waits for those background installs whenever a
+	// plugin is configured. Codea runs with XDG_CONFIG_HOME=<configDir>/xdg/config,
+	// so both Global.Path.config and OPENCODE_CONFIG_DIR are distinct writable
+	// directories. Seed both Codea-owned locations before Runtime startup so a
+	// machine without npm/internet never blocks here.
+	for _, dir := range []string{
+		filepath.Join(configDir, "xdg", "config", "opencode"),
+		configDir,
+	} {
+		if err := PrepareOfflinePluginDependency(dir, pinnedOpenCodePluginVersion); err != nil {
+			return fmt.Errorf("prepare offline OpenCode plugin dependency in %s: %w", dir, err)
+		}
+	}
+	return nil
 }
 
 // pluginFileURL converts a local filesystem path into a standards-compliant
