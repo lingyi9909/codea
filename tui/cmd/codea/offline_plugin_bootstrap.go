@@ -10,21 +10,33 @@ import (
 const lockedOpenCodeVersion = "1.18.11"
 
 // prepareOfflinePluginDependencies prevents OpenCode v1.18.11 from attempting
-// an npm install before loading Codea's self-contained file:// plugin.
+// npm installs before loading Codea's self-contained file:// plugin.
 //
-// OpenCode starts a dependency install for OPENCODE_CONFIG_DIR and, when an
-// external plugin is configured, /agent waits for that install to finish. In an
-// air-gapped environment this can block until the HTTP client times out even
-// though Codea's plugin bundle has no runtime npm dependencies. OpenCode's npm
-// service skips reify when node_modules exists and package.json/package-lock.json
-// already declare the pinned @opencode-ai/plugin dependency, so Codea writes the
-// minimal deterministic metadata it needs before spawning the runtime.
+// OpenCode has two writable config dependency roots in Codea's supervised
+// process: OPENCODE_CONFIG_DIR itself and Global.Path.config, which resolves to
+// $XDG_CONFIG_HOME/opencode. Codea points XDG_CONFIG_HOME at
+// <runtime-config>/xdg/config, so both roots must be primed. When an external
+// plugin is configured, /agent waits for all of these dependency installers;
+// leaving either root unprimed makes air-gapped Windows startup wait on npm.
 func prepareOfflinePluginDependencies(cfgDir, openCodeVersion string) error {
 	if openCodeVersion != lockedOpenCodeVersion {
 		return fmt.Errorf("unsupported OpenCode dependency bootstrap version %q; locked=%s", openCodeVersion, lockedOpenCodeVersion)
 	}
-	if err := os.MkdirAll(filepath.Join(cfgDir, "node_modules"), 0o755); err != nil {
-		return fmt.Errorf("create runtime node_modules sentinel: %w", err)
+	roots := []string{
+		cfgDir,
+		filepath.Join(cfgDir, "xdg", "config", "opencode"),
+	}
+	for _, root := range roots {
+		if err := prepareOfflinePluginDependencyDir(root, openCodeVersion); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func prepareOfflinePluginDependencyDir(dir, openCodeVersion string) error {
+	if err := os.MkdirAll(filepath.Join(dir, "node_modules"), 0o755); err != nil {
+		return fmt.Errorf("create runtime node_modules sentinel in %s: %w", dir, err)
 	}
 
 	pkg := struct {
@@ -36,8 +48,8 @@ func prepareOfflinePluginDependencies(cfgDir, openCodeVersion string) error {
 			"@opencode-ai/plugin": openCodeVersion,
 		},
 	}
-	if err := writeJSONFile(filepath.Join(cfgDir, "package.json"), pkg); err != nil {
-		return fmt.Errorf("write offline package.json: %w", err)
+	if err := writeJSONFile(filepath.Join(dir, "package.json"), pkg); err != nil {
+		return fmt.Errorf("write offline package.json in %s: %w", dir, err)
 	}
 
 	lock := struct {
@@ -61,8 +73,8 @@ func prepareOfflinePluginDependencies(cfgDir, openCodeVersion string) error {
 			},
 		},
 	}
-	if err := writeJSONFile(filepath.Join(cfgDir, "package-lock.json"), lock); err != nil {
-		return fmt.Errorf("write offline package-lock.json: %w", err)
+	if err := writeJSONFile(filepath.Join(dir, "package-lock.json"), lock); err != nil {
+		return fmt.Errorf("write offline package-lock.json in %s: %w", dir, err)
 	}
 	return nil
 }
