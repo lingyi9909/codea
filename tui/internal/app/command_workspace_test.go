@@ -6,6 +6,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"codea/tui/internal/command"
+	"codea/tui/internal/runtime"
 	fakeruntime "codea/tui/tests/fixtures/fake-runtime"
 )
 
@@ -101,5 +102,54 @@ func TestPaletteEnterExecutesSelectedCommand(t *testing.T) {
 	}
 	if m.input != "" {
 		t.Fatalf("input = %q, want cleared", m.input)
+	}
+}
+
+func TestCustomPromptCommandExpandsArgumentsAndUsesAgentRuntime(t *testing.T) {
+	fake := fakeruntime.New()
+	m := NewModel(fake)
+	m.sessionID = runtime.SessionID("active-session")
+
+	reg := command.NewRegistry()
+	if err := reg.Register(command.Definition{
+		Name:     "check-order",
+		Source:   command.SourceEnterprise,
+		Action:   command.ActionPrompt,
+		Agent:    "code-reviewer",
+		Template: "Review order:\n$ARGUMENTS",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	m.SetCommandRegistry(reg)
+	m.input = "/check-order OrderService  --changed-only"
+
+	cmd := m.submit()
+	if cmd == nil {
+		t.Fatal("custom prompt command should return an async Runtime prompt command")
+	}
+	_ = cmd()
+
+	prompts := fake.Prompts()
+	if len(prompts) != 1 {
+		t.Fatalf("Runtime prompts = %d, want 1", len(prompts))
+	}
+	if prompts[0].SessionID != m.sessionID {
+		t.Fatalf("session = %q, want %q", prompts[0].SessionID, m.sessionID)
+	}
+	if prompts[0].Request.Agent != "code-reviewer" {
+		t.Fatalf("agent = %q, want code-reviewer", prompts[0].Request.Agent)
+	}
+	if len(prompts[0].Request.Parts) != 1 {
+		t.Fatalf("parts = %#v, want one text part", prompts[0].Request.Parts)
+	}
+	part, ok := prompts[0].Request.Parts[0].(runtime.TextPart)
+	if !ok {
+		t.Fatalf("part type = %T, want runtime.TextPart", prompts[0].Request.Parts[0])
+	}
+	if part.Text != "Review order:\nOrderService  --changed-only" {
+		t.Fatalf("prompt text = %q", part.Text)
+	}
+	if len(m.messages) < 1 || m.messages[0].Content != "/check-order OrderService  --changed-only" {
+		t.Fatalf("visible user command = %#v", m.messages)
 	}
 }

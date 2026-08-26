@@ -33,16 +33,32 @@ const (
 	ActionReview Action = "review"
 )
 
+// Availability is presentation metadata owned by a command definition. Task 22
+// only needs a stable available/unavailable vocabulary; later workspace tasks
+// may derive it from Runtime capabilities without leaking vendor DTOs here.
+type Availability string
+
+const (
+	AvailabilityAvailable   Availability = "available"
+	AvailabilityUnavailable Availability = "unavailable"
+)
+
+// Definition is the centralized CommandRegistry contract. Action is the
+// terminal-independent handler/route, Agent is the optional Codea Agent route,
+// and RequiredCapability/Availability let later Runtime workspace tasks expose
+// capability-aware commands without growing ad-hoc Bubble Tea branches.
 type Definition struct {
-	Name        string
-	Aliases     []string
-	Description string
-	Category    string
-	Usage       string
-	Source      Source
-	Action      Action
-	Agent       string
-	Template    string
+	Name               string
+	Aliases            []string
+	Description        string
+	Category           string
+	Usage              string
+	Source             Source
+	Action             Action
+	RequiredCapability string
+	Agent              string
+	Availability       Availability
+	Template           string
 }
 
 type Invocation struct {
@@ -93,6 +109,17 @@ type Registry struct {
 	lookup      map[string]int
 }
 
+// controlledBuiltinNames reserves the full approved V1.1 controlled namespace.
+// Task 22 registers only its eight built-ins; Task 23/24 will register their own
+// commands later. Reserving those names now prevents Enterprise/Project Markdown
+// from occupying a controlled name before the owning task is implemented.
+var controlledBuiltinNames = map[string]struct{}{
+	"help": {}, "clear": {}, "status": {}, "sessions": {}, "skills": {},
+	"agents": {}, "cancel": {}, "doctor": {},
+	"model": {}, "compact": {}, "review": {}, "test": {}, "api-doc": {},
+	"debug": {}, "view": {},
+}
+
 func NewRegistry() *Registry {
 	return &Registry{lookup: make(map[string]int)}
 }
@@ -105,6 +132,12 @@ func (r *Registry) Register(def Definition) error {
 	if def.Source == "" {
 		def.Source = SourceBuiltin
 	}
+	if def.Availability == "" {
+		def.Availability = AvailabilityAvailable
+	}
+	if def.Source != SourceBuiltin && isControlledBuiltinName(def.Name) {
+		return controlledNameConflict(def.Source, def.Name, def.Name)
+	}
 
 	keys := make([]string, 0, len(def.Aliases)+1)
 	keys = append(keys, def.Name)
@@ -116,6 +149,9 @@ func (r *Registry) Register(def Definition) error {
 		}
 		if _, duplicate := seen[alias]; duplicate {
 			return &Error{Code: CodeInvalid, Command: def.Name, Detail: "duplicate alias " + alias}
+		}
+		if def.Source != SourceBuiltin && isControlledBuiltinName(alias) {
+			return controlledNameConflict(def.Source, def.Name, alias)
 		}
 		seen[alias] = struct{}{}
 		def.Aliases[i] = alias
@@ -141,6 +177,19 @@ func (r *Registry) Register(def Definition) error {
 		r.lookup[key] = idx
 	}
 	return nil
+}
+
+func controlledNameConflict(source Source, owner, controlled string) error {
+	return &Error{
+		Code:    CodeConflict,
+		Command: controlled,
+		Detail:  fmt.Sprintf("%s command /%s conflicts with controlled built-in /%s", source, owner, controlled),
+	}
+}
+
+func isControlledBuiltinName(name string) bool {
+	_, ok := controlledBuiltinNames[normalizeName(name)]
+	return ok
 }
 
 func (r *Registry) Commands() []Definition {

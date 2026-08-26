@@ -30,9 +30,33 @@ func TestBuiltinsAreRegisteredAndFilterable(t *testing.T) {
 	if len(all) != 8 {
 		t.Fatalf("builtins = %d, want 8", len(all))
 	}
+	for _, def := range all {
+		if def.Availability != AvailabilityAvailable {
+			t.Fatalf("/%s availability = %q, want %q", def.Name, def.Availability, AvailabilityAvailable)
+		}
+	}
 }
 
 func gotNames(in []string) []string { return in }
+
+func TestDefinitionOwnsCapabilityAndAvailabilityMetadata(t *testing.T) {
+	reg := NewRegistry()
+	want := Definition{
+		Name:               "cap-aware",
+		Source:             SourceBuiltin,
+		Action:             ActionStatus,
+		RequiredCapability: "compaction",
+		Agent:              "general",
+		Availability:       AvailabilityUnavailable,
+	}
+	if err := reg.Register(want); err != nil {
+		t.Fatal(err)
+	}
+	got := reg.Commands()[0]
+	if got.RequiredCapability != want.RequiredCapability || got.Agent != want.Agent || got.Availability != want.Availability {
+		t.Fatalf("registered metadata = %#v, want capability=%q agent=%q availability=%q", got, want.RequiredCapability, want.Agent, want.Availability)
+	}
+}
 
 func TestParsePreservesCommandArguments(t *testing.T) {
 	reg := NewRegistry()
@@ -85,6 +109,27 @@ func TestCollisionFailsClosedWithoutOverride(t *testing.T) {
 	}
 }
 
+func TestFutureControlledBuiltinsAreReservedBeforeOwningTaskRegistersThem(t *testing.T) {
+	for _, def := range []Definition{
+		{Name: "review", Source: SourceEnterprise, Action: ActionPrompt},
+		{Name: "project-model", Aliases: []string{"model"}, Source: SourceProject, Action: ActionPrompt},
+	} {
+		reg := NewRegistry()
+		err := reg.Register(def)
+		var cmdErr *Error
+		if !errors.As(err, &cmdErr) || cmdErr.Code != CodeConflict {
+			t.Fatalf("Register(%#v) error = %T %v, want %s", def, err, err, CodeConflict)
+		}
+	}
+
+	// The owning later task can still register the controlled name as a true
+	// built-in through the same registry; Task 22 only protects the namespace.
+	reg := NewRegistry()
+	if err := reg.Register(Definition{Name: "review", Source: SourceBuiltin, Action: ActionReview}); err != nil {
+		t.Fatalf("future built-in owner should be allowed to register /review: %v", err)
+	}
+}
+
 func TestWorkspaceLoaderLoadsEnterpriseThenProjectAndRendersArguments(t *testing.T) {
 	root := t.TempDir()
 	enterprise := filepath.Join(root, "distribution", "commands")
@@ -129,5 +174,17 @@ func TestWorkspaceLoaderRejectsProjectOverrideOfBuiltin(t *testing.T) {
 	var cmdErr *Error
 	if !errors.As(err, &cmdErr) || cmdErr.Code != CodeConflict {
 		t.Fatalf("error = %T %v, want %s", err, err, CodeConflict)
+	}
+}
+
+func TestWorkspaceLoaderRejectsProjectClaimOnFutureControlledBuiltin(t *testing.T) {
+	project := filepath.Join(t.TempDir(), ".codea", "commands")
+	if err := os.MkdirAll(project, 0o755); err != nil { t.Fatal(err) }
+	if err := os.WriteFile(filepath.Join(project, "review.md"), []byte("---\nname: review\ndescription: steal future review\n---\n\nnope\n"), 0o644); err != nil { t.Fatal(err) }
+
+	_, err := LoadWorkspaceRegistry("", project)
+	var cmdErr *Error
+	if !errors.As(err, &cmdErr) || cmdErr.Code != CodeConflict || cmdErr.Command != "review" {
+		t.Fatalf("error = %T %v, want %s for /review", err, err, CodeConflict)
 	}
 }
