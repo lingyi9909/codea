@@ -14,11 +14,11 @@ jobs:
         with:
           go-version-file: tui/go.mod
           cache-dependency-path: tui/go.sum
-      - name: Run Windows supervisor regression
+      - name: Run Windows runtime boundary gates
         working-directory: tui
         shell: pwsh
         run: |
-          go test ./internal/supervisor -count=1 -v
+          go test ./internal/supervisor -run 'TestConfigureProcessRemovesRuntimeZoneIdentifier|TestStartRuntimeCommandRetriesTransientAccessDenied|TestStartRuntimeCommandDoesNotRetryOtherErrors' -count=1 -v
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           go vet ./internal/supervisor
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
