@@ -1,4 +1,4 @@
-name: Runtime MOTW TDD
+name: Runtime MOTW Verify
 
 on:
   push:
@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 jobs:
-  regression:
+  windows-real-runtime:
     runs-on: windows-2025
     steps:
       - uses: actions/checkout@v4
@@ -17,7 +17,104 @@ jobs:
         with:
           go-version: '1.26.5'
           cache-dependency-path: tui/go.sum
+
       - name: Runtime MOTW regression
         working-directory: tui
         shell: pwsh
-        run: go test ./internal/supervisor -run TestConfigureProcessRemovesRuntimeZoneIdentifier -count=1
+        run: |
+          go test ./internal/supervisor -run TestConfigureProcessRemovesRuntimeZoneIdentifier -count=1
+          go test ./internal/supervisor -count=1
+
+      - name: Real OpenCode v1.18.11 starts after Runtime self-heal
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $root = Join-Path $env:RUNNER_TEMP 'codea-motw-real-runtime'
+          Remove-Item -Recurse -Force $root -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Force -Path $root | Out-Null
+          $zip = Join-Path $root 'opencode-windows-x64.zip'
+          Invoke-WebRequest -UseBasicParsing -Uri 'https://github.com/anomalyco/opencode/releases/download/v1.18.11/opencode-windows-x64.zip' -OutFile $zip
+          $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $zip).Hash.ToLowerInvariant()
+          if ($hash -ne 'f3a5ea814aecc692a4e04259d9005283f364225b38456c90f9a47b7a9d83c0e9') {
+            throw "OpenCode archive checksum mismatch: $hash"
+          }
+          $extract = Join-Path $root 'extract'
+          Expand-Archive -LiteralPath $zip -DestinationPath $extract -Force
+          $oc = Get-ChildItem -LiteralPath $extract -Recurse -Filter 'opencode.exe' -File | Select-Object -First 1
+          if (-not $oc) { throw 'opencode.exe not found' }
+
+          Set-Content -LiteralPath $oc.FullName -Stream Zone.Identifier -Value "[ZoneTransfer]`r`nZoneId=3" -NoNewline
+          if (-not (Get-Item -LiteralPath $oc.FullName -Stream Zone.Identifier -ErrorAction SilentlyContinue)) {
+            throw 'failed to apply Zone.Identifier before real-runtime probe'
+          }
+
+          $cfg = Join-Path $root 'runtime-config'
+          New-Item -ItemType Directory -Force -Path $cfg | Out-Null
+          $probeDir = Join-Path $env:GITHUB_WORKSPACE 'tui/cmd/motwprobe'
+          New-Item -ItemType Directory -Force -Path $probeDir | Out-Null
+          @'
+          package main
+
+          import (
+            "context"
+            "fmt"
+            "os"
+            "time"
+
+            "codea/tui/internal/supervisor"
+          )
+
+          func main() {
+            s := supervisor.NewSupervisor(supervisor.Config{
+              OpenCodeBin: os.Getenv("REAL_OC"),
+              ConfigDir: os.Getenv("REAL_CFG"),
+              ProjectRoot: os.Getenv("GITHUB_WORKSPACE"),
+              StartupTimeout: 30 * time.Second,
+              StopTimeout: 5 * time.Second,
+            })
+            ctx, cancel := context.WithTimeout(context.Background(), 35*time.Second)
+            defer cancel()
+            if err := s.Start(ctx); err != nil {
+              fmt.Printf("MOTW_REAL_RUNTIME FAIL status=%s err=%v last=%v\n", s.Status(), err, s.LastError())
+              os.Exit(1)
+            }
+            fmt.Printf("MOTW_REAL_RUNTIME PASS status=%s url=%s\n", s.Status(), s.BaseURL())
+            if err := s.Stop(); err != nil {
+              fmt.Printf("MOTW_REAL_RUNTIME STOP_FAIL err=%v\n", err)
+              os.Exit(1)
+            }
+          }
+          '@ | Set-Content -LiteralPath (Join-Path $probeDir 'main.go') -Encoding utf8
+
+          $env:REAL_OC = $oc.FullName
+          $env:REAL_CFG = $cfg
+          Push-Location (Join-Path $env:GITHUB_WORKSPACE 'tui')
+          try {
+            go run ./cmd/motwprobe
+          } finally {
+            Pop-Location
+          }
+
+          if (Get-Item -LiteralPath $oc.FullName -Stream Zone.Identifier -ErrorAction SilentlyContinue) {
+            throw 'Runtime launch left Zone.Identifier on real opencode.exe'
+          }
+          Write-Host 'REAL_RUNTIME_MOTW_SELF_HEAL PASS'
+
+  full-regression:
+    runs-on: ubuntu-24.04
+    env:
+      GOTOOLCHAIN: local
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.5'
+          cache-dependency-path: tui/go.sum
+      - name: Full Go verification
+        working-directory: tui
+        run: |
+          go test ./... -count=1
+          go test -race ./internal/supervisor -count=1
+          go vet ./...
+          go build ./...
+          CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build ./...
