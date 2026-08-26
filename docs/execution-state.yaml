@@ -68,7 +68,7 @@ tasks:
   "20": {status: completed, completedSteps: [], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: e2a97095acc58dc0c95c4a091738181504d35f42, report: docs/task-reports/task-20.md}
   "21": {status: completed, completedSteps: [1, 2, 3], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: 62c0c7038a6324c115a1be764379e83b21898090, report: docs/task-reports/task-21.md}
   "22": {status: awaiting_acceptance, completedSteps: [1, 2, 3, 4, 5, 6, 7, 8], verificationStatus: pass, taskGateStatus: pass, humanAccepted: false, checkpoint: 381ba1a9aceac6a8ea3ed42dcd42635b7cacbb25, report: docs/task-reports/task-22.md}
-  "23": {status: pending, completedSteps: [], verificationStatus: pending, taskGateStatus: pending, humanAccepted: false}
-  "24": {status: pending, completedSteps: [], verificationStatus: pending, taskGateStatus: pending, humanAccepted: false}
-  "25": {status: pending, completedSteps: [], verificationStatus: pending, taskGateStatus: pending, humanAccepted: false}
-  "26": {status: pending, completedSteps: [], verificationStatus: pending, taskGateStatus: pending, humanAccepted: false}
+  "23": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false}
+  "24": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false}
+  "25": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false}
+  "26": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false}
