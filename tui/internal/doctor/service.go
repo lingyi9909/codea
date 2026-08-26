@@ -53,11 +53,24 @@ func (c checkFunc) Run(ctx context.Context) Result { start := time.Now(); status
 
 type Service struct { checks []Check; now func() time.Time }
 func NewService(checks ...Check) *Service { return &Service{checks:checks, now:time.Now} }
-func (s *Service) Run(ctx context.Context) Report {
+func (s *Service) Run(ctx context.Context) Report { return s.RunWithProgress(ctx, nil, nil) }
+
+// RunWithProgress preserves the normal Doctor report contract while allowing
+// interactive callers to surface which check is currently running. Callbacks
+// are synchronous and optional; non-interactive callers can keep using Run.
+func (s *Service) RunWithProgress(ctx context.Context, onStart func(string, Category), onResult func(Result)) Report {
 	now:=s.now; if now==nil { now=time.Now }; r:=Report{StartedAt:now().UTC()}
 	for _, check := range s.checks {
-		select { case <-ctx.Done(): r.Results=append(r.Results,Result{Name:"Doctor 上下文",Category:CategoryBehavior,Status:Fail,Detail:ctx.Err().Error()}); r.FinishedAt=now().UTC(); return r; default: }
-		r.Results=append(r.Results,check.Run(ctx))
+		select { case <-ctx.Done():
+			res:=Result{Name:"Doctor 上下文",Category:CategoryBehavior,Status:Fail,Detail:ctx.Err().Error()}
+			r.Results=append(r.Results,res); if onResult!=nil{onResult(res)}; r.FinishedAt=now().UTC(); return r
+		default: }
+		if onStart!=nil {
+			if c,ok:=check.(checkFunc);ok { onStart(c.name,c.category) }
+		}
+		res:=check.Run(ctx)
+		r.Results=append(r.Results,res)
+		if onResult!=nil { onResult(res) }
 	}
 	r.FinishedAt=now().UTC(); return r
 }
