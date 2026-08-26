@@ -20,4 +20,4 @@ jobs:
       - name: Runtime MOTW regression
         working-directory: tui
         shell: pwsh
-        run: go test ./internal/supervisor -run TestPrepareRuntimeBinaryRemovesZoneIdentifier -count=1
+        run: go test ./internal/supervisor -run TestConfigureProcessRemovesRuntimeZoneIdentifier -count=1
