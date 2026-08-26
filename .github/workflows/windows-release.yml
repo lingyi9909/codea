@@ -37,6 +37,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.5'
+          cache-dependency-path: tui/go.sum
+
+      - name: Gate Runtime MOTW self-heal
+        working-directory: tui
+        shell: pwsh
+        run: go test ./internal/supervisor -run TestConfigureProcessRemovesRuntimeZoneIdentifier -count=1
+
       - name: Execute install.ps1 on a real Windows runner
         shell: pwsh
         run: |
