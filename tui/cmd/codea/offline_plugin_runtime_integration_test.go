@@ -7,6 +7,8 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -28,8 +30,13 @@ func TestRealOpenCodePluginAgentLoadDoesNotTouchNpmRegistry(t *testing.T) {
 	}
 
 	var registryHits atomic.Int32
+	var registryMu sync.Mutex
+	var registryRequests []string
 	registry := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		registryHits.Add(1)
+		registryMu.Lock()
+		registryRequests = append(registryRequests, r.Method+" "+r.URL.RequestURI())
+		registryMu.Unlock()
 		http.Error(w, "offline-registry-trap", http.StatusServiceUnavailable)
 	}))
 	defer registry.Close()
@@ -62,6 +69,9 @@ func TestRealOpenCodePluginAgentLoadDoesNotTouchNpmRegistry(t *testing.T) {
 		t.Fatal("ListAgents returned no agents")
 	}
 	if hits := registryHits.Load(); hits != 0 {
-		t.Fatalf("OpenCode attempted npm registry access during file plugin load: hits=%d", hits)
+		registryMu.Lock()
+		requests := strings.Join(registryRequests, ", ")
+		registryMu.Unlock()
+		t.Fatalf("OpenCode attempted npm registry access during file plugin load: hits=%d requests=[%s]", hits, requests)
 	}
 }
