@@ -8,19 +8,21 @@ import (
 	"strings"
 )
 
+const pinnedOpenCodePluginVersion = "1.18.11"
+
 // PrepareOfflinePluginDependency prevents OpenCode v1.18.11 from attempting a
 // network dependency install before loading Codea's self-contained file plugin.
 //
 // OpenCode's config service always schedules @opencode-ai/plugin installation
 // for writable config directories. When any plugin is configured, /agent waits
-// for that background install to finish. In an offline environment this can
+// for those background installs to finish. In an offline environment this can
 // block until the HTTP client times out even though Codea's bundle has no
 // runtime npm dependency.
 //
 // The pinned v1.18.11 installer considers the dependency satisfied when
 // node_modules exists and the root package-lock declares @opencode-ai/plugin.
-// Codea owns this config directory, so seed exactly that local bookkeeping state
-// before the Runtime starts. No package contents are needed because the Codea
+// For Codea-owned config directories we seed exactly that bookkeeping state
+// before Runtime startup. No package contents are needed because Codea's file
 // plugin bundle is fully self-contained.
 func PrepareOfflinePluginDependency(configDir, version string) error {
 	if strings.TrimSpace(configDir) == "" {
@@ -84,13 +86,12 @@ func PrepareOfflinePluginDependency(configDir, version string) error {
 		return err
 	}
 	data = append(data, '\n')
-	tmp := lockPath + ".tmp"
-	if err := os.WriteFile(tmp, data, 0o600); err != nil {
-		return err
-	}
-	if err := os.Rename(tmp, lockPath); err != nil {
-		_ = os.Remove(tmp)
-		return err
+	// This runs before OpenCode starts, so no other process owns this Codea-
+	// controlled file. A direct truncate/write is intentionally used here because
+	// Windows os.Rename cannot atomically replace an existing destination, which
+	// made repeated Doctor/TUI launches fail on the second seed.
+	if err := os.WriteFile(lockPath, data, 0o600); err != nil {
+		return fmt.Errorf("write package-lock.json: %w", err)
 	}
 	return nil
 }
