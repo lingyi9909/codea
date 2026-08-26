@@ -26,6 +26,10 @@ func (m *Model) Init() tea.Cmd {
 // Update handles Bubble Tea messages: subscription lifecycle, key input,
 // prompt submission, and streaming runtime event processing.
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if handled, cmd := m.handleRuntimeWorkspaceMessage(msg); handled {
+		return m, cmd
+	}
+
 	switch msg := msg.(type) {
 	case subscribedMsg:
 		m.eventCh = msg.ch
@@ -126,15 +130,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case loadHistoryResultMsg:
-		// A result only applies to the resume currently in flight. A stale result
-		// (the panel was closed or a different resume started) is ignored.
 		if m.pendingResumeID == "" || msg.sessionID != m.pendingResumeID {
 			return m, nil
 		}
 		m.pendingResumeID = ""
 		if msg.err != nil {
-			// Failure does not switch sessions; the panel stays open with a notice
-			// so the user can retry or pick another session.
 			m.sessionNotice = "Failed to load session history: " + msg.err.Error()
 			m.markDirty()
 			return m, nil
@@ -145,9 +145,6 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case approvalResultMsg:
-		// A result only applies to the approval currently shown. A stale result
-		// (from a reply issued against a request that has since been superseded
-		// by a new permission.asked) must not close or corrupt the current modal.
 		if m.permission.Request == nil || runtime.ApprovalID(m.permission.Request.ID) != msg.approvalID {
 			return m, nil
 		}
@@ -218,9 +215,10 @@ func (m *Model) handleKey(msg tea.KeyMsg) tea.Cmd {
 		if handled && choice != FeedbackSkip && m.metrics != nil {
 			_ = m.metrics.RecordFeedback(eventID, choice)
 		}
-		// A visible feedback prompt swallows unrelated keys as well; the user can
-		// always dismiss it with Esc.
 		return nil
+	}
+	if m.modelPicker.Visible {
+		return m.handleModelPickerKey(msg)
 	}
 	if m.commandPalette.Visible {
 		return m.handleCommandPaletteKey(msg)
@@ -254,10 +252,6 @@ func (m *Model) handleKey(msg tea.KeyMsg) tea.Cmd {
 	}
 }
 
-// handleApprovalKey routes keys while the approval modal is open. Only
-// Allow-once / Always / Reject are consumed; every other key is swallowed.
-// While a reply is already in flight, all keys are swallowed so the same
-// approval cannot be replied to twice.
 func (m *Model) handleApprovalKey(msg tea.KeyMsg) tea.Cmd {
 	if m.approvalPending {
 		return nil
@@ -273,9 +267,6 @@ func (m *Model) handleApprovalKey(msg tea.KeyMsg) tea.Cmd {
 	return nil
 }
 
-// replyApproval maps a decision to a Codea ApprovalReply and issues the async
-// ReplyApproval command. The UI never fabricates a vendor "remember" flag;
-// once/always/reject are the only decisions exposed here.
 func (m *Model) replyApproval(decision runtime.ApprovalDecision) tea.Cmd {
 	if m.permission.Request == nil {
 		return nil
@@ -284,7 +275,6 @@ func (m *Model) replyApproval(decision runtime.ApprovalDecision) tea.Cmd {
 	return ReplyApprovalCmd(m.runtimeClient, runtime.ApprovalID(m.permission.Request.ID), runtime.ApprovalReply{Decision: decision})
 }
 
-// handleSessionKey routes keys while the session panel is open.
 func (m *Model) handleSessionKey(msg tea.KeyMsg) tea.Cmd {
 	switch {
 	case key.Matches(msg, m.keys.Up):
@@ -305,7 +295,6 @@ func (m *Model) handleSessionKey(msg tea.KeyMsg) tea.Cmd {
 	return nil
 }
 
-// toggleSessions opens the session panel (fetching sessions) or closes it.
 func (m *Model) toggleSessions() tea.Cmd {
 	if m.sessionPanel.Visible {
 		m.sessionPanel.Close()
@@ -319,10 +308,6 @@ func (m *Model) toggleSessions() tea.Cmd {
 	return ListSessionsCmd(m.runtimeClient)
 }
 
-// resumeSelectedSession resumes the session under the cursor. It is blocked
-// while a response is still streaming. On selection it kicks off an async
-// history load (LoadSessionHistoryCmd); the actual switch happens in the
-// loadHistoryResultMsg handler once history arrives.
 func (m *Model) resumeSelectedSession() tea.Cmd {
 	item, ok := m.sessionPanel.Selected()
 	if !ok || item.Active {
@@ -339,14 +324,11 @@ func (m *Model) resumeSelectedSession() tea.Cmd {
 	return LoadSessionHistoryCmd(m.runtimeClient, item.ID)
 }
 
-// resumeSession switches the current session, resets all transient UI state so
-// the previous session's in-flight streaming, reasoning, tools, and pending
-// prompt cannot leak into the resumed session, and rehydrates the chat view
-// from the loaded history.
 func (m *Model) resumeSession(id runtime.SessionID, history []runtime.Message) {
 	m.sessionID = id
 	m.isStreaming = false
 	m.pendingPrompt = nil
+	m.modelPicker.Close()
 	m.streamBuf.Reset()
 	m.reasoningBuf.Reset()
 	m.reasoningActive = false
@@ -357,11 +339,9 @@ func (m *Model) resumeSession(id runtime.SessionID, history []runtime.Message) {
 	m.proc.Reset()
 	m.messages = historyToChatMessages(history)
 	m.sessionNotice = ""
+	m.currentAgent = "general"
 }
 
-// historyToChatMessages maps Codea-domain session messages into chat messages
-// for rehydration. Historical turns are complete, so every message is marked
-// finished; an unknown role falls back to informational display.
 func historyToChatMessages(history []runtime.Message) []ChatMessage {
 	out := make([]ChatMessage, 0, len(history))
 	for _, msg := range history {
@@ -374,7 +354,6 @@ func historyToChatMessages(history []runtime.Message) []ChatMessage {
 	return out
 }
 
-// messageRole maps a message role string to a Codea Role.
 func messageRole(role string) Role {
 	switch role {
 	case "user":
@@ -386,7 +365,6 @@ func messageRole(role string) Role {
 	}
 }
 
-// sessionItems converts Codea-domain sessions into session list items.
 func sessionItems(sessions []runtime.Session) []components.SessionItem {
 	items := make([]components.SessionItem, len(sessions))
 	for i, s := range sessions {
@@ -399,8 +377,6 @@ func sessionItems(sessions []runtime.Session) []components.SessionItem {
 	return items
 }
 
-// handleTyping appends printable runes and handles backspace, then refreshes
-// the command palette from the updated input buffer.
 func (m *Model) handleTyping(msg tea.KeyMsg) {
 	switch msg.Type {
 	case tea.KeyBackspace:
@@ -413,8 +389,6 @@ func (m *Model) handleTyping(msg tea.KeyMsg) {
 	m.refreshCommandPalette()
 }
 
-// submit executes slash commands locally before the normal model path. Unknown
-// slash commands fail closed and never become a general-agent prompt.
 func (m *Model) submit() tea.Cmd {
 	if strings.TrimSpace(m.input) == "" {
 		return nil
@@ -429,11 +403,6 @@ func (m *Model) submit() tea.Cmd {
 	return m.startPrompt(raw, raw, "general")
 }
 
-// processRuntimeEvent consumes one runtime event, updating streaming answer and
-// reasoning state via the reasoning processor and tracking stream completion.
-// Answer and reasoning deltas are buffered (not committed to the visible
-// message/reasoning state) so a high-frequency token burst does not trigger a
-// render per token; the returned bool reports whether any visible state changed.
 func (m *Model) processRuntimeEvent(ev runtime.Event) bool {
 	if !m.acceptsEvent(ev) {
 		return false
@@ -474,10 +443,6 @@ func (m *Model) processRuntimeEvent(ev runtime.Event) bool {
 	return dirty
 }
 
-// acceptsEvent reports whether a runtime event should be consumed. Session-scoped
-// events (non-empty SessionID) are consumed only when they belong to the current
-// session; events with an empty SessionID are genuine global/runtime events and
-// are always accepted.
 func (m *Model) acceptsEvent(ev runtime.Event) bool {
 	if ev.SessionID == "" {
 		return true
@@ -485,10 +450,6 @@ func (m *Model) acceptsEvent(ev runtime.Event) bool {
 	return ev.SessionID == string(m.sessionID)
 }
 
-// applyReasoningEvents folds processor output into the visible answer/reasoning
-// state. Answer and reasoning deltas are buffered (not committed) so a token
-// burst does not trigger one render per token; it returns whether any visible
-// state changed.
 func (m *Model) applyReasoningEvents(events []reasoning.Event) bool {
 	dirty := false
 	for _, pe := range events {
@@ -512,9 +473,6 @@ func (m *Model) applyReasoningEvents(events []reasoning.Event) bool {
 	return dirty
 }
 
-// flushStreaming commits buffered answer and reasoning deltas into the visible
-// state. It reports whether anything was flushed so callers only invalidate the
-// render cache when the view actually changed (idle ticks do not re-render).
 func (m *Model) flushStreaming() bool {
 	dirty := false
 	if m.streamBuf.Len() > 0 {
@@ -530,8 +488,6 @@ func (m *Model) flushStreaming() bool {
 	return dirty
 }
 
-// appendAnswer appends a streaming chunk to the single in-flight assistant
-// message, never creating a new message per delta.
 func (m *Model) appendAnswer(content string) {
 	if content == "" {
 		return
@@ -545,8 +501,6 @@ func (m *Model) appendAnswer(content string) {
 	m.messages = append(m.messages, ChatMessage{Role: RoleAssistant, Content: content})
 }
 
-// finishStreaming is the successful completion path and requests lightweight
-// feedback when a metric event exists.
 func (m *Model) finishStreaming() {
 	m.finishStreamingWithOutcome(MetricStatusCompleted, "", true)
 }
@@ -563,7 +517,6 @@ func (m *Model) finishStreamingWithOutcome(status MetricStatus, errorCategory st
 	m.completeTaskMetric(status, errorCategory, requestFeedback)
 }
 
-// deleteLastRune removes the final rune from s, handling multi-byte UTF-8.
 func deleteLastRune(s string) string {
 	r := []rune(s)
 	if len(r) == 0 {
@@ -572,11 +525,6 @@ func deleteLastRune(s string) string {
 	return string(r[:len(r)-1])
 }
 
-// addTool records a newly started tool invocation. The real OpenCode tool
-// lifecycle emits multiple tool.called events for one call (pending → running,
-// sharing one callID), so this upserts by callID to keep a single ToolActivity
-// per invocation; appending a duplicate would leave a second entry stuck in
-// running when the terminal event updates only the first match.
 func (m *Model) addTool(ev runtime.Event) {
 	if ev.Tool == nil {
 		return
@@ -593,7 +541,6 @@ func (m *Model) addTool(ev runtime.Event) {
 	m.tools = append(m.tools, ToolActivity{Name: ev.Tool.Name, CallID: ev.Tool.CallID, Status: ToolRunning})
 }
 
-// updateTool marks a previously started tool invocation as completed.
 func (m *Model) updateTool(ev runtime.Event, status ToolStatus) {
 	if ev.Tool == nil {
 		return
@@ -606,7 +553,6 @@ func (m *Model) updateTool(ev runtime.Event, status ToolStatus) {
 	}
 }
 
-// clearChat resets the visible conversation, tools, and reasoning state.
 func (m *Model) clearChat() {
 	m.messages = make([]ChatMessage, 0)
 	m.tools = make([]ToolActivity, 0)
