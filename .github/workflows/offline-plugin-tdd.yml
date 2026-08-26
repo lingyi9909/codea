@@ -1,0 +1,21 @@
+name: Offline Plugin TDD
+
+on:
+  push:
+    branches:
+      - fix/offline-plugin-dependency-bootstrap
+
+jobs:
+  red-green:
+    runs-on: windows-2025
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: tui
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: tui/go.mod
+      - name: Targeted offline plugin dependency test
+        run: go test ./internal/opencode -run TestPrepareOfflinePluginDependencySeedsOpenCodeInstallSentinel -count=1
