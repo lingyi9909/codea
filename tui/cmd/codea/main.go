@@ -198,7 +198,10 @@ func writePluginConfig(cfgDir string) error {
 	if _, err := os.Stat(bundle); err != nil {
 		return nil
 	}
-	return opencode.MergePluginConfig(cfgDir, bundle, 0o644)
+	if err := opencode.MergePluginConfig(cfgDir, bundle, 0o644); err != nil {
+		return err
+	}
+	return prepareOfflinePluginDependencies(cfgDir, lockedOpenCodeVersion)
 }
 
 // skillRoots returns the filesystem roots Codea scans to display skills. Codea
