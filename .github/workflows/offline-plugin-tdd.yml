@@ -21,3 +21,27 @@ jobs:
         run: go test ./internal/opencode -run 'Test(PrepareOfflinePluginDependency|MergePluginConfigSeedsBoth)' -count=1
       - name: Bounded npm environment test
         run: go test ./internal/supervisor -run TestBuildEnvBoundsNPMNetworkRetries -count=1
+      - name: Download locked OpenCode v1.18.11
+        id: runtime
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $meta = Get-Content -LiteralPath '../runtime/version.json' -Raw | ConvertFrom-Json
+          if ($meta.openCodeVersion -ne '1.18.11') { throw "unexpected OpenCode version: $($meta.openCodeVersion)" }
+          $p = $meta.platforms.'windows-x64'
+          $archive = Join-Path $env:RUNNER_TEMP $p.asset
+          Invoke-WebRequest -Uri $p.url -OutFile $archive
+          $expected = ([string]$p.checksum) -replace '^sha256:', ''
+          $actual = (Get-FileHash -Algorithm SHA256 -LiteralPath $archive).Hash.ToLowerInvariant()
+          if ($actual -ne $expected.ToLowerInvariant()) { throw "OpenCode checksum mismatch: $actual" }
+          $extract = Join-Path $env:RUNNER_TEMP 'opencode-real-offline'
+          Remove-Item -Recurse -Force $extract -ErrorAction SilentlyContinue
+          Expand-Archive -LiteralPath $archive -DestinationPath $extract -Force
+          $bin = Get-ChildItem -LiteralPath $extract -Recurse -Filter 'opencode.exe' -File | Select-Object -First 1
+          if (-not $bin) { throw 'opencode.exe not found' }
+          Unblock-File -LiteralPath $bin.FullName -ErrorAction SilentlyContinue
+          "bin=$($bin.FullName)" >> $env:GITHUB_OUTPUT
+      - name: Real OpenCode plugin /agent with unreachable npm
+        env:
+          CODEA_REAL_OPENCODE_BIN: ${{ steps.runtime.outputs.bin }}
+          CODEA_REAL_PLUGIN_BUNDLE: ${{ github.workspace }}\distribution\plugins\dist\index.js
+        run: go test ./cmd/codea -run TestRealOpenCodePluginAgentWorksWithOfflineNPM -v -count=1 -timeout 60s
