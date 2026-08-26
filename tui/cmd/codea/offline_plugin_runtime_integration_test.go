@@ -46,7 +46,7 @@ func TestRealOpenCodePluginAgentLoadDoesNotTouchNpmRegistry(t *testing.T) {
 	}
 
 	projectRoot := t.TempDir()
-	adapter, cleanup, err := bootstrapRuntimeAt(cfgDir, skill.SkillModeNormal, projectRoot)
+	adapter, cleanup, err := bootstrapRuntimeAt(cfgDir, skill.SkillModeStrict, projectRoot)
 	if err != nil {
 		t.Fatalf("bootstrapRuntimeAt: %v", err)
 	}
