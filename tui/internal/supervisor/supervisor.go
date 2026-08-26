@@ -184,14 +184,16 @@ func (s *Supervisor) startProcess() (*exec.Cmd, chan struct{}, uint64, error) {
 		}
 	}
 
-	cmd := exec.Command(s.config.OpenCodeBin, buildArgs(s.config, port)...)
-	cmd.Env = buildEnv(s.config, s.username, password)
-	if s.config.ProjectRoot != "" {
-		cmd.Dir = s.config.ProjectRoot
-	}
-	configureProcess(cmd)
-
-	if err := cmd.Start(); err != nil {
+	cmd, err := startRuntimeCommand(func() *exec.Cmd {
+		cmd := exec.Command(s.config.OpenCodeBin, buildArgs(s.config, port)...)
+		cmd.Env = buildEnv(s.config, s.username, password)
+		if s.config.ProjectRoot != "" {
+			cmd.Dir = s.config.ProjectRoot
+		}
+		configureProcess(cmd)
+		return cmd
+	})
+	if err != nil {
 		s.status = runtime.RuntimeCrashed
 		s.lastErr = fmt.Errorf("start opencode: %w", err)
 		return nil, nil, 0, s.lastErr
