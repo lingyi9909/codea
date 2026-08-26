@@ -1,0 +1,22 @@
+name: Windows Access Denied Retry TDD
+
+on:
+  push:
+    branches:
+      - fix/windows-transient-access-denied
+
+jobs:
+  windows-retry:
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: tui/go.mod
+          cache-dependency-path: tui/go.sum
+      - name: Run retry regression
+        working-directory: tui
+        shell: pwsh
+        run: |
+          go test ./internal/supervisor -run TestStartRuntimeCommandRetriesTransientAccessDenied -count=1 -v
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
