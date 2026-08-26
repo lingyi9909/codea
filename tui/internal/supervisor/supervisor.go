@@ -335,8 +335,8 @@ func findFreePort() (int, error) {
 }
 
 // buildArgs returns the fixed `opencode serve` invocation. The hostname is
-// hard-locked to loopback (V1 has no remote runtime), so config.Hostname is
-// deliberately ignored to prevent a wildcard bind.
+// hard-locked to loopback (V1 has no remote-runtime requirement), so a caller
+// value like 0.0.0.0 cannot expose the runtime on the LAN.
 func buildArgs(_ Config, port int) []string {
 	return []string{
 		"serve",
@@ -358,6 +358,15 @@ func buildEnv(config Config, username, password string) []string {
 		"OPENCODE_DISABLE_EMBEDDED_WEB_UI=1",
 		"OPENCODE_DISABLE_LSP_DOWNLOAD=1",
 		"OPENCODE_DISABLE_DEFAULT_PLUGINS=1",
+		// OpenCode v1.18.11 may still run Arborist for a project/home .opencode
+		// directory even when Codea's own config dirs are pre-seeded. Preserve
+		// project config discovery, but make an unavailable npm registry fail
+		// quickly rather than blocking /agent for tens of seconds. A reachable
+		// internal npm registry still works normally within the same budgets.
+		"npm_config_fetch_retries=0",
+		"npm_config_fetch_timeout=2000",
+		"npm_config_fetch_retry_mintimeout=250",
+		"npm_config_fetch_retry_maxtimeout=500",
 		// Task 1 S6 isolation baseline (BOTH modes): external (.claude/.agents)
 		// skills are disabled, and the native user skills dir
 		// (~/.config/opencode/skills) is isolated by pointing XDG_CONFIG_HOME
