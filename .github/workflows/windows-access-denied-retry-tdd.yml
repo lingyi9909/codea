@@ -14,9 +14,31 @@ jobs:
         with:
           go-version-file: tui/go.mod
           cache-dependency-path: tui/go.sum
-      - name: Run retry regression
+      - name: Run Windows supervisor regression
         working-directory: tui
         shell: pwsh
         run: |
-          go test ./internal/supervisor -run TestStartRuntimeCommandRetriesTransientAccessDenied -count=1 -v
+          go test ./internal/supervisor -count=1 -v
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          go vet ./internal/supervisor
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          go build ./...
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+  linux-regression:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: tui/go.mod
+          cache-dependency-path: tui/go.sum
+      - name: Run full Go regression
+        working-directory: tui
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test ./... -count=1
+          go vet ./...
+          go build ./...
+          CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build ./...
