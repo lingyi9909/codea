@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"time"
@@ -44,7 +45,18 @@ func doctorWorkspaceDir() string {
 	return filepath.Join(codeaHomeDir(), "doctor-workspace")
 }
 
+type doctorProgressRunner interface {
+	RunWithProgress(context.Context, func(string, doctor.Category), func(doctor.Result)) doctor.Report
+}
+
+func runDoctorService(ctx context.Context, svc doctorProgressRunner, out io.Writer) doctor.Report {
+	return svc.RunWithProgress(ctx, func(name string, _ doctor.Category) {
+		fmt.Fprintf(out, "正在检查：%s\n", name)
+	}, nil)
+}
+
 func runDoctorCommand() error {
+	fmt.Println("Codea Doctor：正在准备并启动 Runtime...")
 	if err := recoverInterruptedUpdateIfNeeded(context.Background()); err != nil {
 		return err
 	}
@@ -91,7 +103,7 @@ func runDoctorCommand() error {
 		ExpectedOpenCodeVersion: "1.18.11", BehaviorTimeout: 30 * time.Second,
 	})
 	if err != nil { return err }
-	report := svc.Run(context.Background())
+	report := runDoctorService(context.Background(), svc, os.Stdout)
 	fmt.Print(doctor.FormatText(report))
 	if report.HasFailures() { return fmt.Errorf("Doctor 检查存在 FAIL") }
 	return nil
