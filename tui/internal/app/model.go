@@ -1,9 +1,8 @@
 // Package app hosts the Bubble Tea top-level Model for the Codea TUI.
 //
-// Dependency rule: this package depends only on the Codea runtime domain, the
-// reasoning processor, the theme package, and the Bubble Tea stack. It must
-// never import the OpenCode vendor layer or the supervisor — those are wired
-// together in cmd/codea.
+// Dependency rule: this package depends only on Codea-owned application/domain
+// packages and the Bubble Tea stack. It must never import the OpenCode vendor
+// layer or the supervisor — those are wired together in cmd/codea.
 package app
 
 import (
@@ -12,6 +11,7 @@ import (
 
 	"codea/tui/internal/command"
 	"codea/tui/internal/components"
+	"codea/tui/internal/doctor"
 	"codea/tui/internal/reasoning"
 	"codea/tui/internal/runtime"
 )
@@ -74,8 +74,7 @@ type Model struct {
 	pendingPrompt *runtime.PromptRequest
 
 	// pendingResumeID is the session whose history is being loaded during a
-	// resume. It guards against a stale load result (e.g. the user closed the
-	// panel or started a different resume) applying to the wrong session.
+	// resume. It guards against a stale load result applying to the wrong session.
 	pendingResumeID runtime.SessionID
 
 	proc              *reasoning.Processor
@@ -90,6 +89,14 @@ type Model struct {
 	// commandPalette is only presentation/navigation state.
 	commandRegistry *command.Registry
 	commandPalette  commandPaletteModel
+
+	// Task 23 runtime workspace state. Model choice is session-scoped and kept
+	// entirely in Codea-owned ModelRef values.
+	modelPicker   modelPickerModel
+	sessionModels map[runtime.SessionID]runtime.ModelRef
+	workspaceInfo WorkspaceInfo
+	currentAgent  string
+	doctorService *doctor.Service
 
 	// sessionPanel is the session list/resume overlay. It owns cursor and
 	// visibility; the Application feeds it Codea-domain session items.
@@ -108,8 +115,7 @@ type Model struct {
 
 	// approvalPending is true while a ReplyApproval for the currently shown
 	// request is in flight. While pending, further allow/reject keys are
-	// swallowed so a single approval is never replied to twice (or with
-	// conflicting decisions).
+	// swallowed so a single approval cannot be replied to twice.
 	approvalPending bool
 
 	// skills is the skill manager driving the skills page. It is injected by the
@@ -134,15 +140,11 @@ type Model struct {
 	eventCh <-chan runtime.Event
 
 	// streamBuf and reasoningBuf coalesce high-frequency streaming deltas so a
-	// token burst does not trigger one full render per token. They are flushed
-	// into the visible state by flushStreaming on the ~50ms tick (or on
-	// finishStreaming), and rendered only when dirty.
+	// token burst does not trigger one full render per token.
 	streamBuf    strings.Builder
 	reasoningBuf strings.Builder
 
-	// rendered is the cached full View output; dirty marks it stale. Deltas
-	// buffered above do not set dirty, so View returns the cached frame during
-	// a token flood and re-renders only on a tick flush.
+	// rendered is the cached full View output; dirty marks it stale.
 	rendered string
 	dirty    bool
 }
@@ -150,9 +152,7 @@ type Model struct {
 // markDirty invalidates the cached View output.
 func (m *Model) markDirty() { m.dirty = true }
 
-// NewModel constructs the application model around the given Runtime. Task 22
-// installs the built-in command workspace by default; cmd/codea may replace it
-// with the composed enterprise/project registry before the TUI starts.
+// NewModel constructs the application model around the given Runtime.
 func NewModel(client runtime.AgentRuntime) *Model {
 	return &Model{
 		currentPage:     PageChat,
@@ -163,6 +163,8 @@ func NewModel(client runtime.AgentRuntime) *Model {
 		proc:            reasoning.NewProcessor(),
 		tools:           make([]ToolActivity, 0),
 		commandRegistry: defaultCommandRegistry(),
+		sessionModels:   make(map[runtime.SessionID]runtime.ModelRef),
+		currentAgent:    "general",
 		loadedSkillIDs:  make([]string, 0),
 		dirty:           true,
 	}
