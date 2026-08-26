@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"sync"
 	"syscall"
+	"time"
 	"unsafe"
 )
 
@@ -28,6 +29,8 @@ const (
 	jobObjectExtendedLimitInformationClass = 9
 	jobObjectLimitKillOnJobClose           = 0x00002000
 	processAllAccess                       = 0x001F0FFF
+	runtimeStartMaxAttempts                = 4
+	runtimeStartRetryDelay                 = 250 * time.Millisecond
 )
 
 type ioCounters struct {
@@ -77,6 +80,38 @@ func prepareRuntimeBinary(path string) error {
 	return nil
 }
 
+// startRuntimeCommand tolerates a short Windows execution-denied window that
+// can occur immediately after install while Defender or enterprise endpoint
+// protection is still scanning the newly written executable. Only native
+// ERROR_ACCESS_DENIED is retried. Every attempt builds a fresh exec.Cmd, which
+// also re-runs configureProcess and the final MOTW self-heal.
+func startRuntimeCommand(makeCmd func() *exec.Cmd) (*exec.Cmd, error) {
+	return startRuntimeCommandWith(makeCmd, func(cmd *exec.Cmd) error {
+		return cmd.Start()
+	}, time.Sleep)
+}
+
+func startRuntimeCommandWith(
+	makeCmd func() *exec.Cmd,
+	start func(*exec.Cmd) error,
+	sleep func(time.Duration),
+) (*exec.Cmd, error) {
+	var lastErr error
+	for attempt := 1; attempt <= runtimeStartMaxAttempts; attempt++ {
+		cmd := makeCmd()
+		if err := start(cmd); err == nil {
+			return cmd, nil
+		} else {
+			lastErr = err
+			if attempt == runtimeStartMaxAttempts || !errors.Is(err, syscall.ERROR_ACCESS_DENIED) {
+				return nil, err
+			}
+		}
+		sleep(runtimeStartRetryDelay)
+	}
+	return nil, lastErr
+}
+
 func configureProcess(cmd *exec.Cmd) {
 	if err := prepareRuntimeBinary(cmd.Path); err != nil {
 		// exec.Cmd.Start returns Cmd.Err before attempting CreateProcess, so a
@@ -108,7 +143,7 @@ func attachProcess(cmd *exec.Cmd) error {
 	)
 	if r1 == 0 {
 		_ = closeHandle(job)
-		return win32Err("SetInformationJobObject", lastErr)
+		return win32Err("SetInformationJobObjectW", lastErr)
 	}
 
 	process, _, lastErr := procOpenProcess.Call(processAllAccess, 0, uintptr(cmd.Process.Pid))
