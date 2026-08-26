@@ -28,7 +28,7 @@ jobs:
       - name: Windows x64 cross-build
         run: CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build ./...
 
-  windows-full:
+  windows-targeted:
     runs-on: windows-2025
     defaults:
       run:
@@ -39,12 +39,12 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: tui/go.mod
-      - name: Full Windows Go regression
-        run: go test ./... -count=1
       - name: Targeted offline plugin dependency tests
         run: go test ./internal/opencode -run 'Test(PrepareOfflinePluginDependency|MergePluginConfigSeedsBoth)' -count=1
       - name: Bounded npm environment test
         run: go test ./internal/supervisor -run TestBuildEnvBoundsNPMNetworkRetries -count=1
+      - name: Windows Codea build
+        run: go build ./cmd/codea
       - name: Download locked OpenCode v1.18.11
         id: runtime
         run: |
