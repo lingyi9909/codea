@@ -42,10 +42,10 @@ jobs:
           go-version: '1.26.5'
           cache-dependency-path: tui/go.sum
 
-      - name: Gate Runtime MOTW self-heal
+      - name: Gate Windows runtime execution boundary
         working-directory: tui
         shell: pwsh
-        run: go test ./internal/supervisor -run TestConfigureProcessRemovesRuntimeZoneIdentifier -count=1
+        run: go test ./internal/supervisor -run 'TestConfigureProcessRemovesRuntimeZoneIdentifier|TestStartRuntimeCommandRetriesTransientAccessDenied|TestStartRuntimeCommandDoesNotRetryOtherErrors' -count=1
 
       - name: Download locked OpenCode v1.18.11 Windows runtime
         shell: pwsh
