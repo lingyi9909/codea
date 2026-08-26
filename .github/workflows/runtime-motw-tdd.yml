@@ -1,0 +1,23 @@
+name: Runtime MOTW TDD
+
+on:
+  push:
+    branches:
+      - fix/windows-runtime-motw-self-heal
+
+permissions:
+  contents: read
+
+jobs:
+  regression:
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.5'
+          cache-dependency-path: tui/go.sum
+      - name: Runtime MOTW regression
+        working-directory: tui
+        shell: pwsh
+        run: go test ./internal/supervisor -run TestPrepareRuntimeBinaryRemovesZoneIdentifier -count=1
