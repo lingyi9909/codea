@@ -1,6 +1,6 @@
 # Task 24 Report — Professional Agent Workspace
 
-Task 24 is implementation-complete and ready for human acceptance after the Agent-selection semantic correction requested during review.
+Task 24 is complete and has passed human acceptance after the Agent-selection semantic correction requested during review.
 
 Implementation checkpoint: `b9b6476a20d45bd06bbb25d2ad258f1a97f97749`
 
@@ -9,6 +9,13 @@ Fresh exact-head verification:
 - Workflow: `Task 24 Professional Agent Workspace Gates`
 - Run ID: `33035857569`
 - Source: `b9b6476a20d45bd06bbb25d2ad258f1a97f97749`
+- Result: **PASS**
+
+Administrative closeout verification:
+
+- Workflow: `Task 24 Professional Agent Workspace Gates`
+- Run ID: `33035979018`
+- Source: `ade6d4d1c9e9492a3ab6dd59ce27b945d13e9656`
 - Result: **PASS**
 
 ## Delivered scope
@@ -75,8 +82,12 @@ Exact implementation HEAD `b9b6476a20d45bd06bbb25d2ad258f1a97f97749`, run `33035
 - Windows x64 cross-build: PASS
 - Windows focused Task 24 tests: PASS
 
-Human acceptance: pending.
+## Human acceptance
 
-Final status: **IMPLEMENTATION COMPLETE / GATE PASS / AWAITING HUMAN ACCEPTANCE**
+- Accepted: **yes**
+- Acceptance source: explicit user instruction in the 2026-08-27 review conversation: “正式把 Task 24 标记为 completed / humanAccepted: true，然后进入 Task 25”.
+- Acceptance time: `2026-08-27T05:25:00Z`
 
-Task 25 must not start until explicit human acceptance.
+Final status: **COMPLETED / GATE PASS / HUMAN ACCEPTED**
+
+Task 25 is authorized to start.
