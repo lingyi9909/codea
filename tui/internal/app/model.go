@@ -97,11 +97,12 @@ type Model struct {
 
 	// Task 25 semantic trace is Codea-owned application state. Runtime events and
 	// prompt state update this truth; viewMode only changes its derived rendering.
-	executionTrace         executionTrace
-	viewMode               ViewMode
-	activeTurnID           string
-	activeApprovalTraceKey string
+	executionTrace          executionTrace
+	viewMode                ViewMode
+	activeTurnID            string
+	activeApprovalTraceKey  string
 	pendingApprovalDecision runtime.ApprovalDecision
+	spinnerFrame            int
 
 	// commandRegistry owns terminal-independent parsing/execution definitions;
 	// commandPalette is only presentation/navigation state.
