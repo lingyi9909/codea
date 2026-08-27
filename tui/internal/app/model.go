@@ -26,11 +26,15 @@ const (
 )
 
 // ChatMessage is one conversation turn. Tool activity is tracked separately
-// (see ToolActivity), not folded into Content.
+// (see ToolActivity), not folded into Content. Agent/Model capture the actual
+// PromptRequest identity for this turn; they never mutate persistent currentAgent.
 type ChatMessage struct {
 	Role     Role
 	Content  string
 	Finished bool
+	TurnID   string
+	Agent    string
+	Model    string
 }
 
 // ToolStatus is the lifecycle state of a tool invocation for read-only display.
