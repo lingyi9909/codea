@@ -5,19 +5,22 @@ taskOrder: ["0", "1", "2", "2A", "3", "4", "5", "6", "7", "8", "9", "10", "11", 
 current:
   task: "26"
   step: 5
-  status: awaiting_acceptance
-  nextAction: 等待用户定向复验 Task 26 Windows Native Regression；fresh Windows go test ./... 与 go build ./... 已分别通过，未明确验收通过前保持 humanAccepted=false。
+  status: completed
+  nextAction: Codea V1.1 已完成全部 Task 0-26 并通过人工验收；进入 main 合并与新版本发布收口。
 checkpoint:
-  commit: 3b77ed0f05b51c4cbcb870ceab8afd8e66a73d57
-  updatedAt: "2026-08-27T14:32:00Z"
+  commit: a85ef424f463837a6bf72239923940b185069b96
+  updatedAt: "2026-08-27T14:50:00Z"
 verification:
   status: pass
   commands:
-    - "Task 26 V1.1 Integration and Acceptance Gates run 33082124762"
-    - "Windows job 98551935288: go test ./... -count=1 PASS"
-    - "Windows job 98551935288: go build ./... PASS"
+    - "Task 26 V1.1 Integration and Acceptance Gates run 33083017554"
+    - "Windows job 98558246021: go test ./... -count=1 PASS"
+    - "Windows job 98558246021: go build ./... PASS"
+    - "Real Agent G6-G7: 15/15 PASS"
+    - "Real Runtime G11-G13: 17/17 PASS"
+    - "Dual Runtime Parity G12.1: 12/12 PASS"
   errorSummary: ""
-  recoveryAdvice: "Task 26 Windows Native Regression false-green 已修复；fresh 三平台 Gate 全绿，等待用户定向人工复验。"
+  recoveryAdvice: "V1.1 implementation and acceptance are complete. Previously deferred company-intranet-only Task 17/G15 evidence remains deferred and must not be represented as stable-release certification."
 taskGate:
   status: pass
   gateItems:
@@ -34,7 +37,7 @@ taskGate:
     releaseParityG3ThroughG14: pass
     dualRuntimeParity12Of12: pass
 humanAcceptance:
-  accepted: false
+  accepted: true
 task17Gate:
   task17PackagingContract: pass
   task17ThreePlatformBuildEvidence: pass
@@ -68,4 +71,4 @@ tasks:
   "23": {status: completed, completedSteps: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: 7dca79663bfefb45c144d7f8d03864d739d52996, report: docs/task-reports/task-23.md}
   "24": {status: completed, completedSteps: [1, 2, 3, 4, 5], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: b9b6476a20d45bd06bbb25d2ad258f1a97f97749, report: docs/task-reports/task-24.md}
   "25": {status: completed, completedSteps: [1, 2, 3, 4, 5], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: efec3c084e43e99b80fcc28f525e583626ccc614, report: docs/task-reports/task-25.md}
-  "26": {status: awaiting_acceptance, completedSteps: [1, 2, 3, 4, 5], verificationStatus: pass, taskGateStatus: pass, humanAccepted: false, checkpoint: 3b77ed0f05b51c4cbcb870ceab8afd8e66a73d57, report: docs/task-reports/task-26.md}
+  "26": {status: completed, completedSteps: [1, 2, 3, 4, 5], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: a85ef424f463837a6bf72239923940b185069b96, report: docs/task-reports/task-26.md}
