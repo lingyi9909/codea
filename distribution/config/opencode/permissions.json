@@ -44,6 +44,14 @@
       "write": "deny",
       "edit": "deny",
       "bash": "deny"
+    },
+    "debug": {
+      "read": "allow",
+      "grep": "allow",
+      "glob": "allow",
+      "write": "ask",
+      "edit": "ask",
+      "bash": "ask"
     }
   }
 }
