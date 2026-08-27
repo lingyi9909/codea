@@ -5,6 +5,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"codea/tui/internal/command"
 	"codea/tui/internal/runtime"
 	fakeruntime "codea/tui/tests/fixtures/fake-runtime"
 )
@@ -26,6 +27,7 @@ func TestTask24ProfessionalCommandsReachExactRuntimeAgents(t *testing.T) {
 			fake := fakeruntime.New()
 			m := NewModel(fake)
 			m.sessionID = runtime.SessionID("active-session")
+			m.currentAgent = "general"
 			m.input = tt.command
 
 			cmd := m.submit()
@@ -51,10 +53,85 @@ func TestTask24ProfessionalCommandsReachExactRuntimeAgents(t *testing.T) {
 			if part.Text != tt.want {
 				t.Fatalf("prompt = %q, want %q", part.Text, tt.want)
 			}
-			if m.currentAgent != tt.agent {
-				t.Fatalf("currentAgent = %q, want %q", m.currentAgent, tt.agent)
+			if m.currentAgent != "general" {
+				t.Fatalf("currentAgent = %q, professional command must not persist Agent selection", m.currentAgent)
 			}
 		})
+	}
+}
+
+func TestTask24ProfessionalCommandDoesNotPersistAgentIntoNextNaturalTurn(t *testing.T) {
+	fake := fakeruntime.New()
+	m := NewModel(fake)
+	m.sessionID = runtime.SessionID("active-session")
+	m.currentAgent = "general"
+	m.input = "/review xxx"
+
+	cmd := m.submit()
+	if cmd == nil {
+		t.Fatal("/review should prompt Runtime")
+	}
+	_ = cmd()
+
+	prompts := fake.Prompts()
+	if len(prompts) != 1 || prompts[0].Request.Agent != "code-reviewer" {
+		t.Fatalf("first prompt = %#v, want code-reviewer", prompts)
+	}
+	m.finishStreaming()
+	if m.currentAgent != "general" {
+		t.Fatalf("currentAgent after /review = %q, want general", m.currentAgent)
+	}
+
+	m.input = "继续检查这个问题"
+	cmd = m.submit()
+	if cmd == nil {
+		t.Fatal("natural-language continuation should prompt Runtime")
+	}
+	_ = cmd()
+
+	prompts = fake.Prompts()
+	if len(prompts) != 2 {
+		t.Fatalf("Runtime prompts = %d, want 2", len(prompts))
+	}
+	if prompts[1].Request.Agent != "general" {
+		t.Fatalf("next natural-language agent = %q, want general", prompts[1].Request.Agent)
+	}
+}
+
+func TestTask24ExplicitGeneralCommandIsNotOverriddenByCurrentAgent(t *testing.T) {
+	fake := fakeruntime.New()
+	m := NewModel(fake)
+	m.sessionID = runtime.SessionID("active-session")
+	m.currentAgent = "code-reviewer"
+
+	reg := command.NewRegistry()
+	if err := reg.Register(command.Definition{
+		Name:     "general-now",
+		Source:   command.SourceBuiltin,
+		Action:   command.ActionPrompt,
+		Agent:    "general",
+		Template: "$ARGUMENTS",
+	}); err != nil {
+		t.Fatalf("register general command: %v", err)
+	}
+	m.SetCommandRegistry(reg)
+	m.input = "/general-now explain this"
+
+	cmd := m.submit()
+	if cmd == nil {
+		t.Fatal("explicit general command should prompt Runtime")
+	}
+	_ = cmd()
+
+	prompts := fake.Prompts()
+	if len(prompts) != 1 {
+		t.Fatalf("Runtime prompts = %d, want 1", len(prompts))
+	}
+	if prompts[0].Request.Agent != "general" {
+		t.Fatalf("agent = %q, explicit general must remain general", prompts[0].Request.Agent)
+	}
+	if m.currentAgent != "code-reviewer" {
+		t.Fatalf("currentAgent = %q, explicit one-shot command must not persist switch", m.currentAgent)
 	}
 }
 
@@ -92,6 +169,37 @@ func TestTask24AgentWorkspaceSelectsFromRuntimeList(t *testing.T) {
 
 	if m.currentAgent != "code-reviewer" {
 		t.Fatalf("currentAgent = %q, want runtime-selected code-reviewer", m.currentAgent)
+	}
+}
+
+func TestTask24AgentPickerSelectionPersistsIntoNaturalLanguage(t *testing.T) {
+	fake := fakeruntime.New()
+	m := NewModel(fake)
+	m.sessionID = runtime.SessionID("active-session")
+	_, _ = m.Update(listAgentsResultMsg{agents: []runtime.Agent{
+		{Name: "general", Mode: "primary"},
+		{Name: "debug", Mode: "enterprise-controlled"},
+	}})
+	_, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	_, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+
+	if m.currentAgent != "debug" {
+		t.Fatalf("currentAgent = %q, want debug after /agents picker selection", m.currentAgent)
+	}
+
+	m.input = "继续定位根因"
+	cmd := m.submit()
+	if cmd == nil {
+		t.Fatal("natural-language turn should prompt Runtime")
+	}
+	_ = cmd()
+
+	prompts := fake.Prompts()
+	if len(prompts) != 1 {
+		t.Fatalf("Runtime prompts = %d, want 1", len(prompts))
+	}
+	if prompts[0].Request.Agent != "debug" {
+		t.Fatalf("agent = %q, want picker-selected debug", prompts[0].Request.Agent)
 	}
 }
 
