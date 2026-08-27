@@ -94,25 +94,27 @@ type sseStatus struct {
 }
 
 type ssePart struct {
-	ID        string        `json:"id"`
-	MessageID string        `json:"messageID"`
-	SessionID string        `json:"sessionID"`
-	Type      string        `json:"type"`
-	Text      string        `json:"text"`
-	Reason    string        `json:"reason"`
-	Tool      string        `json:"tool"`
-	CallID    string        `json:"callID"`
-	State     *ssePartState `json:"state"`
-	Time      *sseTime      `json:"time"`
+	ID          string        `json:"id"`
+	MessageID   string        `json:"messageID"`
+	SessionID   string        `json:"sessionID"`
+	Type        string        `json:"type"`
+	Text        string        `json:"text"`
+	Reason      string        `json:"reason"`
+	Tool        string        `json:"tool"`
+	CallID      string        `json:"callID"`
+	Agent       string        `json:"agent"`
+	Description string        `json:"description"`
+	State       *ssePartState `json:"state"`
+	Time        *sseTime      `json:"time"`
 }
 
-// ssePartState captures the ToolState.status of a tool part. The locked
-// OpenCode spec defines exactly four statuses: pending, running, completed,
-// error. The /global/event stream carries the tool lifecycle as successive
-// message.part.updated events with the same callID transitioning across these
-// statuses (pending → running → completed | error).
+// ssePartState captures the structured ToolState evidence carried by the real
+// OpenCode /global/event stream. Input and metadata are intentionally kept at
+// the Runtime adapter boundary and translated into Codea-owned string metadata.
 type ssePartState struct {
-	Status string `json:"status"`
+	Status   string         `json:"status"`
+	Input    map[string]any `json:"input"`
+	Metadata map[string]any `json:"metadata"`
 }
 
 type sseTime struct {
@@ -216,6 +218,7 @@ func MapEvent(raw []byte, sequence int64) (runtime.Event, error) {
 	// Domain data extraction
 	extractApproval(&event, &payload, &props)
 	extractTool(&event, &props)
+	extractExecutionEvidence(&event, &props)
 	extractError(&event, &props)
 
 	return event, nil
@@ -300,6 +303,73 @@ func extractTool(event *runtime.Event, props *sseCommonProps) {
 			event.Tool = &runtime.ToolEvent{Name: name, CallID: callID}
 		}
 	}
+}
+
+// extractExecutionEvidence translates only evidence present on the actual
+// Runtime event into Codea-owned semantic metadata. It deliberately does not
+// infer Skill/Plugin/Subagent use from installed configuration, Agent names, or
+// ordinary tool names.
+func extractExecutionEvidence(event *runtime.Event, props *sseCommonProps) {
+	part := props.Part
+	if part == nil {
+		return
+	}
+	metadata := make(map[string]string)
+
+	if part.Type == "tool" && part.Tool == "skill" && part.State != nil {
+		if skill := mapString(part.State.Input, "name"); skill != "" {
+			metadata["skill"] = skill
+			if id := firstNonEmpty(part.CallID, part.ID); id != "" {
+				metadata["skillInvocationID"] = id
+			}
+		}
+	}
+
+	if part.State != nil {
+		if plugin := mapString(part.State.Metadata, "codeaPlugin"); plugin != "" {
+			metadata["plugin"] = plugin
+			id := mapString(part.State.Metadata, "codeaPluginInvocationID")
+			if id == "" {
+				id = firstNonEmpty(part.CallID, part.ID)
+			}
+			if id != "" {
+				metadata["pluginInvocationID"] = id
+			}
+		}
+	}
+
+	if part.Type == "subtask" {
+		if subagent := strings.TrimSpace(part.Agent); subagent != "" {
+			metadata["subagent"] = subagent
+			if id := strings.TrimSpace(part.ID); id != "" {
+				metadata["subagentInvocationID"] = id
+			}
+		}
+	}
+
+	if len(metadata) > 0 {
+		event.Metadata = metadata
+	}
+}
+
+func mapString(values map[string]any, key string) string {
+	if len(values) == 0 {
+		return ""
+	}
+	value, ok := values[key].(string)
+	if !ok {
+		return ""
+	}
+	return strings.TrimSpace(value)
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if trimmed := strings.TrimSpace(value); trimmed != "" {
+			return trimmed
+		}
+	}
+	return ""
 }
 
 // sseErrorData extracts the message from a structured error object.
