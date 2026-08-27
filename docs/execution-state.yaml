@@ -8,8 +8,8 @@ current:
   status: awaiting_acceptance
   nextAction: 等待用户人工验收 Task 24 Professional Agent Workspace；未明确验收通过前不得开始 Task 25。
 checkpoint:
-  commit: 7b867adda3a328fc43a538bf7f62ae63470534cb
-  updatedAt: "2026-08-27T02:23:00Z"
+  commit: b9b6476a20d45bd06bbb25d2ad258f1a97f97749
+  updatedAt: "2026-08-27T03:18:00Z"
 verification:
   status: pass
   commands:
@@ -23,7 +23,7 @@ verification:
     - Windows x64 cross-build
     - Windows Task 24 focused tests
   errorSummary: ""
-  recoveryAdvice: "Task 24 fresh exact-head Gate 已通过；等待人工验收。不得开始 Task 25。"
+  recoveryAdvice: "Task 24 Agent-selection semantic fix 已通过 fresh exact-head Gate 33035857569；等待人工验收。不得开始 Task 25。"
 taskGate:
   status: pass
   gateItems:
@@ -69,6 +69,6 @@ tasks:
   "21": {status: completed, completedSteps: [1, 2, 3], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: 62c0c7038a6324c115a1be764379e83b21898090, report: docs/task-reports/task-21.md}
   "22": {status: completed, completedSteps: [1, 2, 3, 4, 5, 6, 7, 8], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: 0820756365d3733e26ec6ec29c0c86f8d7ad4489, report: docs/task-reports/task-22.md}
   "23": {status: completed, completedSteps: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: 7dca79663bfefb45c144d7f8d03864d739d52996, report: docs/task-reports/task-23.md}
-  "24": {status: awaiting_acceptance, completedSteps: [1, 2, 3, 4, 5], verificationStatus: pass, taskGateStatus: pass, humanAccepted: false, checkpoint: 7b867adda3a328fc43a538bf7f62ae63470534cb, report: docs/task-reports/task-24.md}
+  "24": {status: awaiting_acceptance, completedSteps: [1, 2, 3, 4, 5], verificationStatus: pass, taskGateStatus: pass, humanAccepted: false, checkpoint: b9b6476a20d45bd06bbb25d2ad258f1a97f97749, report: docs/task-reports/task-24.md}
   "25": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false}
   "26": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false}
