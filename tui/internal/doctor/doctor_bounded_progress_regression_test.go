@@ -57,10 +57,12 @@ func (r *boundedDoctorRuntime) Cancel(ctx context.Context, _ runtimedomain.Sessi
 func (r *boundedDoctorRuntime) ListAgents(context.Context) ([]runtimedomain.Agent, error) {
 	return []runtimedomain.Agent{{Name: "code-reviewer"}, {Name: "unit-test-generator"}, {Name: "api-documentation"}}, nil
 }
+func (r *boundedDoctorRuntime) ListModels(context.Context) ([]runtimedomain.Model, error) { return nil, nil }
 func (r *boundedDoctorRuntime) ListSessions(context.Context) ([]runtimedomain.Session, error) { return nil, nil }
 func (r *boundedDoctorRuntime) GetSessionMessages(context.Context, runtimedomain.SessionID) ([]runtimedomain.Message, error) {
 	return nil, nil
 }
+func (r *boundedDoctorRuntime) CompactSession(context.Context, runtimedomain.SessionID) error { return nil }
 func (r *boundedDoctorRuntime) Capabilities() runtimedomain.RuntimeCapabilities {
 	return runtimedomain.RuntimeCapabilities{}
 }
