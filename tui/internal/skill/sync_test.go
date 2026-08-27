@@ -3,6 +3,7 @@ package skill
 import (
 	"os"
 	"path/filepath"
+	goruntime "runtime"
 	"testing"
 )
 
@@ -95,7 +96,9 @@ func TestSyncCopiesWholeDir(t *testing.T) {
 	if err != nil {
 		t.Fatalf("extra file not copied: %v", err)
 	}
-	if info.Mode().Perm()&0o100 == 0 {
+	// Windows does not expose/preserve the Unix executable bit. The whole-file
+	// copy remains required; executable-mode preservation is asserted on Unix.
+	if goruntime.GOOS != "windows" && info.Mode().Perm()&0o100 == 0 {
 		t.Fatalf("executable bit not preserved: %v", info.Mode())
 	}
 }
