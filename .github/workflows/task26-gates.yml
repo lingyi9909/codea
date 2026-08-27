@@ -59,6 +59,9 @@ jobs:
       - name: Task 26 acceptance contract
         run: python3 tests/task26_v11_acceptance_test.py
 
+      - name: Task 26 parity timeout contract
+        run: python3 tests/release/test_task26_parity_timeout_contract.py
+
       - name: Task 22 focused tests
         working-directory: tui
         run: |
