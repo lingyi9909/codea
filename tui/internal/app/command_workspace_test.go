@@ -17,8 +17,8 @@ func TestSlashOpensPaletteAndFiltersLive(t *testing.T) {
 	if !m.commandPalette.Visible {
 		t.Fatal("typing / should open command palette")
 	}
-	if len(m.commandPalette.Items) != 10 {
-		t.Fatalf("palette items = %d, want 10 for Task 22 + Task 23", len(m.commandPalette.Items))
+	if len(m.commandPalette.Items) != 14 {
+		t.Fatalf("palette items = %d, want 14 for Task 22 + Task 23 + Task 24", len(m.commandPalette.Items))
 	}
 
 	m.handleTyping(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'s'}})
