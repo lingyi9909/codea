@@ -58,6 +58,13 @@ func (m *Model) renderView() string {
 		return b.String()
 	}
 
+	if m.agentPicker.Visible {
+		b.WriteString(m.renderBody())
+		b.WriteString("\n\n")
+		b.WriteString(theme.AccentStyle().Render(m.agentPickerView()))
+		return b.String()
+	}
+
 	if m.modelPicker.Visible {
 		b.WriteString(m.renderBody())
 		b.WriteString("\n\n")
@@ -156,7 +163,11 @@ func renderTerminalTooSmall(w, h int) string {
 }
 
 func (m *Model) renderHeader() string {
-	return fmt.Sprintf("Codea  %s %s", statusDot(m.runtimeStatus), statusLabel(m.runtimeStatus))
+	agent := strings.TrimSpace(m.currentAgent)
+	if agent == "" {
+		agent = "general"
+	}
+	return fmt.Sprintf("Codea  %s %s  ·  Agent: %s", statusDot(m.runtimeStatus), statusLabel(m.runtimeStatus), agent)
 }
 
 func (m *Model) renderStatusLine() string {
