@@ -6,24 +6,27 @@ current:
   task: "25"
   step: 5
   status: awaiting_acceptance
-  nextAction: 等待用户人工验收 Task 25 Claude-style Conversation UX & Live Trace；未明确验收通过前不得开始 Task 26。
+  nextAction: 等待用户重新人工验收已修复 3 个 blocker 的 Task 25 Claude-style Conversation UX & Live Trace；未明确验收通过前不得开始 Task 26。
 checkpoint:
-  commit: 3ac6a3f585728227844926ca51525e288ad977b6
-  updatedAt: "2026-08-27T06:12:11Z"
+  commit: efec3c084e43e99b80fcc28f525e583626ccc614
+  updatedAt: "2026-08-27T07:24:11Z"
 verification:
   status: pass
   commands:
-    - "Task 25 Conversation UX and Live Trace Gates run 33044848845"
-    - "Task 22 Command Workspace Gates run 33044848938"
-    - "Task 23 Runtime Workspace Gates run 33044848871"
-    - "Task 24 Professional Agent Workspace Gates run 33044848915"
+    - "Task 25 Conversation UX and Live Trace Gates run 33049570616"
+    - "Task 22 Command Workspace Gates run 33049570709"
+    - "Task 23 Runtime Workspace Gates run 33049570996"
+    - "Task 24 Professional Agent Workspace Gates run 33049570609"
   errorSummary: ""
-  recoveryAdvice: "Task 25 fresh Gate 已通过并进入人工验收；Task 26 必须等待用户明确验收 Task 25 后才可开始。"
+  recoveryAdvice: "Task 25 三个验收 blocker 已按范围修复，四组 fresh Gate 全部通过；Task 25 保持 awaiting_acceptance，Task 26 必须等待用户明确验收后才可开始。"
 taskGate:
   status: pass
   gateItems:
     task25LinuxFocused: pass
     task25WindowsFocused: pass
+    focusLatestTurnProjection: pass
+    realRuntimeTraceEvidence: pass
+    transientTurnAgentIdentity: pass
     architectureBoundary: pass
     fullGoRegression: pass
     enterprisePluginRegressionBuild: pass
@@ -63,5 +66,5 @@ tasks:
   "22": {status: completed, completedSteps: [1, 2, 3, 4, 5, 6, 7, 8], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: 0820756365d3733e26ec6ec29c0c86f8d7ad4489, report: docs/task-reports/task-22.md}
   "23": {status: completed, completedSteps: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: 7dca79663bfefb45c144d7f8d03864d739d52996, report: docs/task-reports/task-23.md}
   "24": {status: completed, completedSteps: [1, 2, 3, 4, 5], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: b9b6476a20d45bd06bbb25d2ad258f1a97f97749, report: docs/task-reports/task-24.md}
-  "25": {status: awaiting_acceptance, completedSteps: [1, 2, 3, 4, 5], verificationStatus: pass, taskGateStatus: pass, humanAccepted: false, checkpoint: 3ac6a3f585728227844926ca51525e288ad977b6, report: docs/task-reports/task-25.md}
+  "25": {status: awaiting_acceptance, completedSteps: [1, 2, 3, 4, 5], verificationStatus: pass, taskGateStatus: pass, humanAccepted: false, checkpoint: efec3c084e43e99b80fcc28f525e583626ccc614, report: docs/task-reports/task-25.md}
   "26": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false}
