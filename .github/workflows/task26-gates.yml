@@ -1,0 +1,204 @@
+name: Task 26 V1.1 Integration and Acceptance Gates
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [develop]
+    paths:
+      - 'tui/**'
+      - 'distribution/agents/**'
+      - 'distribution/skills/**'
+      - 'distribution/config/**'
+      - 'distribution/plugins/**'
+      - 'runtime/**'
+      - 'packaging/**'
+      - 'tests/offline/**'
+      - 'tests/release/**'
+      - 'tests/upgrade/**'
+      - 'tests/task24-debug-agent.sh'
+      - 'tests/task26_v11_acceptance_test.py'
+      - 'scripts/check-execution-state.sh'
+      - 'scripts/run-release-parity-gates.sh'
+      - 'scripts/run-task17-build-gates.sh'
+      - 'scripts/run-real-agent-smoke.sh'
+      - 'scripts/run-real-api-doc-smoke.sh'
+      - 'scripts/run-real-parity-smoke.sh'
+      - 'scripts/run-dual-runtime-parity.sh'
+      - 'docs/execution-state.yaml'
+      - 'docs/task-reports/task-26.md'
+      - 'docs/superpowers/plans/2026-08-27-codea-v1.1-task26-integration-acceptance-plan.md'
+      - '.github/workflows/task26-gates.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: task26-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux-v11-integration:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.5'
+          cache-dependency-path: tui/go.sum
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.3.14'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Validate execution state
+        run: bash scripts/check-execution-state.sh
+
+      - name: Task 26 acceptance contract
+        run: python3 tests/task26_v11_acceptance_test.py
+
+      - name: Task 22 focused tests
+        working-directory: tui
+        run: |
+          GOTOOLCHAIN=local go test ./internal/command -count=1
+          GOTOOLCHAIN=local go test ./internal/app -run 'TestSlashOpensPaletteAndFiltersLive|TestPaletteNavigationAndEscapeAreModal|TestUnknownSlashCommandNeverCreatesModelPrompt|TestDirectClearCommandExecutesWithoutModelPrompt|TestPaletteEnterExecutesSelectedCommand' -count=1
+
+      - name: Task 23 focused tests
+        working-directory: tui
+        run: GOTOOLCHAIN=local go test ./internal/runtime ./internal/opencode ./internal/command ./internal/app -run 'Task23|RuntimeWorkspace|Model|Compact|Doctor|Status' -count=1
+
+      - name: Task 24 focused tests
+        working-directory: tui
+        run: GOTOOLCHAIN=local go test ./internal/command ./internal/app ./internal/agent -run 'Task24|Professional|Debug|AgentWorkspace|AskTool' -count=1
+
+      - name: Task 25 focused tests
+        working-directory: tui
+        run: GOTOOLCHAIN=local go test ./internal/command ./internal/app -run 'Task25|ExecutionTrace|ViewMode|LiveTrace' -count=1
+
+      - name: Architecture boundary
+        working-directory: tui
+        run: GOTOOLCHAIN=local go test ./tests/architecture -count=1
+
+      - name: Full Go regression race vet and build
+        working-directory: tui
+        run: |
+          GOTOOLCHAIN=local go test ./... -count=1
+          GOTOOLCHAIN=local go test -race ./... -count=1
+          GOTOOLCHAIN=local go vet ./...
+          GOTOOLCHAIN=local go build ./...
+
+      - name: Install enterprise plugin dependencies
+        working-directory: distribution/plugins
+        run: bun install --frozen-lockfile
+
+      - name: Enterprise plugin regression and build
+        working-directory: distribution/plugins
+        run: bun run check
+
+      - name: Debug Agent contract
+        run: bash tests/task24-debug-agent.sh
+
+      - name: Offline packaging and launcher contracts
+        run: |
+          bash tests/offline/task17_packaging_test.sh
+          bash tests/offline/task18_launcher_contract_test.sh
+
+      - name: Build all supported V1.1 release targets
+        run: ./scripts/run-task17-build-gates.sh "$RUNNER_TEMP/task26-releases" "$RUNNER_TEMP/task26-build-evidence.json"
+
+      - name: Windows x64 cross-build
+        working-directory: tui
+        run: GOOS=windows GOARCH=amd64 GOTOOLCHAIN=local go build ./...
+
+      - name: Download locked OpenCode v1.18.11 linux-x64
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' > "$RUNNER_TEMP/runtime-meta"
+          import json, pathlib
+          p=json.loads(pathlib.Path('runtime/version.json').read_text())
+          x=p['platforms']['linux-x64']
+          if p['openCodeVersion'] != '1.18.11':
+              raise SystemExit('OpenCode version lock mismatch')
+          print(x['url'])
+          print(x['checksum'].removeprefix('sha256:'))
+          PY
+          url=$(sed -n '1p' "$RUNNER_TEMP/runtime-meta")
+          expected=$(sed -n '2p' "$RUNNER_TEMP/runtime-meta")
+          curl -fL "$url" -o "$RUNNER_TEMP/opencode.tar.gz"
+          actual=$(sha256sum "$RUNNER_TEMP/opencode.tar.gz" | awk '{print $1}')
+          test "$actual" = "$expected"
+          mkdir -p "$RUNNER_TEMP/opencode"
+          tar -xzf "$RUNNER_TEMP/opencode.tar.gz" -C "$RUNNER_TEMP/opencode"
+          find "$RUNNER_TEMP/opencode" -type f -name opencode -exec chmod +x {} \;
+          find "$RUNNER_TEMP/opencode" -type f -name opencode -print -quit > "$RUNNER_TEMP/opencode-path"
+          test -s "$RUNNER_TEMP/opencode-path"
+          "$(cat "$RUNNER_TEMP/opencode-path")" --version | grep -q '1.18.11'
+
+      - name: V1 release parity regression G3 through G14
+        shell: bash
+        run: |
+          CODEA_SOURCE_COMMIT="$GITHUB_SHA" \
+          OPENCODE_BIN="$(cat "$RUNNER_TEMP/opencode-path")" \
+          bash scripts/run-release-parity-gates.sh
+
+      - name: Upload Task 26 integration evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: task26-linux-evidence-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/task26-build-evidence.json
+            ${{ runner.temp }}/task26-releases/*.tar.gz
+            ${{ runner.temp }}/task26-releases/*.tar.gz.sha256
+            ${{ runner.temp }}/task26-releases/*.zip
+            ${{ runner.temp }}/task26-releases/*.zip.sha256
+            tests/evidence/release-gates.d/*.json
+            tui/tests/parity/evidence/release-parity.json
+            tui/tests/parity/evidence/runtime-evidence.json
+            tui/tests/parity/evidence/agent-evidence.json
+            tui/tests/parity/evidence/api-doc-agent-evidence.json
+          if-no-files-found: warn
+
+  windows-v11-integration:
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.5'
+          cache-dependency-path: tui/go.sum
+      - name: Task 22 through 25 native Windows focused regression
+        working-directory: tui
+        shell: pwsh
+        run: |
+          $env:GOTOOLCHAIN='local'
+          go test ./internal/command -count=1
+          go test ./internal/app -run 'TestSlashOpensPaletteAndFiltersLive|TestPaletteNavigationAndEscapeAreModal|TestUnknownSlashCommandNeverCreatesModelPrompt|TestDirectClearCommandExecutesWithoutModelPrompt|TestPaletteEnterExecutesSelectedCommand' -count=1
+          go test ./internal/runtime ./internal/opencode ./internal/command ./internal/app -run 'Task23|RuntimeWorkspace|Model|Compact|Doctor|Status' -count=1
+          go test ./internal/command ./internal/app ./internal/agent -run 'Task24|Professional|Debug|AgentWorkspace|AskTool' -count=1
+          go test ./internal/command ./internal/app -run 'Task25|ExecutionTrace|ViewMode|LiveTrace' -count=1
+      - name: Full native Windows Go regression and build
+        working-directory: tui
+        shell: pwsh
+        run: |
+          $env:GOTOOLCHAIN='local'
+          go test ./... -count=1
+          go build ./...
+
+  macos-v11-integration:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.5'
+          cache-dependency-path: tui/go.sum
+      - name: Native macOS workspace regression
+        working-directory: tui
+        run: |
+          GOTOOLCHAIN=local go test ./internal/command ./internal/app ./internal/runtime ./internal/opencode ./internal/agent -count=1
+          GOTOOLCHAIN=local go test ./... -count=1
+          GOTOOLCHAIN=local go build ./...
