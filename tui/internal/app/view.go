@@ -207,8 +207,7 @@ func (m *Model) latestConversationTurnIndexes() (int, int) {
 		}
 	}
 	latestAssistant := -1
-	start := len(m.messages) - 1
-	for i := start; i >= 0; i-- {
+	for i := len(m.messages) - 1; i >= 0; i-- {
 		if m.messages[i].Role != RoleAssistant {
 			continue
 		}
@@ -359,6 +358,7 @@ func (m *Model) currentTurnAgent() string {
 			if agent := strings.TrimSpace(entry.Title); agent != "" {
 				return agent
 			}
+		}
 	}
 	for i := len(m.messages) - 1; i >= 0; i-- {
 		if m.messages[i].Role == RoleAssistant {
