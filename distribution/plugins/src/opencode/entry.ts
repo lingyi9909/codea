@@ -21,6 +21,8 @@ import type { Hooks, PluginModule, ToolContext, ToolDefinition, ToolResult } fro
 // path (deny aborts, write/execute enters permission) and the output path
 // (DLP redact/block before the result reaches the model).
 
+const CODEA_PLUGIN_ID = "codea-enterprise";
+
 const TOOL_ACTIONS: Record<string, string> = {
   collect_review_context: "read",
   analyze_test_project: "read",
@@ -136,6 +138,11 @@ function adaptTool(
       const ownership = ownershipFactory ? ownershipFactory(octx.sessionID, octx.agent) : undefined;
       const codeaCtx = toCodeaContext(octx, audit, guard, ownership);
 
+      // Emit execution evidence from the actual enterprise tool lifecycle. This
+      // is metadata-only: it does not infer plugin use from installation or
+      // Agent configuration, and OpenCode will attach it to this live ToolPart.
+      octx.metadata({ metadata: { codeaPlugin: CODEA_PLUGIN_ID } });
+
       // 1. guard before: path policy + DLP input. Deny aborts the call.
       const before = guard.before({
         sessionId: octx.sessionID,
@@ -177,6 +184,7 @@ function adaptTool(
           ...(result.ok ? {} : { errorCategory: result.error.category }),
           dlpBlocked: dlp.blocked,
           ...(dlp.rule ? { dlpRule: dlp.rule } : {}),
+          codeaPlugin: CODEA_PLUGIN_ID,
         },
       };
     },
@@ -202,6 +210,7 @@ function buildDifyTool(dify: DifyClient | null, audit: AuditLogger, guard: Runti
         throw new Error(before.reason ?? "dify-query denied by security policy");
       }
 
+      octx.metadata({ metadata: { codeaPlugin: CODEA_PLUGIN_ID } });
       const question = typeof args?.question === "string" ? args.question : "";
       const result = dify
         ? await dify.query(question)
@@ -220,14 +229,14 @@ function buildDifyTool(dify: DifyClient | null, audit: AuditLogger, guard: Runti
       return {
         title: "dify-query",
         output: dlp.output,
-        metadata: { degraded: result.degraded, dlpBlocked: dlp.blocked },
+        metadata: { degraded: result.degraded, dlpBlocked: dlp.blocked, codeaPlugin: CODEA_PLUGIN_ID },
       };
     },
   };
 }
 
 export const plugin: PluginModule = {
-  id: "codea-enterprise",
+  id: CODEA_PLUGIN_ID,
   server: async (input, options) => {
     const opts = options ?? {};
     const auditLog =
@@ -329,6 +338,17 @@ export const plugin: PluginModule = {
         }
       },
       "tool.execute.after": async (hookInput, output) => {
+        // Only a tool that actually passed through the Codea enterprise plugin
+        // receives this execution evidence. The Mapper consumes this explicit
+        // marker; it never guesses plugin use from a tool name or Agent config.
+        if (Object.prototype.hasOwnProperty.call(TOOL_ACTIONS, hookInput.tool)) {
+          output.metadata = {
+            ...(output.metadata ?? {}),
+            codeaPlugin: CODEA_PLUGIN_ID,
+            codeaPluginInvocationID: hookInput.callID,
+          };
+        }
+
         // Native tool output (file contents / grep matches / command output) must
         // pass output DLP before it reaches the model. Layer-1 secrets block the
         // whole output; ordinary sensitive values are redacted in place.
