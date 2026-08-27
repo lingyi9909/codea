@@ -170,6 +170,10 @@ func (m *Model) executeWorkspaceAction(action command.Action) tea.Cmd {
 	case command.ActionSkills:
 		return m.toggleSkills()
 	case command.ActionAgents:
+		if m.isStreaming {
+			m.appendInfo("Finish or cancel the current response before changing agents.")
+			return nil
+		}
 		return ListAgentsCmd(m.runtimeClient)
 	case command.ActionModel:
 		if m.sessionID == "" {
