@@ -116,9 +116,9 @@ func (m *Model) renderCompletionSummary() string {
 }
 
 type traceMetrics struct {
-	tools    int
-	skills   int
-	plugins  int
+	tools     int
+	skills    int
+	plugins   int
 	subagents int
 }
 
@@ -144,8 +144,10 @@ func (m *Model) traceActivityMetrics(turnID string) traceMetrics {
 
 func (m *Model) renderFocusActivitySummary() string {
 	turnID := m.activeTurnID
-	if terminal, ok := m.latestTerminalWorking(); ok {
-		turnID = terminal.TurnID
+	if turnID == "" {
+		if terminal, ok := m.latestTerminalWorking(); ok {
+			turnID = terminal.TurnID
+		}
 	}
 	metrics := m.traceActivityMetrics(turnID)
 	parts := make([]string, 0, 4)
