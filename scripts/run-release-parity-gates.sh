@@ -5,10 +5,11 @@ repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 source_commit=${CODEA_SOURCE_COMMIT:-$(git -C "$repo_root" rev-parse HEAD)}
 evidence_dir=${CODEA_RELEASE_GATE_DIR:-"$repo_root/tests/evidence/release-gates.d"}
 opencode_bin=${OPENCODE_BIN:-}
+real_smoke_timeout_seconds=${CODEA_REAL_SMOKE_TIMEOUT_SECONDS:-900}
 
 [ -n "$source_commit" ] || { echo "CODEA_SOURCE_COMMIT is required" >&2; exit 2; }
 [ -n "$opencode_bin" ] && [ -x "$opencode_bin" ] || { echo "OPENCODE_BIN must point to locked OpenCode v1.18.11" >&2; exit 2; }
-for cmd in python3 go bun; do command -v "$cmd" >/dev/null 2>&1 || { echo "$cmd is required" >&2; exit 2; }; done
+for cmd in python3 go bun timeout; do command -v "$cmd" >/dev/null 2>&1 || { echo "$cmd is required" >&2; exit 2; }; done
 
 rm -rf "$evidence_dir"
 mkdir -p "$evidence_dir"
@@ -19,6 +20,27 @@ write_gate() {
     --id "$id" --source-commit "$source_commit" --status pass \
     --evidence "$evidence" --out "$evidence_dir/${id//./_}.json"
   echo "[PASS] $id — $evidence"
+}
+
+run_bounded() {
+  local label=$1
+  shift
+  local started=$SECONDS
+  local status
+  echo "=== START ${label} ==="
+  set +e
+  timeout --foreground "$real_smoke_timeout_seconds" "$@"
+  status=$?
+  set -e
+  if [ "$status" -eq 124 ]; then
+    echo "FAIL: ${label} timed out after ${real_smoke_timeout_seconds}s" >&2
+    return 124
+  fi
+  if [ "$status" -ne 0 ]; then
+    echo "FAIL: ${label} exited with status ${status}" >&2
+    return "$status"
+  fi
+  echo "=== PASS ${label} · $((SECONDS-started))s ==="
 }
 
 # G3 — all three skill modes and source/approval policy are exercised by the
@@ -40,13 +62,13 @@ write_gate G5 "tests/upgrade/rollback_test.sh: rollback last committed version/c
 
 # G6/G7 — one real locked-runtime smoke emits the accepted 15/15 evidence for
 # Code Reviewer and Unit Test Generator.
-OPENCODE_BIN="$opencode_bin" bash "$repo_root/scripts/run-real-agent-smoke.sh"
+run_bounded "G6-G7" env OPENCODE_BIN="$opencode_bin" bash "$repo_root/scripts/run-real-agent-smoke.sh"
 write_gate G6 "tui/tests/parity/evidence/agent-evidence.json 15/15: Code Reviewer file/line/code-evidence workflow"
 write_gate G7 "tui/tests/parity/evidence/agent-evidence.json 15/15: Unit Test Generator production-source mutation count = 0"
 
 # G8 — real locked-runtime API Documentation smoke validates deterministic
 # extraction/validation and rejects invented schema fields.
-OPENCODE_BIN="$opencode_bin" bash "$repo_root/scripts/run-real-api-doc-smoke.sh"
+run_bounded "G8" env OPENCODE_BIN="$opencode_bin" bash "$repo_root/scripts/run-real-api-doc-smoke.sh"
 write_gate G8 "tui/tests/parity/evidence/api-doc-agent-evidence.json: real API Documentation workflow with schema/example validation and no fabricated fields"
 
 # G9 — reasoning normalization/processing plus TUI application rendering/key
@@ -67,7 +89,7 @@ write_gate G10 "Bun security suite: dangerous command deny, write/bash approval 
 # G11/G12/G13 — run the locked real Runtime capability smoke once, then combine
 # it with mapper/parity unit contracts. This evidence covers native capabilities,
 # capability reachability, approval flows and unknown-event Raw fallback.
-OPENCODE_BIN="$opencode_bin" bash "$repo_root/scripts/run-real-parity-smoke.sh"
+run_bounded "G11-G13" env OPENCODE_BIN="$opencode_bin" bash "$repo_root/scripts/run-real-parity-smoke.sh"
 (
   cd "$repo_root/tui"
   GOTOOLCHAIN=local go test ./internal/opencode ./internal/parity ./tests/parity -count=1
@@ -78,7 +100,7 @@ write_gate G13 "real-parity evidence + golden/adapter event regression: SSE even
 
 # G12.1 — baseline is vanilla locked OpenCode; candidate is same Runtime/model/
 # permissions with Codea plugin. All Required scenarios are repeated by Runner.
-OPENCODE_BIN="$opencode_bin" bash "$repo_root/scripts/run-dual-runtime-parity.sh"
+run_bounded "G12.1" env OPENCODE_BIN="$opencode_bin" bash "$repo_root/scripts/run-dual-runtime-parity.sh"
 write_gate G12.1 "tui/tests/parity/evidence/release-parity.json: distinct vanilla/candidate OpenCode v1.18.11, 12/12 Required task-effect parity"
 
 # G14 — Application-layer handoff contract keeps one Session and transfers only
