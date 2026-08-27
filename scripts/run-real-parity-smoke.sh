@@ -23,6 +23,12 @@ smoke_port=${SMOKE_PORT:-49321}
 fake_port=${FAKE_MODEL_PORT:-49220}
 username=${OPENCODE_SERVER_USERNAME:-opencode}
 password=${OPENCODE_SERVER_PASSWORD:-testpass123}
+cleanup_term_grace_seconds=${CLEANUP_TERM_GRACE_SECONDS:-3}
+
+if ! [[ "$cleanup_term_grace_seconds" =~ ^[0-9]+$ ]]; then
+  echo "CLEANUP_TERM_GRACE_SECONDS must be a non-negative integer" >&2
+  exit 2
+fi
 
 run_root=$(mktemp -d "${TMPDIR:-/tmp}/codea-real-parity.XXXXXX")
 # Resolve the temp dir to its canonical path. On macOS both /tmp and /var are
@@ -35,9 +41,48 @@ run_root=$(cd "$run_root" && pwd -P)
 fake_pid=""
 opencode_pid=""
 
+terminate_pid() {
+  local pid=${1:-}
+  local label=${2:-process}
+  local ticks=$((cleanup_term_grace_seconds * 10))
+
+  [ -n "$pid" ] || return 0
+
+  if ! kill -0 "$pid" 2>/dev/null; then
+    wait "$pid" 2>/dev/null || true
+    return 0
+  fi
+
+  kill "$pid" 2>/dev/null || true
+  for ((i=0; i<ticks; i++)); do
+    if ! kill -0 "$pid" 2>/dev/null; then
+      wait "$pid" 2>/dev/null || true
+      return 0
+    fi
+    sleep 0.1
+  done
+
+  if kill -0 "$pid" 2>/dev/null; then
+    echo "cleanup: $label pid=$pid did not exit after ${cleanup_term_grace_seconds}s; forcing SIGKILL" >&2
+    kill -KILL "$pid" 2>/dev/null || true
+  fi
+
+  # Do not perform an unconditional wait here. cancel-in-streaming can leave a
+  # runtime in a shutdown state where wait blocks indefinitely; after SIGKILL
+  # the parent shell must be allowed to exit so CI remains bounded.
+  for ((i=0; i<20; i++)); do
+    if ! kill -0 "$pid" 2>/dev/null; then
+      wait "$pid" 2>/dev/null || true
+      return 0
+    fi
+    sleep 0.05
+  done
+  echo "cleanup: $label pid=$pid still present after SIGKILL; continuing without wait" >&2
+}
+
 cleanup() {
-  if [ -n "$opencode_pid" ]; then kill "$opencode_pid" 2>/dev/null || true; wait "$opencode_pid" 2>/dev/null || true; fi
-  if [ -n "$fake_pid" ]; then kill "$fake_pid" 2>/dev/null || true; wait "$fake_pid" 2>/dev/null || true; fi
+  terminate_pid "$opencode_pid" "OpenCode"
+  terminate_pid "$fake_pid" "fake model"
   find "$run_root" -type f -delete 2>/dev/null || true
   find "$run_root" -depth -type d -exec rmdir {} \; 2>/dev/null || true
 }
