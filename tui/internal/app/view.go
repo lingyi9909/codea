@@ -145,20 +145,24 @@ func (m *Model) renderCommandPalette() string {
 
 func (m *Model) renderBody() string {
 	var lines []string
-	latestAssistant := -1
-	for i := len(m.messages) - 1; i >= 0; i-- {
-		if m.messages[i].Role == RoleAssistant {
-			latestAssistant = i
-			break
-		}
-	}
+	latestUser, latestAssistant := m.latestConversationTurnIndexes()
 
-	for i, msg := range m.messages {
-		if i == latestAssistant {
-			continue
+	if m.viewMode == ViewFocus {
+		// Focus is a presentation-only projection of the latest turn. It never
+		// mutates history or semantic trace truth.
+		if latestUser >= 0 {
+			if rendered := m.renderMessage(m.messages[latestUser]); rendered != "" {
+				lines = append(lines, rendered)
+			}
 		}
-		if rendered := m.renderMessage(msg); rendered != "" {
-			lines = append(lines, rendered)
+	} else {
+		for i, msg := range m.messages {
+			if i == latestAssistant {
+				continue
+			}
+			if rendered := m.renderMessage(msg); rendered != "" {
+				lines = append(lines, rendered)
+			}
 		}
 	}
 
@@ -169,7 +173,7 @@ func (m *Model) renderBody() string {
 	}
 	if trace := m.renderExecutionTrace(); trace != "" {
 		lines = append(lines, trace)
-	} else if tools := m.renderTools(); tools != "" {
+	} else if tools := m.renderTools(); tools != "" && m.viewMode != ViewFocus {
 		// Legacy fallback for tests/older states that predate a semantic trace.
 		lines = append(lines, tools)
 	}
@@ -184,12 +188,36 @@ func (m *Model) renderBody() string {
 			lines = append(lines, rendered)
 		}
 	}
-	if !m.isStreaming {
+	// Focus already has one compact activity summary; do not append the normal
+	// completion summary and duplicate activity beneath the latest answer.
+	if !m.isStreaming && m.viewMode != ViewFocus {
 		if summary := m.renderCompletionSummary(); summary != "" {
 			lines = append(lines, theme.MutedStyle().Render(summary))
 		}
 	}
 	return strings.Join(lines, "\n")
+}
+
+func (m *Model) latestConversationTurnIndexes() (int, int) {
+	latestUser := -1
+	for i := len(m.messages) - 1; i >= 0; i-- {
+		if m.messages[i].Role == RoleUser {
+			latestUser = i
+			break
+		}
+	}
+	latestAssistant := -1
+	start := len(m.messages) - 1
+	for i := start; i >= 0; i-- {
+		if m.messages[i].Role != RoleAssistant {
+			continue
+		}
+		if latestUser < 0 || i > latestUser {
+			latestAssistant = i
+			break
+		}
+	}
+	return latestUser, latestAssistant
 }
 
 func (m *Model) renderExecutionTrace() string {
@@ -287,11 +315,32 @@ func (m *Model) renderMessage(msg ChatMessage) string {
 		if strings.TrimSpace(msg.Content) == "" {
 			return ""
 		}
-		return "● Codea\n  " + msg.Content
+		identity := assistantAgentLabel(msg.Agent)
+		if model := strings.TrimSpace(msg.Model); model != "" {
+			identity += " · " + model
+		}
+		return "● " + identity + "\n  " + msg.Content
 	case RoleInfo:
 		return "System · " + msg.Content
 	default:
 		return msg.Content
+	}
+}
+
+func assistantAgentLabel(agent string) string {
+	switch strings.TrimSpace(agent) {
+	case "", "general":
+		return "Codea"
+	case "code-reviewer":
+		return "Code Reviewer"
+	case "unit-test-generator":
+		return "Unit Test Generator"
+	case "api-documentation":
+		return "API Documentation"
+	case "debug":
+		return "Debug"
+	default:
+		return strings.TrimSpace(agent)
 	}
 }
 
@@ -300,11 +349,29 @@ func renderTerminalTooSmall(w, h int) string {
 }
 
 func (m *Model) renderHeader() string {
+	agent := m.currentTurnAgent()
+	return fmt.Sprintf("Codea  %s %s  ·  Agent: %s  ·  Model: %s  ·  View: %s", statusDot(m.runtimeStatus), statusLabel(m.runtimeStatus), agent, m.selectedModelLabel(), m.viewMode)
+}
+
+func (m *Model) currentTurnAgent() string {
+	if turnID := m.currentTraceTurnID(); turnID != "" {
+		if entry, ok := m.executionTrace.Entry("turn:" + turnID + ":agent"); ok {
+			if agent := strings.TrimSpace(entry.Title); agent != "" {
+				return agent
+			}
+	}
+	for i := len(m.messages) - 1; i >= 0; i-- {
+		if m.messages[i].Role == RoleAssistant {
+			if agent := strings.TrimSpace(m.messages[i].Agent); agent != "" {
+				return agent
+			}
+		}
+	}
 	agent := strings.TrimSpace(m.currentAgent)
 	if agent == "" {
-		agent = "general"
+		return "general"
 	}
-	return fmt.Sprintf("Codea  %s %s  ·  Agent: %s  ·  Model: %s  ·  View: %s", statusDot(m.runtimeStatus), statusLabel(m.runtimeStatus), agent, m.selectedModelLabel(), m.viewMode)
+	return agent
 }
 
 func (m *Model) renderStatusLine() string {
