@@ -235,7 +235,20 @@ func (m *Model) appendInfo(content string) {
 	m.markDirty()
 }
 
+func (m *Model) activeAgent(requested string) string {
+	requested = strings.TrimSpace(requested)
+	if requested != "" && requested != "general" {
+		return requested
+	}
+	active := strings.TrimSpace(m.currentAgent)
+	if active != "" {
+		return active
+	}
+	return "general"
+}
+
 func (m *Model) startPrompt(displayText, promptText, agent string) tea.Cmd {
+	agent = m.activeAgent(agent)
 	m.messages = append(m.messages,
 		ChatMessage{Role: RoleUser, Content: displayText, Finished: true},
 		ChatMessage{Role: RoleAssistant},
