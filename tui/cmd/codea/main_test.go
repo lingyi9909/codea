@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	goruntime "runtime"
 	"testing"
 	"time"
 
@@ -19,13 +20,31 @@ import (
 // in TestMain and reused across composition tests.
 var fakeOpenCodeBin string
 
+func testExecutableName(base string) string {
+	if goruntime.GOOS == "windows" {
+		return base + ".exe"
+	}
+	return base
+}
+
+func setUserHomeForTest(t *testing.T, home string) {
+	t.Helper()
+	if goruntime.GOOS == "windows" {
+		t.Setenv("USERPROFILE", home)
+		t.Setenv("HOMEDRIVE", "")
+		t.Setenv("HOMEPATH", "")
+		return
+	}
+	t.Setenv("HOME", home)
+}
+
 func TestMain(m *testing.M) {
 	tmp, err := os.MkdirTemp("", "codea-cmd-fake-opencode-*")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "mkdtemp: %v\n", err)
 		os.Exit(1)
 	}
-	fakeOpenCodeBin = filepath.Join(tmp, "fake-opencode")
+	fakeOpenCodeBin = filepath.Join(tmp, testExecutableName("fake-opencode"))
 	build := exec.Command("go", "build", "-o", fakeOpenCodeBin, "codea/tui/internal/supervisor/fakeopencode")
 	if out, err := build.CombinedOutput(); err != nil {
 		fmt.Fprintf(os.Stderr, "build fake opencode: %v\n%s\n", err, out)
@@ -106,7 +125,7 @@ func TestBootstrapRuntimeStartupFailure(t *testing.T) {
 // dir must be a dedicated Codea location, never OpenCode's native ~/.config/opencode.
 func TestCodeaConfigDirDefaultsIsolated(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("HOME", home)
+	setUserHomeForTest(t, home)
 	t.Setenv("CODEA_RUNTIME_CONFIG_DIR", "")
 
 	got := codeaConfigDir()
@@ -132,7 +151,7 @@ func TestCodeaConfigDirHonorsOverride(t *testing.T) {
 // Codea sync target.
 func TestSkillRootsTreatsUserOpenCodeAsReadOnly(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("HOME", home)
+	setUserHomeForTest(t, home)
 	t.Setenv("CODEA_SKILLS_DIR", filepath.Join(t.TempDir(), "dist"))
 
 	roots := skillRoots()
@@ -202,8 +221,12 @@ func TestWritePluginConfigRegistersBundle(t *testing.T) {
 		t.Fatalf("plugin scheme = %q, want file", u.Scheme)
 	}
 	abs, _ := filepath.Abs(bundle)
-	if u.Path != filepath.ToSlash(abs) {
-		t.Fatalf("plugin path = %q, want %q", u.Path, filepath.ToSlash(abs))
+	wantPath := filepath.ToSlash(abs)
+	if goruntime.GOOS == "windows" && len(wantPath) >= 2 && wantPath[1] == ':' {
+		wantPath = "/" + wantPath
+	}
+	if u.Path != wantPath {
+		t.Fatalf("plugin path = %q, want %q", u.Path, wantPath)
 	}
 }
 
