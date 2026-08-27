@@ -17,7 +17,7 @@ func TestTask25ViewModeCommandsChangeOnlyDerivedPresentation(t *testing.T) {
 	m.processRuntimeEvent(runtime.Event{
 		Type:      eventTypeToolCalled,
 		SessionID: "session-a",
-		Content:   "README.md",
+		Metadata:  map[string]string{"target": "README.md"},
 		Tool:      &runtime.ToolEvent{Name: "read", CallID: "call-1"},
 	})
 
@@ -71,7 +71,7 @@ func TestTask25FocusHidesRoutineTraceButKeepsApprovalBlocker(t *testing.T) {
 	m.sessionID = runtime.SessionID("session-a")
 	m.input = "fix it"
 	_ = m.submit()
-	m.processRuntimeEvent(runtime.Event{Type: eventTypeToolCalled, SessionID: "session-a", Content: "go test ./...", Tool: &runtime.ToolEvent{Name: "bash", CallID: "call-1"}})
+	m.processRuntimeEvent(runtime.Event{Type: eventTypeToolCalled, SessionID: "session-a", Metadata: map[string]string{"target": "go test ./..."}, Tool: &runtime.ToolEvent{Name: "bash", CallID: "call-1"}})
 	m.processRuntimeEvent(runtime.Event{Type: eventTypeApprovalRequested, SessionID: "session-a", Approval: &runtime.ApprovalRequest{ID: "approval-1", Permission: "bash", Command: "go test ./..."}})
 
 	m.viewMode = ViewFocus
@@ -94,7 +94,7 @@ func TestTask25VerboseShowsAvailableTraceDetail(t *testing.T) {
 	m.sessionID = runtime.SessionID("session-a")
 	m.input = "inspect"
 	_ = m.submit()
-	m.processRuntimeEvent(runtime.Event{Type: eventTypeToolCalled, SessionID: "session-a", Content: "README.md", Tool: &runtime.ToolEvent{Name: "read", CallID: "call-1"}})
+	m.processRuntimeEvent(runtime.Event{Type: eventTypeToolCalled, SessionID: "session-a", Metadata: map[string]string{"target": "README.md"}, Tool: &runtime.ToolEvent{Name: "read", CallID: "call-1"}})
 	m.viewMode = ViewVerbose
 	m.markDirty()
 
@@ -103,8 +103,32 @@ func TestTask25VerboseShowsAvailableTraceDetail(t *testing.T) {
 		t.Fatalf("verbose view missing semantic trace blocks:\n%s", view)
 	}
 	if !strings.Contains(view, "README.md") {
-		t.Fatalf("verbose view missing available detail:\n%s", view)
+		t.Fatalf("verbose view missing available structured detail:\n%s", view)
 	}
+}
+
+func TestTask25FocusShowsCompactActivitySummaryWithoutDiscardingTrace(t *testing.T) {
+	m := NewModel(fakeruntime.New())
+	m.width, m.height = 120, 40
+	m.sessionID = runtime.SessionID("session-a")
+	m.input = "inspect"
+	_ = m.submit()
+	for i, id := range []string{"call-1", "call-2"} {
+		name := "read"
+		if i == 1 {
+			name = "grep"
+		}
+		m.processRuntimeEvent(runtime.Event{Type: eventTypeToolCalled, SessionID: "session-a", Tool: &runtime.ToolEvent{Name: name, CallID: id}})
+		m.processRuntimeEvent(runtime.Event{Type: eventTypeToolSuccess, SessionID: "session-a", Tool: &runtime.ToolEvent{Name: name, CallID: id}})
+	}
+	before := m.executionTrace.Entries()
+	m.viewMode = ViewFocus
+	m.markDirty()
+	view := m.View()
+	if !strings.Contains(view, "2 tool calls") {
+		t.Fatalf("focus view missing compact trace-derived activity summary:\n%s", view)
+	}
+	assertTraceUnchanged(t, before, m.executionTrace.Entries())
 }
 
 func TestTask25RefreshCadenceStaysWithinBoundedDesignWindow(t *testing.T) {
