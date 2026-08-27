@@ -2,6 +2,7 @@ package supervisor
 
 import (
 	"context"
+	"path/filepath"
 	"sync"
 	"testing"
 	"time"
@@ -249,7 +250,8 @@ func hasEnv(env []string, k string) bool {
 }
 
 func TestBuildEnvIsolation(t *testing.T) {
-	base := buildEnv(Config{ConfigDir: "/c", CodeaSkillsOnly: false}, "u", "p")
+	configDir := t.TempDir()
+	base := buildEnv(Config{ConfigDir: configDir, CodeaSkillsOnly: false}, "u", "p")
 	if !hasEnv(base, "OPENCODE_DISABLE_EXTERNAL_SKILLS=1") {
 		t.Fatal("compatible mode must disable external (.agents) skills")
 	}
@@ -259,18 +261,18 @@ func TestBuildEnvIsolation(t *testing.T) {
 	if !hasEnv(base, "OPENCODE_DISABLE_CLAUDE_CODE=1") {
 		t.Fatal("Task 1 offline lock must remain")
 	}
-	if !hasEnv(base, "XDG_CONFIG_HOME=/c/xdg/config") {
+	if !hasEnv(base, "XDG_CONFIG_HOME="+filepath.Join(configDir, "xdg", "config")) {
 		t.Fatal("compatible mode must redirect XDG_CONFIG_HOME to isolate native user skills")
 	}
 
-	strict := buildEnv(Config{ConfigDir: "/c", CodeaSkillsOnly: true}, "u", "p")
+	strict := buildEnv(Config{ConfigDir: configDir, CodeaSkillsOnly: true}, "u", "p")
 	if !hasEnv(strict, "OPENCODE_DISABLE_EXTERNAL_SKILLS=1") || !hasEnv(strict, "OPENCODE_DISABLE_PROJECT_CONFIG=1") {
 		t.Fatal("strict mode must disable external + project skills")
 	}
-	if !hasEnv(strict, "XDG_CONFIG_HOME=/c/xdg/config") {
+	if !hasEnv(strict, "XDG_CONFIG_HOME="+filepath.Join(configDir, "xdg", "config")) {
 		t.Fatal("strict mode must redirect XDG_CONFIG_HOME away from ~/.config")
 	}
-	if !hasEnv(strict, "XDG_DATA_HOME=/c/xdg/data") || !hasEnv(strict, "XDG_CACHE_HOME=/c/xdg/cache") || !hasEnv(strict, "XDG_STATE_HOME=/c/xdg/state") {
+	if !hasEnv(strict, "XDG_DATA_HOME="+filepath.Join(configDir, "xdg", "data")) || !hasEnv(strict, "XDG_CACHE_HOME="+filepath.Join(configDir, "xdg", "cache")) || !hasEnv(strict, "XDG_STATE_HOME="+filepath.Join(configDir, "xdg", "state")) {
 		t.Fatal("strict mode must redirect XDG data/cache/state")
 	}
 }
