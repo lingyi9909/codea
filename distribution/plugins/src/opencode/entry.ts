@@ -39,12 +39,13 @@ const APPROVAL_ACTIONS = new Set(["write", "execute"]);
 // (file contents, grep matches, command output) must be scanned for secrets.
 const NATIVE_OUTPUT_DLP_TOOLS = new Set(["read", "grep", "glob", "bash"]);
 
-// Native tools that carry a file/directory path in their args. These get a
-// sensitive-path check before execution (absolute/traversal/.env/.ssh/etc).
-const NATIVE_PATH_TOOLS = new Set(["read", "grep", "glob"]);
+// Native tools that carry a file/directory path in their args. Read-style tools
+// and mutation tools share the same containment/sensitive-target validator.
+const NATIVE_PATH_TOOLS = new Set(["read", "grep", "glob", "write", "edit"]);
+const NATIVE_MUTATION_TOOLS = new Set(["write", "edit"]);
 
 function nativePathFor(tool: string, args: any): string | undefined {
-  if (tool === "read") return args?.filePath;
+  if (tool === "read" || tool === "write" || tool === "edit") return args?.filePath;
   if (tool === "grep" || tool === "glob") return args?.path;
   return undefined;
 }
@@ -247,7 +248,7 @@ export const plugin: PluginModule = {
     // overwrite=true.
     const ownershipStore = new Map<string, Set<string>>();
     const ownershipFactory: OwnershipFactory = (sessionId, agent) => {
-      const key = `${sessionId} ${agent}`;
+      const key = `${sessionId}\u0000${agent}`;
       let set = ownershipStore.get(key);
       if (!set) {
         set = new Set<string>();
@@ -295,10 +296,9 @@ export const plugin: PluginModule = {
           return;
         }
 
-        // Native read/grep/glob carry a path that must stay inside the project
-        // root and not point at a sensitive file. Absolute in-root paths are
-        // allowed (OpenCode defines read.filePath as absolute); only escapes and
-        // sensitive targets are denied, before the file is even read.
+        // Every native path-bearing tool stays inside the project and may not
+        // target credential/sensitive paths. OpenCode commonly sends absolute
+        // filePath values, so use the native validator before the generic guard.
         if (NATIVE_PATH_TOOLS.has(tool)) {
           const targetPath = nativePathFor(tool, output.args);
           if (typeof targetPath === "string" && targetPath !== "") {
@@ -306,6 +306,25 @@ export const plugin: PluginModule = {
             if (reason) {
               throw new Error(`native-path:${reason}`);
             }
+          }
+        }
+
+        // Debug can request native write/edit through OpenCode's normal `ask`
+        // permission flow. Before that approval/execution occurs, Codea still
+        // scans the complete mutation payload for DLP violations. The path was
+        // validated above; targetPath is intentionally omitted here so absolute
+        // in-root OpenCode paths work consistently on Windows and POSIX.
+        if (NATIVE_MUTATION_TOOLS.has(tool)) {
+          const decision = guard.before({
+            sessionId: hookInput.sessionID,
+            agent: "",
+            tool,
+            action: "write",
+            projectRoot: input.directory,
+            input: output.args,
+          });
+          if (decision.decision === "deny") {
+            throw new Error(decision.reason ?? `${tool} denied by security policy`);
           }
         }
       },
