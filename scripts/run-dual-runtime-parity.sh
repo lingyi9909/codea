@@ -9,6 +9,7 @@ baseline_port=${BASELINE_PORT:-49340}
 candidate_port=${CANDIDATE_PORT:-49341}
 username=${OPENCODE_SERVER_USERNAME:-codea-parity}
 password=${OPENCODE_SERVER_PASSWORD:-codea-parity-pass}
+parity_runner_timeout_seconds=${PARITY_RUNNER_TIMEOUT_SECONDS:-600}
 
 if [ -z "$opencode_bin" ] || [ ! -x "$opencode_bin" ]; then
   echo "OPENCODE_BIN must point to executable OpenCode v1.18.11" >&2
@@ -21,7 +22,7 @@ fixture="$repo_root/tests/fixtures/release-parity/fake_model.py"
 plugin="$repo_root/distribution/plugins/dist/index.js"
 [ -f "$fixture" ] || { echo "release parity fake model missing" >&2; exit 2; }
 [ -f "$plugin" ] || { echo "candidate Codea plugin bundle missing; build distribution/plugins first" >&2; exit 2; }
-for cmd in python3 curl; do command -v "$cmd" >/dev/null 2>&1 || { echo "$cmd is required" >&2; exit 2; }; done
+for cmd in python3 curl timeout; do command -v "$cmd" >/dev/null 2>&1 || { echo "$cmd is required" >&2; exit 2; }; done
 
 run_root=$(mktemp -d "${TMPDIR:-/tmp}/codea-dual-parity.XXXXXX")
 run_root=$(cd "$run_root" && pwd -P)
@@ -134,10 +135,13 @@ CODEA_PARITY_BASELINE_PASSWORD="$password" \
 CODEA_PARITY_CANDIDATE_USERNAME="$username" \
 CODEA_PARITY_CANDIDATE_PASSWORD="$password" \
 CODEA_PARITY_EVIDENCE="$evidence_file" \
-GOTOOLCHAIN=local go run ./cmd/parity-runner
+GOTOOLCHAIN=local timeout --foreground "$parity_runner_timeout_seconds" go run ./cmd/parity-runner
 parity_status=$?
 set -e
 if [ "$parity_status" -ne 0 ]; then
+  if [ "$parity_status" -eq 124 ]; then
+    echo "parity runner timed out after ${parity_runner_timeout_seconds}s" >&2
+  fi
   echo "--- release parity fake-model trace ---" >&2
   tail -n 400 "$run_root/fake.log" >&2 || true
   echo "--- baseline OpenCode log ---" >&2
