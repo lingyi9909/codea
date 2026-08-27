@@ -27,13 +27,16 @@ const OpenCodeMode = "all"
 type Manifest struct {
 	Name        string
 	DisplayName string
-	// AllowTools are the tools the manifest whitelists (tools map value "allow").
-	// They become the only tools the runtime permits, behind a fail-closed
-	// `"*": deny` entry, so an unlisted tool is denied rather than allowed.
+	// AllowTools are tools the manifest permits without an approval prompt.
+	// They are still behind the fail-closed `"*": deny` entry.
 	AllowTools []string
+	// AskTools are tools that require the Runtime approval path. They let a
+	// controlled Agent request a mutation/command while preserving user approval
+	// instead of broadening the default permission surface.
+	AskTools []string
 	// DenyTools are tools the manifest explicitly marks deny. With the fail-closed
 	// wildcard they are redundant for enforcement, but are retained so callers can
-	// assert the manifest's declared intent (e.g. write/edit/bash never permitted).
+	// assert the manifest's declared intent.
 	DenyTools []string
 }
 
@@ -44,6 +47,7 @@ type Manifest struct {
 func ParseManifest(body []byte) (Manifest, error) {
 	var m Manifest
 	allow := map[string]bool{}
+	ask := map[string]bool{}
 	deny := map[string]bool{}
 	inTools := false
 
@@ -68,6 +72,8 @@ func ParseManifest(body []byte) (Manifest, error) {
 			switch value {
 			case "allow":
 				allow[key] = true
+			case "ask":
+				ask[key] = true
 			case "deny":
 				deny[key] = true
 			}
@@ -94,19 +100,21 @@ func ParseManifest(body []byte) (Manifest, error) {
 	for t := range allow {
 		m.AllowTools = append(m.AllowTools, t)
 	}
+	for t := range ask {
+		m.AskTools = append(m.AskTools, t)
+	}
 	for t := range deny {
 		m.DenyTools = append(m.DenyTools, t)
 	}
 	sort.Strings(m.AllowTools)
+	sort.Strings(m.AskTools)
 	sort.Strings(m.DenyTools)
 	return m, nil
 }
 
 // Render produces the OpenCode markdown agent file for a manifest and system
-// prompt. The prompt is the agent.md body verbatim; the frontmatter carries the
-// description, mode and a fail-closed permission map: `"*": deny` first, then
-// each whitelisted tool as `allow`. Unlisted tools therefore inherit deny rather
-// than OpenCode's custom-agent default of `"*": allow`.
+// prompt. The frontmatter remains fail-closed: `"*": deny` is emitted first,
+// then manifest allow/ask exceptions. Unlisted tools therefore stay denied.
 func Render(m Manifest, prompt string) []byte {
 	var b strings.Builder
 	b.WriteString("---\n")
@@ -116,6 +124,9 @@ func Render(m Manifest, prompt string) []byte {
 	b.WriteString("  \"*\": deny\n")
 	for _, t := range m.AllowTools {
 		fmt.Fprintf(&b, "  %s: allow\n", t)
+	}
+	for _, t := range m.AskTools {
+		fmt.Fprintf(&b, "  %s: ask\n", t)
 	}
 	b.WriteString("---\n")
 	if prompt != "" {
