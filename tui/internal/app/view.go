@@ -145,9 +145,23 @@ func (m *Model) renderCommandPalette() string {
 
 func (m *Model) renderBody() string {
 	var lines []string
-	for _, msg := range m.messages {
-		lines = append(lines, m.renderMessage(msg))
+	latestAssistant := -1
+	for i := len(m.messages) - 1; i >= 0; i-- {
+		if m.messages[i].Role == RoleAssistant {
+			latestAssistant = i
+			break
+		}
 	}
+
+	for i, msg := range m.messages {
+		if i == latestAssistant {
+			continue
+		}
+		if rendered := m.renderMessage(msg); rendered != "" {
+			lines = append(lines, rendered)
+		}
+	}
+
 	if m.viewMode != ViewFocus {
 		if r := m.renderReasoning(); r != "" {
 			lines = append(lines, theme.MutedStyle().Render(r))
@@ -159,6 +173,22 @@ func (m *Model) renderBody() string {
 		// Legacy fallback for tests/older states that predate a semantic trace.
 		lines = append(lines, tools)
 	}
+	if m.viewMode == ViewFocus {
+		if summary := m.renderFocusActivitySummary(); summary != "" {
+			lines = append(lines, theme.MutedStyle().Render(summary))
+		}
+	}
+
+	if latestAssistant >= 0 {
+		if rendered := m.renderMessage(m.messages[latestAssistant]); rendered != "" {
+			lines = append(lines, rendered)
+		}
+	}
+	if !m.isStreaming {
+		if summary := m.renderCompletionSummary(); summary != "" {
+			lines = append(lines, theme.MutedStyle().Render(summary))
+		}
+	}
 	return strings.Join(lines, "\n")
 }
 
@@ -167,8 +197,12 @@ func (m *Model) renderExecutionTrace() string {
 	if len(entries) == 0 {
 		return ""
 	}
+	turnID := m.currentTraceTurnID()
 	lines := make([]string, 0, len(entries))
 	for _, entry := range entries {
+		if m.viewMode != ViewVerbose && turnID != "" && entry.TurnID != "" && entry.TurnID != turnID {
+			continue
+		}
 		if !m.traceEntryVisible(entry) {
 			continue
 		}
@@ -176,11 +210,17 @@ func (m *Model) renderExecutionTrace() string {
 		if entry.Category != TraceWorking && strings.TrimSpace(entry.Title) != "" {
 			label += " · " + entry.Title
 		}
-		line := fmt.Sprintf("%s  [%s]", label, entry.Status)
-		if m.viewMode == ViewVerbose && strings.TrimSpace(entry.Detail) != "" {
+		line := label
+		if entry.Category == TraceTool && strings.TrimSpace(entry.Detail) != "" && m.viewMode != ViewFocus {
+			line += "  " + strings.TrimSpace(entry.Detail)
+		} else if m.viewMode == ViewVerbose && strings.TrimSpace(entry.Detail) != "" {
 			line += "  " + strings.TrimSpace(entry.Detail)
 		}
-		if entry.Category == TraceApproval || entry.Status == TraceFailed || entry.Status == TraceDenied {
+		line += fmt.Sprintf("  [%s]", entry.Status)
+		if entry.Duration > 0 {
+			line += "  " + formatDuration(entry.Duration)
+		}
+		if entry.Category == TraceApproval || entry.Category == TraceRuntime || entry.Status == TraceFailed || entry.Status == TraceDenied {
 			line = theme.AccentStyle().Render(line)
 		} else {
 			line = theme.MutedStyle().Render(line)
@@ -190,14 +230,24 @@ func (m *Model) renderExecutionTrace() string {
 	return strings.Join(lines, "\n")
 }
 
+func (m *Model) currentTraceTurnID() string {
+	if m.activeTurnID != "" {
+		return m.activeTurnID
+	}
+	if terminal, ok := m.latestTerminalWorking(); ok {
+		return terminal.TurnID
+	}
+	return ""
+}
+
 func (m *Model) traceEntryVisible(entry ExecutionTraceEntry) bool {
 	switch m.viewMode {
 	case ViewVerbose:
 		return true
 	case ViewFocus:
-		return entry.Category == TraceApproval || entry.Status == TraceFailed || entry.Status == TraceDenied
+		return entry.Category == TraceApproval || entry.Category == TraceRuntime || entry.Status == TraceFailed || entry.Status == TraceDenied
 	default:
-		// Normal is balanced: keep execution structure but omit verbose detail.
+		// Normal is balanced: keep current execution structure with safe summaries.
 		return true
 	}
 }
@@ -222,16 +272,27 @@ func traceCategoryLabel(category TraceCategory) string {
 		return "Assistant"
 	case TraceSubagent:
 		return "Subagent"
+	case TraceRuntime:
+		return "Runtime"
 	default:
 		return "Trace"
 	}
 }
 
 func (m *Model) renderMessage(msg ChatMessage) string {
-	if msg.Role == RoleUser {
-		return "User > " + msg.Content
+	switch msg.Role {
+	case RoleUser:
+		return "❯ " + msg.Content
+	case RoleAssistant:
+		if strings.TrimSpace(msg.Content) == "" {
+			return ""
+		}
+		return "● Codea\n  " + msg.Content
+	case RoleInfo:
+		return "System · " + msg.Content
+	default:
+		return msg.Content
 	}
-	return msg.Content
 }
 
 func renderTerminalTooSmall(w, h int) string {
@@ -243,17 +304,15 @@ func (m *Model) renderHeader() string {
 	if agent == "" {
 		agent = "general"
 	}
-	return fmt.Sprintf("Codea  %s %s  ·  Agent: %s  ·  View: %s", statusDot(m.runtimeStatus), statusLabel(m.runtimeStatus), agent, m.viewMode)
+	return fmt.Sprintf("Codea  %s %s  ·  Agent: %s  ·  Model: %s  ·  View: %s", statusDot(m.runtimeStatus), statusLabel(m.runtimeStatus), agent, m.selectedModelLabel(), m.viewMode)
 }
 
 func (m *Model) renderStatusLine() string {
 	if m.isStreaming {
-		if m.activeTurnID != "" {
-			if working, ok := m.executionTrace.Entry("turn:" + m.activeTurnID + ":working"); ok && working.Status == TraceWaiting {
-				return "◌ Waiting for approval"
-			}
+		if m.approvalWaiting() {
+			return "⚠ Permission required"
 		}
-		return "◌ Working"
+		return m.spinnerGlyph() + " " + m.executionStatusText()
 	}
 	return "Ready"
 }
