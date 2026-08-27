@@ -48,6 +48,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case promptResultMsg:
 		if msg.err != nil {
+			m.finishActiveTurnTrace(TraceFailed)
 			m.finishStreamingWithOutcome(MetricStatusFailed, "prompt_error", false)
 			m.markDirty()
 			return m, nil
@@ -60,11 +61,13 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case sessionCreatedMsg:
 		if msg.err != nil {
 			m.pendingPrompt = nil
+			m.finishActiveTurnTrace(TraceFailed)
 			m.finishStreamingWithOutcome(MetricStatusFailed, "session_create_error", false)
 			m.markDirty()
 			return m, nil
 		}
 		m.sessionID = msg.sessionID
+		m.bindActiveTraceSession(msg.sessionID)
 		req := m.pendingPrompt
 		m.pendingPrompt = nil
 		if req == nil {
@@ -124,6 +127,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if m.isStreaming {
+			m.finishActiveTurnTrace(TraceFailed)
 			m.finishStreamingWithOutcome(MetricStatusFailed, "cancelled", false)
 		}
 		m.appendInfo("Cancelled current response.")
@@ -154,6 +158,18 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.markDirty()
 			return m, nil
 		}
+		if m.activeApprovalTraceKey != "" {
+			status := TraceSuccess
+			if m.pendingApprovalDecision == runtime.ApprovalReject {
+				status = TraceDenied
+			}
+			m.executionTrace.setStatus(m.activeApprovalTraceKey, status, true)
+		}
+		if m.activeTurnID != "" {
+			m.executionTrace.setStatus("turn:"+m.activeTurnID+":working", TraceRunning, false)
+		}
+		m.activeApprovalTraceKey = ""
+		m.pendingApprovalDecision = ""
 		m.permission = components.PermissionModel{}
 		m.approvalErr = ""
 		m.markDirty()
@@ -167,11 +183,13 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case subscribeErrMsg:
 		m.runtimeStatus = runtime.RuntimeCrashed
+		m.finishActiveTurnTrace(TraceFailed)
 		m.finishStreamingWithOutcome(MetricStatusFailed, "subscription_error", false)
 		m.markDirty()
 		return m, nil
 
 	case eventStreamClosedMsg:
+		m.finishActiveTurnTrace(TraceFailed)
 		m.completeTaskMetric(MetricStatusFailed, "event_stream_closed", false)
 		if m.runtimeStatus != runtime.RuntimeCrashed {
 			m.runtimeStatus = runtime.RuntimeStopped
@@ -272,6 +290,7 @@ func (m *Model) replyApproval(decision runtime.ApprovalDecision) tea.Cmd {
 		return nil
 	}
 	m.approvalPending = true
+	m.pendingApprovalDecision = decision
 	return ReplyApprovalCmd(m.runtimeClient, runtime.ApprovalID(m.permission.Request.ID), runtime.ApprovalReply{Decision: decision})
 }
 
@@ -336,6 +355,10 @@ func (m *Model) resumeSession(id runtime.SessionID, history []runtime.Message) {
 	m.reasoningDuration = 0
 	m.reasoningExpanded = false
 	m.tools = make([]ToolActivity, 0)
+	m.executionTrace.Reset()
+	m.activeTurnID = ""
+	m.activeApprovalTraceKey = ""
+	m.pendingApprovalDecision = ""
 	m.proc.Reset()
 	m.messages = historyToChatMessages(history)
 	m.sessionNotice = ""
@@ -407,6 +430,7 @@ func (m *Model) processRuntimeEvent(ev runtime.Event) bool {
 	if !m.acceptsEvent(ev) {
 		return false
 	}
+	m.traceRuntimeEvent(ev)
 	dirty := false
 	switch ev.Type {
 	case eventTypeStepFinished:
@@ -556,6 +580,10 @@ func (m *Model) updateTool(ev runtime.Event, status ToolStatus) {
 func (m *Model) clearChat() {
 	m.messages = make([]ChatMessage, 0)
 	m.tools = make([]ToolActivity, 0)
+	m.executionTrace.Reset()
+	m.activeTurnID = ""
+	m.activeApprovalTraceKey = ""
+	m.pendingApprovalDecision = ""
 	m.reasoningActive = false
 	m.reasoningContent = ""
 	m.reasoningExpanded = false
