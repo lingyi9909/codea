@@ -51,10 +51,12 @@ func (r *lifecycleGapRuntime) ReplyApproval(context.Context, runtime.ApprovalID,
 }
 func (r *lifecycleGapRuntime) Cancel(context.Context, runtime.SessionID) error { return nil }
 func (r *lifecycleGapRuntime) ListAgents(context.Context) ([]runtime.Agent, error) { return nil, nil }
+func (r *lifecycleGapRuntime) ListModels(context.Context) ([]runtime.Model, error) { return nil, nil }
 func (r *lifecycleGapRuntime) ListSessions(context.Context) ([]runtime.Session, error) { return nil, nil }
 func (r *lifecycleGapRuntime) GetSessionMessages(context.Context, runtime.SessionID) ([]runtime.Message, error) {
 	return nil, nil
 }
+func (r *lifecycleGapRuntime) CompactSession(context.Context, runtime.SessionID) error { return nil }
 func (r *lifecycleGapRuntime) Capabilities() runtime.RuntimeCapabilities { return runtime.RuntimeCapabilities{} }
 
 func TestRunnerDoesNotTreatPreAnswerLifecycleGapAsCompletion(t *testing.T) {
