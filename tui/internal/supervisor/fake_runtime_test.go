@@ -16,13 +16,20 @@ import (
 // once in TestMain and reused across lifecycle tests.
 var fakeOpenCodeBin string
 
+func fakeExecutableName(base string) string {
+	if goruntime.GOOS == "windows" {
+		return base + ".exe"
+	}
+	return base
+}
+
 func TestMain(m *testing.M) {
 	tmp, err := os.MkdirTemp("", "codea-fake-opencode-*")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "mkdtemp: %v\n", err)
 		os.Exit(1)
 	}
-	fakeOpenCodeBin = filepath.Join(tmp, "fake-opencode")
+	fakeOpenCodeBin = filepath.Join(tmp, fakeExecutableName("fake-opencode"))
 	build := exec.Command("go", "build", "-o", fakeOpenCodeBin, "./fakeopencode")
 	if out, err := build.CombinedOutput(); err != nil {
 		fmt.Fprintf(os.Stderr, "build fake opencode: %v\n%s\n", err, out)
