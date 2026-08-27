@@ -283,9 +283,26 @@ func (m *Model) startPrompt(displayText, promptText, fallbackAgent string) tea.C
 }
 
 func (m *Model) startPromptWithAgent(displayText, promptText, agent string) tea.Cmd {
+	req := runtime.PromptRequest{
+		MessageID: fmt.Sprintf("msg-%d", m.msgCounter),
+		Agent:     agent,
+		Parts:     []runtime.PromptPart{runtime.TextPart{Text: promptText}},
+	}
+	modelLabel := ""
+	if m.sessionID != "" {
+		if selected, ok := m.sessionModels[m.sessionID]; ok {
+			model := selected
+			req.Model = &model
+			modelLabel = strings.TrimSpace(selected.ModelID)
+		}
+	}
+
+	// Bind visible turn identity to the actual PromptRequest. Professional
+	// one-shot commands can therefore show code-reviewer without mutating the
+	// persistent currentAgent selected through /agents.
 	m.messages = append(m.messages,
-		ChatMessage{Role: RoleUser, Content: displayText, Finished: true},
-		ChatMessage{Role: RoleAssistant},
+		ChatMessage{Role: RoleUser, Content: displayText, Finished: true, TurnID: req.MessageID},
+		ChatMessage{Role: RoleAssistant, TurnID: req.MessageID, Agent: req.Agent, Model: modelLabel},
 	)
 	m.isStreaming = true
 	m.proc.Reset()
@@ -297,17 +314,6 @@ func (m *Model) startPromptWithAgent(displayText, promptText, agent string) tea.
 	m.reasoningBuf.Reset()
 	m.tools = make([]ToolActivity, 0)
 
-	req := runtime.PromptRequest{
-		MessageID: fmt.Sprintf("msg-%d", m.msgCounter),
-		Agent:     agent,
-		Parts:     []runtime.PromptPart{runtime.TextPart{Text: promptText}},
-	}
-	if m.sessionID != "" {
-		if selected, ok := m.sessionModels[m.sessionID]; ok {
-			model := selected
-			req.Model = &model
-		}
-	}
 	m.beginPromptTrace(req)
 	m.msgCounter++
 	m.input = ""
