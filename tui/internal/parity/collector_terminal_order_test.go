@@ -42,10 +42,12 @@ func (r *terminalOrderRuntime) ReplyApproval(context.Context, runtime.ApprovalID
 }
 func (r *terminalOrderRuntime) Cancel(context.Context, runtime.SessionID) error { return nil }
 func (r *terminalOrderRuntime) ListAgents(context.Context) ([]runtime.Agent, error) { return nil, nil }
+func (r *terminalOrderRuntime) ListModels(context.Context) ([]runtime.Model, error) { return nil, nil }
 func (r *terminalOrderRuntime) ListSessions(context.Context) ([]runtime.Session, error) { return nil, nil }
 func (r *terminalOrderRuntime) GetSessionMessages(context.Context, runtime.SessionID) ([]runtime.Message, error) {
 	return nil, nil
 }
+func (r *terminalOrderRuntime) CompactSession(context.Context, runtime.SessionID) error { return nil }
 func (r *terminalOrderRuntime) Capabilities() runtime.RuntimeCapabilities { return runtime.RuntimeCapabilities{} }
 
 func newTerminalOrderRuntime(schedule func(chan runtime.Event)) *terminalOrderRuntime {
