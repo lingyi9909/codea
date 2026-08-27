@@ -27,12 +27,19 @@ func TestBuiltinsAreRegisteredAndFilterable(t *testing.T) {
 	}
 
 	all := reg.Commands()
-	if len(all) != 8 {
-		t.Fatalf("builtins = %d, want 8", len(all))
+	if len(all) != 10 {
+		t.Fatalf("builtins = %d, want 10 for Task 22 + Task 23", len(all))
 	}
+	seen := map[string]bool{}
 	for _, def := range all {
+		seen[def.Name] = true
 		if def.Availability != AvailabilityAvailable {
 			t.Fatalf("/%s availability = %q, want %q", def.Name, def.Availability, AvailabilityAvailable)
+		}
+	}
+	for _, name := range []string{"help", "clear", "status", "sessions", "skills", "agents", "cancel", "doctor", "model", "compact"} {
+		if !seen[name] {
+			t.Fatalf("missing builtin /%s", name)
 		}
 	}
 }
@@ -122,8 +129,6 @@ func TestFutureControlledBuiltinsAreReservedBeforeOwningTaskRegistersThem(t *tes
 		}
 	}
 
-	// The owning later task can still register the controlled name as a true
-	// built-in through the same registry; Task 22 only protects the namespace.
 	reg := NewRegistry()
 	if err := reg.Register(Definition{Name: "review", Source: SourceBuiltin, Action: ActionReview}); err != nil {
 		t.Fatalf("future built-in owner should be allowed to register /review: %v", err)
