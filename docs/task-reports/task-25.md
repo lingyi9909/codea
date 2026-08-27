@@ -1,6 +1,6 @@
 # Task 25 Report — Claude-style Conversation UX & Live Trace
 
-Task 25 implementation is complete and remains **awaiting human acceptance** after the three acceptance blockers identified in the 2026-08-27 review were corrected without expanding Task 25 scope. Task 26 remains pending and must not start before explicit Task 25 human acceptance.
+Task 25 implementation is complete and **human accepted** after the three acceptance blockers identified in the 2026-08-27 review were corrected without expanding Task 25 scope. Task 26 is now authorized to start.
 
 Implementation checkpoint: `efec3c084e43e99b80fcc28f525e583626ccc614`
 
@@ -154,11 +154,12 @@ Exact implementation HEAD `efec3c084e43e99b80fcc28f525e583626ccc614`:
 
 ## Human acceptance
 
-- Accepted: **no — pending re-review**
+- Accepted: **YES**
+- Accepted at: **2026-08-27**
+- Acceptance source: user explicitly stated `验收通过 继续下一个吧` in the project conversation.
 - Automated verification: **PASS**
 - Task Gate: **PASS**
-- Current state: `awaiting_acceptance`
-- Task 26: **pending / not started**
-- Next allowed action: explicit human acceptance of this corrected Task 25 checkpoint.
+- Final state: `completed`
+- Next action: Task 26 V1.1 Integration & Acceptance is authorized to start.
 
-Current status: **AWAITING ACCEPTANCE / GATE PASS / HUMAN ACCEPTANCE PENDING**
+Current status: **COMPLETED / GATE PASS / HUMAN ACCEPTED**
