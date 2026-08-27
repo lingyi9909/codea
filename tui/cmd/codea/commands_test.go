@@ -9,7 +9,7 @@ import (
 
 func TestCodeaHomeDirDefaultAndOverride(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("HOME", home)
+	setUserHomeForTest(t, home)
 	t.Setenv("CODEA_HOME", "")
 	if got := codeaHomeDir(); got != filepath.Join(home, ".codea") { t.Fatalf("default=%s", got) }
 	custom := filepath.Join(t.TempDir(), "custom")
