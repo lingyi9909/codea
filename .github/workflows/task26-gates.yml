@@ -183,12 +183,17 @@ jobs:
           go test ./internal/runtime ./internal/opencode ./internal/command ./internal/app -run 'Task23|RuntimeWorkspace|Model|Compact|Doctor|Status' -count=1
           go test ./internal/command ./internal/app ./internal/agent -run 'Task24|Professional|Debug|AgentWorkspace|AskTool' -count=1
           go test ./internal/command ./internal/app -run 'Task25|ExecutionTrace|ViewMode|LiveTrace' -count=1
-      - name: Full native Windows Go regression and build
+      - name: Full native Windows Go regression
         working-directory: tui
         shell: pwsh
         run: |
           $env:GOTOOLCHAIN='local'
           go test ./... -count=1
+      - name: Full native Windows Go build
+        working-directory: tui
+        shell: pwsh
+        run: |
+          $env:GOTOOLCHAIN='local'
           go build ./...
 
   macos-v11-integration:
