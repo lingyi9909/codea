@@ -16,6 +16,7 @@ func BuiltinCommands() []Definition {
 		{Name: "compact", Description: "Compact the current session context", Category: "runtime", Source: SourceBuiltin, Action: ActionCompact, RequiredCapability: "context_compaction"},
 		{Name: "cancel", Description: "Cancel the current response", Category: "runtime", Source: SourceBuiltin, Action: ActionCancel},
 		{Name: "doctor", Description: "Run the shared Codea Doctor", Category: "runtime", Source: SourceBuiltin, Action: ActionDoctor},
+		{Name: "view", Description: "Set conversation trace view mode", Category: "workspace", Usage: "/view normal|verbose|focus", Source: SourceBuiltin, Action: ActionView},
 		{Name: "review", Description: "Review code with Code Reviewer", Category: "professional", Usage: "/review [target]", Source: SourceBuiltin, Action: ActionPrompt, Agent: "code-reviewer", Template: "$ARGUMENTS"},
 		{Name: "test", Description: "Generate or repair unit tests", Category: "professional", Usage: "/test [target]", Source: SourceBuiltin, Action: ActionPrompt, Agent: "unit-test-generator", Template: "$ARGUMENTS"},
 		{Name: "api-doc", Description: "Generate API documentation", Category: "professional", Usage: "/api-doc [target]", Source: SourceBuiltin, Action: ActionPrompt, Agent: "api-documentation", Template: "$ARGUMENTS"},
