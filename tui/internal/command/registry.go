@@ -27,6 +27,7 @@ const (
 	ActionAgents   Action = "agents"
 	ActionCancel   Action = "cancel"
 	ActionDoctor   Action = "doctor"
+	ActionView     Action = "view"
 	ActionPrompt   Action = "prompt"
 	// ActionReview is reserved for callers/tests that register a professional
 	// action. Task 22 does not register /review as a built-in; Task 24 owns that.
@@ -110,9 +111,8 @@ type Registry struct {
 }
 
 // controlledBuiltinNames reserves the full approved V1.1 controlled namespace.
-// Task 22 registers only its eight built-ins; Task 23/24 will register their own
-// commands later. Reserving those names now prevents Enterprise/Project Markdown
-// from occupying a controlled name before the owning task is implemented.
+// Task 22 registers only its eight built-ins; later V1.1 tasks register their
+// controlled commands without allowing Enterprise/Project Markdown collisions.
 var controlledBuiltinNames = map[string]struct{}{
 	"help": {}, "clear": {}, "status": {}, "sessions": {}, "skills": {},
 	"agents": {}, "cancel": {}, "doctor": {},
