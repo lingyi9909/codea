@@ -34,8 +34,11 @@ func TestStepFinishedFinalizesReasoningWithoutAnswer(t *testing.T) {
 	if len(snap.Blocks) != 1 || snap.Blocks[0].State != reasoning.BlockCompleted {
 		t.Errorf("block state = %+v, want a single completed block", snap.Blocks)
 	}
-	if m.reasoningDuration <= 0 {
-		t.Errorf("reasoningDuration = %v, want > 0 after step.finished", m.reasoningDuration)
+	// An immediate start/end pair may legitimately measure 0 on platforms with
+	// coarser wall-clock resolution (notably Windows). Exact positive duration
+	// behavior is covered deterministically by reasoning.TestTrackerDurationCorrect.
+	if m.reasoningDuration < 0 {
+		t.Errorf("reasoningDuration = %v, want >= 0 after step.finished", m.reasoningDuration)
 	}
 	if m.isStreaming {
 		t.Error("isStreaming = true, want false after step.finished")
