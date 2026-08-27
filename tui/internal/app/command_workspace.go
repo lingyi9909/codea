@@ -241,7 +241,7 @@ func (m *Model) appendInfo(content string) {
 
 func (m *Model) activeAgent(requested string) string {
 	requested = strings.TrimSpace(requested)
-	if requested != "" && requested != "general" {
+	if requested != "" {
 		return requested
 	}
 	active := strings.TrimSpace(m.currentAgent)
@@ -266,7 +266,6 @@ func (m *Model) startPrompt(displayText, promptText, agent string) tea.Cmd {
 	m.streamBuf.Reset()
 	m.reasoningBuf.Reset()
 	m.tools = make([]ToolActivity, 0)
-	m.currentAgent = agent
 
 	req := runtime.PromptRequest{
 		MessageID: fmt.Sprintf("msg-%d", m.msgCounter),
