@@ -147,6 +147,9 @@ func (m *Model) submitCommand(raw string) tea.Cmd {
 		return m.startCommandPrompt(raw, out.Prompt, agent)
 	case command.OutcomeAction:
 		m.input = ""
+		if out.Action == command.ActionView {
+			return m.setViewMode(out.Arguments)
+		}
 		return m.executeWorkspaceAction(out.Action)
 	default:
 		m.input = ""
@@ -213,6 +216,19 @@ func (m *Model) executeWorkspaceAction(action command.Action) tea.Cmd {
 		return DoctorServiceCmd(m.doctorService)
 	default:
 		m.appendInfo("Command error: unsupported workspace action " + string(action))
+		return nil
+	}
+}
+
+func (m *Model) setViewMode(raw string) tea.Cmd {
+	mode := ViewMode(strings.ToLower(strings.TrimSpace(raw)))
+	switch mode {
+	case ViewNormal, ViewVerbose, ViewFocus:
+		m.viewMode = mode
+		m.markDirty()
+		return nil
+	default:
+		m.appendInfo("Usage: /view normal|verbose|focus")
 		return nil
 	}
 }
@@ -292,6 +308,7 @@ func (m *Model) startPromptWithAgent(displayText, promptText, agent string) tea.
 			req.Model = &model
 		}
 	}
+	m.beginPromptTrace(req)
 	m.msgCounter++
 	m.input = ""
 	m.startTaskMetric(req.Agent)
