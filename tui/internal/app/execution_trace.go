@@ -22,6 +22,7 @@ const (
 	TraceApproval  TraceCategory = "approval"
 	TraceAssistant TraceCategory = "assistant"
 	TraceSubagent  TraceCategory = "subagent"
+	TraceRuntime   TraceCategory = "runtime"
 )
 
 // TraceStatus describes the truthful lifecycle of one semantic invocation.
@@ -77,10 +78,7 @@ func (t *executionTrace) Entries() []ExecutionTraceEntry {
 	for i, entry := range t.entries {
 		out[i] = entry
 		if entry.Metadata != nil {
-			out[i].Metadata = make(map[string]string, len(entry.Metadata))
-			for k, v := range entry.Metadata {
-				out[i].Metadata[k] = v
-			}
+			out[i].Metadata = cloneTraceMetadata(entry.Metadata)
 		}
 	}
 	return out
@@ -234,6 +232,7 @@ func (m *Model) traceRuntimeEvent(ev runtime.Event) {
 	case eventTypeStepFinished:
 		m.finishActiveTurnTrace(TraceSuccess)
 	case eventTypeSessionError, eventTypeRuntimeError:
+		m.traceRuntimeFailure(ev)
 		m.finishActiveTurnTrace(TraceFailed)
 	}
 }
@@ -253,8 +252,8 @@ func (m *Model) traceTool(ev runtime.Event, status TraceStatus, finished bool) {
 	}
 	entry := ExecutionTraceEntry{
 		Category:      TraceTool,
-		Title:         strings.TrimSpace(ev.Tool.Name),
-		Detail:        strings.TrimSpace(ev.Content),
+		Title:         safeTraceText(ev.Tool.Name),
+		Detail:        safeTraceDetail(ev),
 		Status:        status,
 		InvocationKey: key,
 		SessionID:     runtime.SessionID(ev.SessionID),
@@ -281,14 +280,18 @@ func (m *Model) traceApprovalRequested(ev runtime.Event) {
 	if approvalID != "" {
 		key = "approval:" + approvalID
 	}
-	title := strings.TrimSpace(ev.Approval.Permission)
+	title := safeTraceText(ev.Approval.Permission)
 	if title == "" {
 		title = "unavailable"
+	}
+	detail := safeTraceText(ev.Approval.Command)
+	if ev.RawSensitivity == runtime.SensitivitySensitive {
+		detail = "[sensitive command hidden]"
 	}
 	key = m.executionTrace.upsert(ExecutionTraceEntry{
 		Category:      TraceApproval,
 		Title:         title,
-		Detail:        strings.TrimSpace(ev.Approval.Command),
+		Detail:        detail,
 		Status:        TraceWaiting,
 		InvocationKey: key,
 		SessionID:     runtime.SessionID(ev.SessionID),
@@ -298,6 +301,30 @@ func (m *Model) traceApprovalRequested(ev runtime.Event) {
 	if m.activeTurnID != "" {
 		m.executionTrace.setStatus("turn:"+m.activeTurnID+":working", TraceWaiting, false)
 	}
+}
+
+func (m *Model) traceRuntimeFailure(ev runtime.Event) {
+	key := ""
+	if strings.TrimSpace(ev.ID) != "" {
+		key = "runtime:" + strings.TrimSpace(ev.ID)
+	}
+	detail := ""
+	if ev.Error != nil {
+		detail = safeTraceText(ev.Error.Message)
+	}
+	if ev.RawSensitivity == runtime.SensitivitySensitive {
+		detail = "[sensitive runtime detail hidden]"
+	}
+	m.executionTrace.upsert(ExecutionTraceEntry{
+		Category:      TraceRuntime,
+		Title:         "Runtime",
+		Detail:        detail,
+		Status:        TraceFailed,
+		InvocationKey: key,
+		SessionID:     runtime.SessionID(ev.SessionID),
+		TurnID:        m.activeTurnID,
+		FinishedAt:    time.Now(),
+	})
 }
 
 func (m *Model) finishActiveTurnTrace(status TraceStatus) {
@@ -312,6 +339,7 @@ func (m *Model) traceStructuredMetadata(ev runtime.Event) {
 	if len(ev.Metadata) == 0 {
 		return
 	}
+	status, finished := structuredTraceStatus(ev.Type)
 	for _, spec := range []struct {
 		category TraceCategory
 		nameKey  string
@@ -321,7 +349,7 @@ func (m *Model) traceStructuredMetadata(ev runtime.Event) {
 		{TracePlugin, "plugin", "pluginInvocationID"},
 		{TraceSubagent, "subagent", "subagentInvocationID"},
 	} {
-		name := strings.TrimSpace(ev.Metadata[spec.nameKey])
+		name := safeTraceText(ev.Metadata[spec.nameKey])
 		if name == "" {
 			continue
 		}
@@ -330,13 +358,86 @@ func (m *Model) traceStructuredMetadata(ev runtime.Event) {
 		if id != "" {
 			key = string(spec.category) + ":" + id
 		}
-		m.executionTrace.upsert(ExecutionTraceEntry{
+		key = m.executionTrace.upsert(ExecutionTraceEntry{
 			Category:      spec.category,
 			Title:         name,
-			Status:        TraceRunning,
+			Status:        status,
 			InvocationKey: key,
 			SessionID:     runtime.SessionID(ev.SessionID),
 			TurnID:        m.activeTurnID,
 		})
+		if finished {
+			m.executionTrace.setStatus(key, status, true)
+		}
 	}
+}
+
+func structuredTraceStatus(eventType runtime.EventType) (TraceStatus, bool) {
+	switch eventType {
+	case eventTypeToolSuccess, eventTypeStepFinished:
+		return TraceSuccess, true
+	case eventTypeToolFailed, eventTypeSessionError, eventTypeRuntimeError:
+		return TraceFailed, true
+	case eventTypeApprovalRequested:
+		return TraceWaiting, false
+	default:
+		return TraceRunning, false
+	}
+}
+
+// safeTraceDetail deliberately ignores Event.Content and Raw. Those fields may
+// contain model/tool payloads. Task 25 renders only structured Codea metadata
+// summaries, then truncates/redacts them again at the presentation boundary.
+func safeTraceDetail(ev runtime.Event) string {
+	if len(ev.Metadata) == 0 {
+		return ""
+	}
+	keys := []string{"target"}
+	if ev.RawSensitivity != runtime.SensitivitySensitive {
+		keys = append(keys, "inputSummary", "outputSummary", "errorSummary")
+	}
+	parts := make([]string, 0, len(keys))
+	for _, key := range keys {
+		if value := safeTraceText(ev.Metadata[key]); value != "" {
+			parts = append(parts, value)
+		}
+	}
+	return strings.Join(parts, " · ")
+}
+
+func safeTraceText(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return ""
+	}
+	value = redactCommonSecret(value)
+	runes := []rune(value)
+	if len(runes) > 240 {
+		value = string(runes[:240]) + "…"
+	}
+	return value
+}
+
+func redactCommonSecret(value string) string {
+	lower := strings.ToLower(value)
+	markers := []string{"api_key=", "api-key=", "apikey=", "password=", "token=", "secret=", "authorization:", "bearer ", "ghp_", "sk-"}
+	for _, marker := range markers {
+		for {
+			idx := strings.Index(lower, marker)
+			if idx < 0 {
+				break
+			}
+			start := idx + len(marker)
+			end := start
+			for end < len(value) && value[end] != ' ' && value[end] != '\t' && value[end] != '\n' && value[end] != '\r' && value[end] != ',' && value[end] != ';' {
+				end++
+			}
+			value = value[:start] + "***" + value[end:]
+			lower = strings.ToLower(value)
+			if end == start {
+				break
+			}
+		}
+	}
+	return value
 }
