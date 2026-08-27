@@ -27,8 +27,8 @@ func TestBuiltinsAreRegisteredAndFilterable(t *testing.T) {
 	}
 
 	all := reg.Commands()
-	if len(all) != 14 {
-		t.Fatalf("builtins = %d, want 14 for Task 22 + Task 23 + Task 24", len(all))
+	if len(all) != 15 {
+		t.Fatalf("builtins = %d, want 15 through Task 25", len(all))
 	}
 	seen := map[string]bool{}
 	for _, def := range all {
@@ -37,7 +37,7 @@ func TestBuiltinsAreRegisteredAndFilterable(t *testing.T) {
 			t.Fatalf("/%s availability = %q, want %q", def.Name, def.Availability, AvailabilityAvailable)
 		}
 	}
-	for _, name := range []string{"help", "clear", "status", "sessions", "skills", "agents", "cancel", "doctor", "model", "compact", "review", "test", "api-doc", "debug"} {
+	for _, name := range []string{"help", "clear", "status", "sessions", "skills", "agents", "cancel", "doctor", "model", "compact", "view", "review", "test", "api-doc", "debug"} {
 		if !seen[name] {
 			t.Fatalf("missing builtin /%s", name)
 		}
@@ -120,6 +120,7 @@ func TestFutureControlledBuiltinsAreReservedBeforeOwningTaskRegistersThem(t *tes
 	for _, def := range []Definition{
 		{Name: "review", Source: SourceEnterprise, Action: ActionPrompt},
 		{Name: "project-model", Aliases: []string{"model"}, Source: SourceProject, Action: ActionPrompt},
+		{Name: "project-view", Aliases: []string{"view"}, Source: SourceProject, Action: ActionPrompt},
 	} {
 		reg := NewRegistry()
 		err := reg.Register(def)
@@ -131,7 +132,10 @@ func TestFutureControlledBuiltinsAreReservedBeforeOwningTaskRegistersThem(t *tes
 
 	reg := NewRegistry()
 	if err := reg.Register(Definition{Name: "review", Source: SourceBuiltin, Action: ActionReview}); err != nil {
-		t.Fatalf("future built-in owner should be allowed to register /review: %v", err)
+		t.Fatalf("controlled built-in owner should be allowed to register /review: %v", err)
+	}
+	if err := reg.Register(Definition{Name: "view", Source: SourceBuiltin, Action: ActionView}); err != nil {
+		t.Fatalf("controlled built-in owner should be allowed to register /view: %v", err)
 	}
 }
 
