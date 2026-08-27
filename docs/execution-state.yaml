@@ -3,43 +3,21 @@ project: codea-v1.1
 plan: docs/superpowers/specs/2026-08-26-codea-v1.1-agent-workspace-design.md
 taskOrder: ["0", "1", "2", "2A", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26"]
 current:
-  task: "23"
-  step: 11
-  status: awaiting_acceptance
-  nextAction: 等待用户验收 Task 23 Runtime Workspace；只有人工验收通过后才开始 Task 24 Professional Agent Workspace。
+  task: "24"
+  step: 1
+  status: in_progress
+  nextAction: 开始 Task 24 Professional Agent Workspace；先以 TDD 锁定 /review、/test、/api-doc、/debug 的 deterministic Agent routing，再新增 Debug Agent/Skill 并完成 session-safe Agent switching 与回归验证。
 checkpoint:
-  commit: 7dca79663bfefb45c144d7f8d03864d739d52996
-  updatedAt: "2026-08-27T01:34:00Z"
+  commit: c1e684ecb50feddf642bc8b683a55067d6cc62cf
+  updatedAt: "2026-08-27T02:00:00Z"
 verification:
-  status: pass
-  commands:
-    - Task 23 Runtime Workspace Gates run ID 33030314432 / source 7dca79663bfefb45c144d7f8d03864d739d52996
-    - bash scripts/check-execution-state.sh PASS
-    - Task 23 focused Runtime/OpenCode/Command/Application tests PASS
-    - Architecture vendor-boundary tests PASS
-    - Full go test ./... -count=1 PASS
-    - go vet ./... PASS
-    - go build ./... PASS
-    - Windows x64 cross-build PASS
-    - Windows Task 23 focused tests PASS
-    - OpenCode v1.18.11 /provider and /session/:id/summarize contracts cross-checked against locked upstream source
+  status: not_run
+  commands: []
   errorSummary: ""
-  recoveryAdvice: "Task 23 已具备 fresh Gate、真实 OpenCode v1.18.11 contract 与 composition-root 证据，当前只等待人工验收；不得提前启动 Task 24。"
+  recoveryAdvice: "Task 23 已人工验收；Task 24 正在开发。不得开始 Task 25，直到 Task 24 fresh Gate 通过并完成人工验收。"
 taskGate:
-  status: pass
-  gateItems:
-    vendorDTOZeroLeakage: pass
-    realRuntimeModelListing: pass
-    sessionScopedModelSelection: pass
-    selectedModelPromptApplication: pass
-    realSameSessionCompaction: pass
-    unsupportedCompactionFailClosed: pass
-    sessionTransientStateIsolation: pass
-    sharedDoctorService: pass
-    sanitizedRuntimeStatus: pass
-    openCodeV11811AdapterRegression: pass
-    futureRuntimeAdapterBoundary: pass
-    windowsRuntimeWorkspace: pass
+  status: not_evaluated
+  gateItems: {}
 humanAcceptance:
   accepted: false
 task17Gate:
@@ -72,7 +50,7 @@ tasks:
   "20": {status: completed, completedSteps: [], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: e2a97095acc58dc0c95c4a091738181504d35f42, report: docs/task-reports/task-20.md}
   "21": {status: completed, completedSteps: [1, 2, 3], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: 62c0c7038a6324c115a1be764379e83b21898090, report: docs/task-reports/task-21.md}
   "22": {status: completed, completedSteps: [1, 2, 3, 4, 5, 6, 7, 8], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: 0820756365d3733e26ec6ec29c0c86f8d7ad4489, report: docs/task-reports/task-22.md}
-  "23": {status: awaiting_acceptance, completedSteps: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11], verificationStatus: pass, taskGateStatus: pass, humanAccepted: false, checkpoint: 7dca79663bfefb45c144d7f8d03864d739d52996, report: docs/task-reports/task-23.md}
-  "24": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false}
+  "23": {status: completed, completedSteps: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: 7dca79663bfefb45c144d7f8d03864d739d52996, report: docs/task-reports/task-23.md}
+  "24": {status: in_progress, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false}
   "25": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false}
   "26": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false}
