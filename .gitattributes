@@ -1,0 +1,3 @@
+# Generated OpenCode DTOs are compared byte-for-byte with go/format output.
+# Keep this file LF on every checkout, including native Windows CI.
+tui/internal/opencode/dto.go text eol=lf
