@@ -87,8 +87,8 @@ func TestTask24AgentWorkspaceSelectsFromRuntimeList(t *testing.T) {
 		{Name: "code-reviewer", Mode: "enterprise-controlled"},
 	}})
 
-	m.handleKey(tea.KeyMsg{Type: tea.KeyDown})
-	m.handleKey(tea.KeyMsg{Type: tea.KeyEnter})
+	_, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	_, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 
 	if m.currentAgent != "code-reviewer" {
 		t.Fatalf("currentAgent = %q, want runtime-selected code-reviewer", m.currentAgent)
@@ -104,8 +104,8 @@ func TestTask24AgentWorkspaceEscapeKeepsCurrentAgent(t *testing.T) {
 		{Name: "api-documentation", Mode: "enterprise-controlled"},
 	}})
 
-	m.handleKey(tea.KeyMsg{Type: tea.KeyDown})
-	m.handleKey(tea.KeyMsg{Type: tea.KeyEsc})
+	_, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	_, _ = m.Update(tea.KeyMsg{Type: tea.KeyEsc})
 
 	if m.currentAgent != "unit-test-generator" {
 		t.Fatalf("currentAgent = %q, Esc must keep unit-test-generator", m.currentAgent)
