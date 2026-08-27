@@ -29,7 +29,7 @@ func TestStartWithSpacesInPaths(t *testing.T) {
 		}
 	}
 
-	bin := filepath.Join(binDir, "fake opencode with spaces")
+	bin := filepath.Join(binDir, fakeExecutableName("fake opencode with spaces"))
 	data, err := os.ReadFile(fakeOpenCodeBin)
 	if err != nil {
 		t.Fatalf("read fake binary: %v", err)
