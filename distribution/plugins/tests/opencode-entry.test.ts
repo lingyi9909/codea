@@ -83,6 +83,35 @@ describe("OpenCode entry — native tool hooks", () => {
     }
   });
 
+  test("Task24 native write/edit pass Codea path and DLP guards before approval/execution", async () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "codea-entry-"));
+    const root = path.join(tmp, "project");
+    fs.mkdirSync(path.join(root, "src"), { recursive: true });
+    try {
+      const hooks = await plugin.server(makeInput(root), { auditLog: path.join(tmp, "audit.log") });
+      const before = hooks["tool.execute.before"];
+      expect(typeof before).toBe("function");
+
+      await expect(
+        before!({ tool: "write", sessionID: "s", callID: "w1" }, { args: { filePath: "../../outside.txt", content: "safe" } }),
+      ).rejects.toThrow(/native-path:outside-project/);
+
+      await expect(
+        before!({ tool: "edit", sessionID: "s", callID: "e1" }, { args: { filePath: ".env", oldString: "a", newString: "b" } }),
+      ).rejects.toThrow(/native-path:sensitive-file:\.env/);
+
+      await expect(
+        before!({ tool: "write", sessionID: "s", callID: "w2" }, { args: { filePath: "src/Foo.java", content: "api_key=supersecret123" } }),
+      ).rejects.toThrow(/dlp-blocked: api-key/);
+
+      await expect(
+        before!({ tool: "edit", sessionID: "s", callID: "e2" }, { args: { filePath: "src/Foo.java", oldString: "old", newString: "new" } }),
+      ).resolves.toBeUndefined();
+    } finally {
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
   test("tool.execute.before still denies dangerous bash commands", async () => {
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "codea-entry-"));
     const root = path.join(tmp, "project");
