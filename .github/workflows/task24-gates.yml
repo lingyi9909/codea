@@ -1,0 +1,71 @@
+name: Task 24 Professional Agent Workspace Gates
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [develop]
+    paths:
+      - 'tui/internal/command/**'
+      - 'tui/internal/app/**'
+      - 'tui/internal/agent/**'
+      - 'tui/tests/fixtures/fake-runtime/**'
+      - 'tui/tests/architecture/**'
+      - 'distribution/agents/**'
+      - 'distribution/skills/**'
+      - 'distribution/config/opencode/permissions.json'
+      - 'tests/task24-debug-agent.sh'
+      - 'scripts/check-execution-state.sh'
+      - 'docs/execution-state.yaml'
+      - 'docs/superpowers/plans/2026-08-27-codea-v1.1-task24-professional-agent-workspace-plan.md'
+      - '.github/workflows/task24-gates.yml'
+
+concurrency:
+  group: task24-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux-professional-workspace:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.5'
+          cache-dependency-path: tui/go.sum
+      - name: Validate execution state
+        run: bash scripts/check-execution-state.sh
+      - name: Task 24 focused tests
+        working-directory: tui
+        run: |
+          GOTOOLCHAIN=local go test ./internal/command ./internal/app ./internal/agent -run 'Task24|Professional|Debug|AgentWorkspace|AskTool' -count=1
+      - name: Debug Agent contract
+        run: bash tests/task24-debug-agent.sh
+      - name: Architecture boundary
+        working-directory: tui
+        run: GOTOOLCHAIN=local go test ./tests/architecture -count=1
+      - name: Full Go regression
+        working-directory: tui
+        run: GOTOOLCHAIN=local go test ./... -count=1
+      - name: Vet and build
+        working-directory: tui
+        run: |
+          GOTOOLCHAIN=local go vet ./...
+          GOTOOLCHAIN=local go build ./...
+      - name: Windows x64 cross-build
+        working-directory: tui
+        run: GOOS=windows GOARCH=amd64 GOTOOLCHAIN=local go build ./...
+
+  windows-professional-workspace:
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.5'
+          cache-dependency-path: tui/go.sum
+      - name: Task 24 focused tests on Windows
+        working-directory: tui
+        shell: pwsh
+        run: |
+          $env:GOTOOLCHAIN='local'
+          go test ./internal/command ./internal/app ./internal/agent -run 'Task24|Professional|Debug|AgentWorkspace|AskTool' -count=1
