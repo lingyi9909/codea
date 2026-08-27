@@ -11,7 +11,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-// View returns the cached render, rebuilding only when dirty. The ~50ms tick
+// View returns the cached render, rebuilding only when dirty. The bounded tick
 // flushes buffered streaming deltas and marks the model dirty; high-frequency
 // answer/reasoning deltas are buffered without marking dirty, so a token burst
 // does not trigger a full re-render per token.
@@ -43,6 +43,12 @@ func (m *Model) renderView() string {
 	b.WriteString("\n")
 
 	if m.permission.Visible() {
+		// Keep the semantic conversation/trace visible behind the blocking
+		// approval so the user can see exactly what is waiting and why.
+		if body := m.renderBody(); body != "" {
+			b.WriteString(body)
+			b.WriteString("\n\n")
+		}
 		b.WriteString(m.permission.View())
 		if m.approvalErr != "" {
 			b.WriteString("\n\n")
@@ -142,13 +148,83 @@ func (m *Model) renderBody() string {
 	for _, msg := range m.messages {
 		lines = append(lines, m.renderMessage(msg))
 	}
-	if r := m.renderReasoning(); r != "" {
-		lines = append(lines, theme.MutedStyle().Render(r))
+	if m.viewMode != ViewFocus {
+		if r := m.renderReasoning(); r != "" {
+			lines = append(lines, theme.MutedStyle().Render(r))
+		}
 	}
-	if tools := m.renderTools(); tools != "" {
+	if trace := m.renderExecutionTrace(); trace != "" {
+		lines = append(lines, trace)
+	} else if tools := m.renderTools(); tools != "" {
+		// Legacy fallback for tests/older states that predate a semantic trace.
 		lines = append(lines, tools)
 	}
 	return strings.Join(lines, "\n")
+}
+
+func (m *Model) renderExecutionTrace() string {
+	entries := m.executionTrace.Entries()
+	if len(entries) == 0 {
+		return ""
+	}
+	lines := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		if !m.traceEntryVisible(entry) {
+			continue
+		}
+		label := traceCategoryLabel(entry.Category)
+		if entry.Category != TraceWorking && strings.TrimSpace(entry.Title) != "" {
+			label += " · " + entry.Title
+		}
+		line := fmt.Sprintf("%s  [%s]", label, entry.Status)
+		if m.viewMode == ViewVerbose && strings.TrimSpace(entry.Detail) != "" {
+			line += "  " + strings.TrimSpace(entry.Detail)
+		}
+		if entry.Category == TraceApproval || entry.Status == TraceFailed || entry.Status == TraceDenied {
+			line = theme.AccentStyle().Render(line)
+		} else {
+			line = theme.MutedStyle().Render(line)
+		}
+		lines = append(lines, line)
+	}
+	return strings.Join(lines, "\n")
+}
+
+func (m *Model) traceEntryVisible(entry ExecutionTraceEntry) bool {
+	switch m.viewMode {
+	case ViewVerbose:
+		return true
+	case ViewFocus:
+		return entry.Category == TraceApproval || entry.Status == TraceFailed || entry.Status == TraceDenied
+	default:
+		// Normal is balanced: keep execution structure but omit verbose detail.
+		return true
+	}
+}
+
+func traceCategoryLabel(category TraceCategory) string {
+	switch category {
+	case TraceUser:
+		return "User"
+	case TraceWorking:
+		return "Working"
+	case TraceAgent:
+		return "Agent"
+	case TraceTool:
+		return "Tool"
+	case TraceSkill:
+		return "Skill"
+	case TracePlugin:
+		return "Plugin"
+	case TraceApproval:
+		return "Approval"
+	case TraceAssistant:
+		return "Assistant"
+	case TraceSubagent:
+		return "Subagent"
+	default:
+		return "Trace"
+	}
 }
 
 func (m *Model) renderMessage(msg ChatMessage) string {
@@ -167,11 +243,16 @@ func (m *Model) renderHeader() string {
 	if agent == "" {
 		agent = "general"
 	}
-	return fmt.Sprintf("Codea  %s %s  ·  Agent: %s", statusDot(m.runtimeStatus), statusLabel(m.runtimeStatus), agent)
+	return fmt.Sprintf("Codea  %s %s  ·  Agent: %s  ·  View: %s", statusDot(m.runtimeStatus), statusLabel(m.runtimeStatus), agent, m.viewMode)
 }
 
 func (m *Model) renderStatusLine() string {
 	if m.isStreaming {
+		if m.activeTurnID != "" {
+			if working, ok := m.executionTrace.Entry("turn:" + m.activeTurnID + ":working"); ok && working.Status == TraceWaiting {
+				return "◌ Waiting for approval"
+			}
+		}
 		return "◌ Working"
 	}
 	return "Ready"
