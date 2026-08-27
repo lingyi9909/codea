@@ -9,9 +9,10 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-// refreshInterval is the ~50ms merge-refresh cadence. It coalesces
-// high-frequency streaming redraws and keeps live duration/status text moving.
-const refreshInterval = 50 * time.Millisecond
+// refreshInterval is the 25ms merge-refresh cadence. It stays inside Task 25's
+// 16–33ms bounded window, coalesces high-frequency streaming redraws, and keeps
+// live lifecycle/status text responsive without repainting per token.
+const refreshInterval = 25 * time.Millisecond
 
 // SubscribeEvents calls AgentRuntime.Subscribe and returns either the event
 // channel (wrapped in subscribedMsg) or a subscribeErrMsg. It never blocks the
