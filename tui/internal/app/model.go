@@ -49,6 +49,16 @@ type ToolActivity struct {
 	Status ToolStatus
 }
 
+// ViewMode controls only the derived Task 25 conversation presentation. The
+// underlying execution trace remains unchanged across modes.
+type ViewMode string
+
+const (
+	ViewNormal  ViewMode = "normal"
+	ViewVerbose ViewMode = "verbose"
+	ViewFocus   ViewMode = "focus"
+)
+
 // Model is the Bubble Tea application state. All mutation happens inside
 // Update (single goroutine), so no mutex is required.
 type Model struct {
@@ -84,6 +94,14 @@ type Model struct {
 	reasoningExpanded bool
 
 	tools []ToolActivity
+
+	// Task 25 semantic trace is Codea-owned application state. Runtime events and
+	// prompt state update this truth; viewMode only changes its derived rendering.
+	executionTrace         executionTrace
+	viewMode               ViewMode
+	activeTurnID           string
+	activeApprovalTraceKey string
+	pendingApprovalDecision runtime.ApprovalDecision
 
 	// commandRegistry owns terminal-independent parsing/execution definitions;
 	// commandPalette is only presentation/navigation state.
@@ -164,6 +182,8 @@ func NewModel(client runtime.AgentRuntime) *Model {
 		messages:        make([]ChatMessage, 0),
 		proc:            reasoning.NewProcessor(),
 		tools:           make([]ToolActivity, 0),
+		executionTrace:  newExecutionTrace(),
+		viewMode:        ViewNormal,
 		commandRegistry: defaultCommandRegistry(),
 		sessionModels:   make(map[runtime.SessionID]runtime.ModelRef),
 		currentAgent:    "general",
