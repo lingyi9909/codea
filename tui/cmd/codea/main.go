@@ -92,9 +92,21 @@ func run() error {
 	}
 	defer cleanup()
 
+	doctorService, err := newDoctorService(adapter, nil, doctorRuntimeURL())
+	if err != nil {
+		return fmt.Errorf("create doctor service: %w", err)
+	}
+
 	model := app.NewModel(adapter)
 	model.SetCommandRegistry(commandRegistry)
 	model.SetSkillManager(skill.NewManager(roots, store, targetDir, projectDir, adapter, policy))
+	model.SetDoctorService(doctorService)
+	model.SetWorkspaceInfo(app.WorkspaceInfo{
+		CodeaVersion:    installedCodeaVersion(),
+		RuntimeProvider: "OpenCode",
+		Project:         projectDir,
+		SkillMode:       string(mode),
+	})
 	// Pilot metrics are deliberately best-effort. An unwritable metrics location
 	// must never prevent Codea or the Runtime from starting.
 	if collector, metricsErr := app.NewMetricsCollector(projectDir, filepath.Join(codeaHomeDir(), "metrics")); metricsErr == nil {
