@@ -11,6 +11,8 @@ WRITE = ROOT / "scripts" / "write-release-gate.py"
 MERGE = ROOT / "scripts" / "merge-release-gates.py"
 DERIVE_NATIVE = ROOT / "scripts" / "derive-native-release-gates.py"
 GENERATE_CLOSEOUT = ROOT / "scripts" / "generate-release-closeout.py"
+RELEASE_PARITY = ROOT / "scripts" / "run-release-parity-gates.sh"
+DUAL_PARITY = ROOT / "scripts" / "run-dual-runtime-parity.sh"
 GATES = ["G1","G2","G2.1","G3","G4","G5","G6","G7","G8","G9","G10","G11","G12","G12.1","G13","G14","G15"]
 
 
@@ -175,6 +177,18 @@ class ReleaseGateToolsTest(unittest.TestCase):
             self.assertIn("g15", (p.stdout + p.stderr).lower())
             self.assertFalse(checklist.exists())
             self.assertFalse(report.exists())
+
+    def test_real_runtime_release_subflows_have_hard_deadlines_and_progress_labels(self):
+        text = RELEASE_PARITY.read_text()
+        self.assertIn("run_bounded", text)
+        self.assertIn("timeout --foreground", text)
+        for label in ("G6-G7", "G8", "G11-G13", "G12.1"):
+            self.assertIn(f'run_bounded "{label}"', text)
+
+    def test_dual_runtime_parity_runner_has_hard_deadline(self):
+        text = DUAL_PARITY.read_text()
+        self.assertIn("PARITY_RUNNER_TIMEOUT_SECONDS", text)
+        self.assertIn('timeout --foreground "$parity_runner_timeout_seconds" go run ./cmd/parity-runner', text)
 
 
 if __name__ == "__main__":
