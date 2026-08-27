@@ -109,9 +109,13 @@ func DoctorServiceCmd(service *doctor.Service) tea.Cmd {
 	}
 }
 
-// handleRuntimeWorkspaceMessage centralizes Task 23 async results so the main
-// Bubble Tea Update loop only needs one Codea-owned hook.
+// handleRuntimeWorkspaceMessage centralizes Task 23/24 async workspace results
+// so the main Bubble Tea Update loop only needs one Codea-owned hook.
 func (m *Model) handleRuntimeWorkspaceMessage(msg tea.Msg) (bool, tea.Cmd) {
+	if handled, cmd := m.handleProfessionalWorkspaceMessage(msg); handled {
+		return true, cmd
+	}
+
 	switch msg := msg.(type) {
 	case listModelsResultMsg:
 		if msg.sessionID == "" || msg.sessionID != m.sessionID {
