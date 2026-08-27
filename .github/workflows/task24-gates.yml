@@ -13,6 +13,10 @@ on:
       - 'distribution/agents/**'
       - 'distribution/skills/**'
       - 'distribution/config/opencode/permissions.json'
+      - 'distribution/plugins/src/**'
+      - 'distribution/plugins/tests/**'
+      - 'distribution/plugins/package.json'
+      - 'distribution/plugins/bun.lock'
       - 'tests/task24-debug-agent.sh'
       - 'scripts/check-execution-state.sh'
       - 'docs/execution-state.yaml'
@@ -32,12 +36,21 @@ jobs:
         with:
           go-version: '1.26.5'
           cache-dependency-path: tui/go.sum
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.3.14'
       - name: Validate execution state
         run: bash scripts/check-execution-state.sh
-      - name: Task 24 focused tests
+      - name: Task 24 focused Go tests
         working-directory: tui
         run: |
           GOTOOLCHAIN=local go test ./internal/command ./internal/app ./internal/agent -run 'Task24|Professional|Debug|AgentWorkspace|AskTool' -count=1
+      - name: Install enterprise plugin dependencies
+        working-directory: distribution/plugins
+        run: bun install --frozen-lockfile
+      - name: Task 24 native mutation security
+        working-directory: distribution/plugins
+        run: bun test tests/opencode-entry.test.ts
       - name: Debug Agent contract
         run: bash tests/task24-debug-agent.sh
       - name: Architecture boundary
@@ -46,6 +59,9 @@ jobs:
       - name: Full Go regression
         working-directory: tui
         run: GOTOOLCHAIN=local go test ./... -count=1
+      - name: Enterprise plugin regression and build
+        working-directory: distribution/plugins
+        run: bun run check
       - name: Vet and build
         working-directory: tui
         run: |
