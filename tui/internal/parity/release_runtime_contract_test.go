@@ -25,7 +25,7 @@ func TestV1AgentSelectionUsesNativeBuildAgent(t *testing.T) {
 }
 
 type orderedEventRuntime struct {
-	events []runtime.Event
+	events    []runtime.Event
 	lastAgent string
 }
 
@@ -41,8 +41,10 @@ func (r *orderedEventRuntime) Subscribe(ctx context.Context) (<-chan runtime.Eve
 func (r *orderedEventRuntime) ReplyApproval(context.Context, runtime.ApprovalID, runtime.ApprovalReply) error { return nil }
 func (r *orderedEventRuntime) Cancel(context.Context, runtime.SessionID) error { return nil }
 func (r *orderedEventRuntime) ListAgents(context.Context) ([]runtime.Agent, error) { return nil, nil }
+func (r *orderedEventRuntime) ListModels(context.Context) ([]runtime.Model, error) { return nil, nil }
 func (r *orderedEventRuntime) ListSessions(context.Context) ([]runtime.Session, error) { return nil, nil }
 func (r *orderedEventRuntime) GetSessionMessages(context.Context, runtime.SessionID) ([]runtime.Message, error) { return nil, nil }
+func (r *orderedEventRuntime) CompactSession(context.Context, runtime.SessionID) error { return nil }
 func (r *orderedEventRuntime) Capabilities() runtime.RuntimeCapabilities { return runtime.RuntimeCapabilities{} }
 func (r *orderedEventRuntime) LastPrompt() (string, bool) { return r.lastAgent, r.lastAgent != "" }
 
