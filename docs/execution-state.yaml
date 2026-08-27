@@ -6,16 +6,18 @@ current:
   task: "26"
   step: 5
   status: awaiting_acceptance
-  nextAction: 等待用户人工验收 Task 26 V1.1 Integration & Acceptance；自动化集成 Gate 已全部通过，未明确验收通过前保持 humanAccepted=false。
+  nextAction: 等待用户定向复验 Task 26 Windows Native Regression；fresh Windows go test ./... 与 go build ./... 已分别通过，未明确验收通过前保持 humanAccepted=false。
 checkpoint:
-  commit: 488db3f03c6c9e11b6b5bba93ae8aa554a9cd2bb
-  updatedAt: "2026-08-27T13:41:18Z"
+  commit: 3b77ed0f05b51c4cbcb870ceab8afd8e66a73d57
+  updatedAt: "2026-08-27T14:32:00Z"
 verification:
   status: pass
   commands:
-    - "Task 26 V1.1 Integration and Acceptance Gates run 33077649260"
+    - "Task 26 V1.1 Integration and Acceptance Gates run 33082124762"
+    - "Windows job 98551935288: go test ./... -count=1 PASS"
+    - "Windows job 98551935288: go build ./... PASS"
   errorSummary: ""
-  recoveryAdvice: "Task 26 exact-head integrated Gate 已通过；等待用户人工验收。"
+  recoveryAdvice: "Task 26 Windows Native Regression false-green 已修复；fresh 三平台 Gate 全绿，等待用户定向人工复验。"
 taskGate:
   status: pass
   gateItems:
@@ -25,6 +27,8 @@ taskGate:
     linuxRegression: pass
     macOSNativeRegression: pass
     windowsNativeRegression: pass
+    windowsNativeTestIndependentExit: pass
+    windowsNativeBuildIndependentExit: pass
     offlinePackaging: pass
     v11ReleaseTargets: pass
     releaseParityG3ThroughG14: pass
@@ -64,4 +68,4 @@ tasks:
   "23": {status: completed, completedSteps: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: 7dca79663bfefb45c144d7f8d03864d739d52996, report: docs/task-reports/task-23.md}
   "24": {status: completed, completedSteps: [1, 2, 3, 4, 5], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: b9b6476a20d45bd06bbb25d2ad258f1a97f97749, report: docs/task-reports/task-24.md}
   "25": {status: completed, completedSteps: [1, 2, 3, 4, 5], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: efec3c084e43e99b80fcc28f525e583626ccc614, report: docs/task-reports/task-25.md}
-  "26": {status: awaiting_acceptance, completedSteps: [1, 2, 3, 4, 5], verificationStatus: pass, taskGateStatus: pass, humanAccepted: false, checkpoint: 488db3f03c6c9e11b6b5bba93ae8aa554a9cd2bb, report: docs/task-reports/task-26.md}
+  "26": {status: awaiting_acceptance, completedSteps: [1, 2, 3, 4, 5], verificationStatus: pass, taskGateStatus: pass, humanAccepted: false, checkpoint: 3b77ed0f05b51c4cbcb870ceab8afd8e66a73d57, report: docs/task-reports/task-26.md}
