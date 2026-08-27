@@ -144,7 +144,7 @@ func (m *Model) submitCommand(raw string) tea.Cmd {
 		if agent == "" {
 			agent = "general"
 		}
-		return m.startPrompt(raw, out.Prompt, agent)
+		return m.startCommandPrompt(raw, out.Prompt, agent)
 	case command.OutcomeAction:
 		m.input = ""
 		return m.executeWorkspaceAction(out.Action)
@@ -251,8 +251,22 @@ func (m *Model) activeAgent(requested string) string {
 	return "general"
 }
 
-func (m *Model) startPrompt(displayText, promptText, agent string) tea.Cmd {
-	agent = m.activeAgent(agent)
+func (m *Model) startCommandPrompt(displayText, promptText, requestedAgent string) tea.Cmd {
+	return m.startPromptWithAgent(displayText, promptText, m.activeAgent(requestedAgent))
+}
+
+// startPrompt is the ordinary natural-language path. Its third parameter is
+// only a fallback for an empty persistent selection; currentAgent, chosen by
+// /agents, remains authoritative for normal multi-turn conversation.
+func (m *Model) startPrompt(displayText, promptText, fallbackAgent string) tea.Cmd {
+	agent := strings.TrimSpace(m.currentAgent)
+	if agent == "" {
+		agent = strings.TrimSpace(fallbackAgent)
+	}
+	return m.startPromptWithAgent(displayText, promptText, m.activeAgent(agent))
+}
+
+func (m *Model) startPromptWithAgent(displayText, promptText, agent string) tea.Cmd {
 	m.messages = append(m.messages,
 		ChatMessage{Role: RoleUser, Content: displayText, Finished: true},
 		ChatMessage{Role: RoleAssistant},
