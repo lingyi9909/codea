@@ -32,8 +32,10 @@ func (f *fakeRuntime) Subscribe(context.Context)(<-chan runtimedomain.Event,erro
 func (f *fakeRuntime) ReplyApproval(context.Context,runtimedomain.ApprovalID,runtimedomain.ApprovalReply)error{return nil}
 func (f *fakeRuntime) Cancel(context.Context,runtimedomain.SessionID)error{return nil}
 func (f *fakeRuntime) ListAgents(context.Context)([]runtimedomain.Agent,error){return f.agents,nil}
+func (f *fakeRuntime) ListModels(context.Context)([]runtimedomain.Model,error){return nil,nil}
 func (f *fakeRuntime) ListSessions(context.Context)([]runtimedomain.Session,error){return nil,nil}
 func (f *fakeRuntime) GetSessionMessages(context.Context,runtimedomain.SessionID)([]runtimedomain.Message,error){return nil,nil}
+func (f *fakeRuntime) CompactSession(context.Context,runtimedomain.SessionID)error{return nil}
 func (f *fakeRuntime) Capabilities()runtimedomain.RuntimeCapabilities{return runtimedomain.RuntimeCapabilities{}}
 
 func doctorWrite(t *testing.T,path,body string){t.Helper();if err:=os.MkdirAll(filepath.Dir(path),0755);err!=nil{t.Fatal(err)};if err:=os.WriteFile(path,[]byte(body),0644);err!=nil{t.Fatal(err)}}
