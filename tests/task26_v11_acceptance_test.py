@@ -26,8 +26,17 @@ class Task26AcceptanceContract(unittest.TestCase):
 
         self.assertEqual(str(self.state["current"]["task"]), "26")
         task26 = self.state["tasks"]["26"]
-        self.assertIn(task26["status"], {"in_progress", "awaiting_acceptance"})
-        self.assertIs(task26["humanAccepted"], False)
+        self.assertEqual(task26["verificationStatus"], "pass")
+        self.assertEqual(task26["taskGateStatus"], "pass")
+
+        if task26["status"] == "completed":
+            self.assertIs(task26["humanAccepted"], True)
+            self.assertEqual(self.state["current"]["status"], "completed")
+            self.assertIs(self.state["humanAcceptance"]["accepted"], True)
+        else:
+            self.assertIn(task26["status"], {"in_progress", "awaiting_acceptance"})
+            self.assertIs(task26["humanAccepted"], False)
+            self.assertIs(self.state["humanAcceptance"]["accepted"], False)
 
     def test_locked_runtime_and_release_targets_match_v11_contract(self):
         self.assertEqual(self.runtime["openCodeVersion"], "1.18.11")
