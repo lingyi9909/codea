@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"codea/tui/internal/agent"
@@ -55,6 +56,45 @@ func runDoctorService(ctx context.Context, svc doctorProgressRunner, out io.Writ
 	}, nil)
 }
 
+// newDoctorService is the single composition point for both `codea doctor`
+// and the TUI `/doctor` command. Runtime bootstrap can differ, but the checks,
+// timeouts, version contract, and report semantics stay in one Doctor service.
+func newDoctorService(rt runtimedomain.AgentRuntime, runtimeErr error, runtimeURL string) (*doctor.Service, error) {
+	if strings.TrimSpace(runtimeURL) == "" {
+		runtimeURL = "http://127.0.0.1"
+	}
+	return doctor.NewDefaultService(doctor.Config{
+		HomeDir: codeaHomeDir(), ConfigDir: codeaConfigDir(), Runtime: rt,
+		RuntimeStartError: runtimeErr, RuntimeURL: runtimeURL,
+		ExpectedOpenCodeVersion: lockedOpenCodeVersion, BehaviorTimeout: 30 * time.Second,
+	})
+}
+
+func doctorRuntimeURL() string {
+	if raw := strings.TrimSpace(os.Getenv("OPENCODE_URL")); raw != "" {
+		return raw
+	}
+	return "http://127.0.0.1"
+}
+
+func installedCodeaVersion() string {
+	if v := strings.TrimSpace(os.Getenv("CODEA_VERSION")); v != "" {
+		return v
+	}
+	current, err := update.NewPlatformSwitcher(codeaHomeDir()).Current()
+	if err != nil || current == "" {
+		return "unknown"
+	}
+	body, err := os.ReadFile(filepath.Join(current, "VERSION"))
+	if err != nil {
+		return "unknown"
+	}
+	if v := strings.TrimSpace(string(body)); v != "" {
+		return v
+	}
+	return "unknown"
+}
+
 func runDoctorCommand() error {
 	fmt.Println("Codea Doctor：正在准备并启动 Runtime...")
 	if err := recoverInterruptedUpdateIfNeeded(context.Background()); err != nil {
@@ -95,13 +135,7 @@ func runDoctorCommand() error {
 	if adapter != nil {
 		doctorRuntime = adapter
 	}
-	runtimeURL := os.Getenv("OPENCODE_URL")
-	if runtimeURL == "" { runtimeURL = "http://127.0.0.1" }
-	svc, err := doctor.NewDefaultService(doctor.Config{
-		HomeDir: codeaHomeDir(), ConfigDir: cfgDir, Runtime: doctorRuntime,
-		RuntimeStartError: runtimeErr, RuntimeURL: runtimeURL,
-		ExpectedOpenCodeVersion: "1.18.11", BehaviorTimeout: 30 * time.Second,
-	})
+	svc, err := newDoctorService(doctorRuntime, runtimeErr, doctorRuntimeURL())
 	if err != nil { return err }
 	report := runDoctorService(context.Background(), svc, os.Stdout)
 	fmt.Print(doctor.FormatText(report))
