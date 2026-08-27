@@ -1,0 +1,19 @@
+name: debug
+version: 1.0.0
+displayName: Debug Agent
+mode: enterprise-controlled
+requiredSkills:
+  - debug
+tools:
+  read: allow
+  grep: allow
+  glob: allow
+  write: ask
+  edit: ask
+  bash: ask
+constraints:
+  requireFreshVerification: true
+  preserveProjectBoundary: true
+  preserveApproval: true
+  preserveDlp: true
+  offlineOnly: true
