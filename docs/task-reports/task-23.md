@@ -2,7 +2,7 @@
 
 ## Overview
 
-Task 23 Runtime Workspace is implementation-complete and ready for human acceptance against:
+Task 23 Runtime Workspace is implementation-complete and accepted against:
 
 `docs/superpowers/specs/2026-08-26-codea-v1.1-agent-workspace-design.md`
 
@@ -17,7 +17,10 @@ Fresh implementation Gate:
 - Source commit: `7dca79663bfefb45c144d7f8d03864d739d52996`
 - Result: **PASS**
 
-Task 24–26 have not been started.
+Human acceptance:
+
+- Accepted: **YES**
+- Acceptance source: user handoff on 2026-08-27 explicitly states `Task 23：验收通过` and authorizes Task 24 start.
 
 ## Delivered scope
 
@@ -152,10 +155,8 @@ TDD evidence also includes a deliberate RED Gate (`33030121625`) where the share
 - future non-OpenCode adapter boundary preserved — PASS
 - Windows Task 23 behavior/build — PASS
 
-## Current status
+## Final status
 
-**Task 23: IMPLEMENTATION COMPLETE / AWAITING HUMAN ACCEPTANCE**
+**Task 23: COMPLETED / HUMAN ACCEPTED**
 
-`humanAccepted` remains `false` until the user explicitly accepts Task 23.
-
-Do not start Task 24 until Task 23 is explicitly accepted.
+Task 24 Professional Agent Workspace is authorized to start. Task 23 implementation checkpoint remains `7dca79663bfefb45c144d7f8d03864d739d52996`; the acceptance closeout commit is administrative evidence only.
