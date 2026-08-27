@@ -1,0 +1,79 @@
+name: Task 25 Conversation UX and Live Trace Gates
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [develop]
+    paths:
+      - 'tui/internal/command/**'
+      - 'tui/internal/app/**'
+      - 'tui/internal/runtime/**'
+      - 'tui/internal/opencode/**'
+      - 'tui/tests/fixtures/fake-runtime/**'
+      - 'tui/tests/architecture/**'
+      - 'distribution/plugins/src/**'
+      - 'distribution/plugins/tests/**'
+      - 'distribution/plugins/package.json'
+      - 'distribution/plugins/bun.lock'
+      - 'scripts/check-execution-state.sh'
+      - 'docs/execution-state.yaml'
+      - 'docs/superpowers/plans/2026-08-27-codea-v1.1-task25-conversation-ux-live-trace-plan.md'
+      - '.github/workflows/task25-gates.yml'
+
+concurrency:
+  group: task25-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux-conversation-trace:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.5'
+          cache-dependency-path: tui/go.sum
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.3.14'
+      - name: Validate execution state
+        run: bash scripts/check-execution-state.sh
+      - name: Task 25 focused Go tests
+        working-directory: tui
+        run: |
+          GOTOOLCHAIN=local go test ./internal/command ./internal/app -run 'Task25|ExecutionTrace|ViewMode|LiveTrace' -count=1
+      - name: Architecture boundary
+        working-directory: tui
+        run: GOTOOLCHAIN=local go test ./tests/architecture -count=1
+      - name: Full Go regression
+        working-directory: tui
+        run: GOTOOLCHAIN=local go test ./... -count=1
+      - name: Install enterprise plugin dependencies
+        working-directory: distribution/plugins
+        run: bun install --frozen-lockfile
+      - name: Enterprise plugin regression and build
+        working-directory: distribution/plugins
+        run: bun run check
+      - name: Vet and build
+        working-directory: tui
+        run: |
+          GOTOOLCHAIN=local go vet ./...
+          GOTOOLCHAIN=local go build ./...
+      - name: Windows x64 cross-build
+        working-directory: tui
+        run: GOOS=windows GOARCH=amd64 GOTOOLCHAIN=local go build ./...
+
+  windows-conversation-trace:
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.5'
+          cache-dependency-path: tui/go.sum
+      - name: Task 25 focused tests on Windows
+        working-directory: tui
+        shell: pwsh
+        run: |
+          $env:GOTOOLCHAIN='local'
+          go test ./internal/command ./internal/app -run 'Task25|ExecutionTrace|ViewMode|LiveTrace' -count=1
