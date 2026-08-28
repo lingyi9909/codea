@@ -44,11 +44,13 @@ class Task27AuthenticodeContract(unittest.TestCase):
         self.assertNotIn("[Security.Cryptography.RSA]::Create", text)
         self.assertNotIn("Get-Command openssl.exe", text)
 
-    def test_ci_trust_import_is_noninteractive(self):
+    def test_ci_trust_import_is_noninteractive_and_does_not_touch_root(self):
         text = TASK27.read_text()
         self.assertIn("X509Store", text)
         self.assertIn("StoreLocation]::CurrentUser", text)
         self.assertIn("OpenFlags]::ReadWrite", text)
+        self.assertIn("@('TrustedPeople','TrustedPublisher')", text)
+        self.assertNotIn("@('Root','TrustedPublisher')", text)
         self.assertNotIn("certutil.exe -user -addstore", text)
         self.assertNotIn("certutil.exe -user -delstore", text)
 
