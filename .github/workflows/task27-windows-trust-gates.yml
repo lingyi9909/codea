@@ -166,14 +166,21 @@ jobs:
           $cert = [Security.Cryptography.X509Certificates.X509Certificate2]::new($cer)
           try {
             $thumbprint = $cert.Thumbprint
+            foreach ($storeName in @('Root','TrustedPublisher')) {
+              $store = [Security.Cryptography.X509Certificates.X509Store]::new(
+                $storeName,
+                [Security.Cryptography.X509Certificates.StoreLocation]::CurrentUser
+              )
+              try {
+                $store.Open([Security.Cryptography.X509Certificates.OpenFlags]::ReadWrite)
+                $store.Add($cert)
+              } finally {
+                $store.Close()
+              }
+            }
           } finally {
             $cert.Dispose()
           }
-
-          & certutil.exe -user -addstore -f Root $cer | Out-Host
-          if ($LASTEXITCODE -ne 0) { throw "certutil Root import failed with exit code $LASTEXITCODE" }
-          & certutil.exe -user -addstore -f TrustedPublisher $cer | Out-Host
-          if ($LASTEXITCODE -ne 0) { throw "certutil TrustedPublisher import failed with exit code $LASTEXITCODE" }
 
           "TASK27_PROOF_EXE=$proofExe" >> $env:GITHUB_ENV
           "TASK27_PROOF_PFX=$pfx" >> $env:GITHUB_ENV
@@ -202,14 +209,31 @@ jobs:
         run: |
           $thumb = [string]$env:TASK27_PROOF_THUMBPRINT
           if (-not [string]::IsNullOrWhiteSpace($thumb)) {
-            & certutil.exe -user -delstore Root $thumb *> $null
-            & certutil.exe -user -delstore TrustedPublisher $thumb *> $null
+            foreach ($storeName in @('Root','TrustedPublisher')) {
+              $store = [Security.Cryptography.X509Certificates.X509Store]::new(
+                $storeName,
+                [Security.Cryptography.X509Certificates.StoreLocation]::CurrentUser
+              )
+              try {
+                $store.Open([Security.Cryptography.X509Certificates.OpenFlags]::ReadWrite)
+                $matches = $store.Certificates.Find(
+                  [Security.Cryptography.X509Certificates.X509FindType]::FindByThumbprint,
+                  $thumb,
+                  $false
+                )
+                foreach ($match in $matches) {
+                  $store.Remove($match)
+                  $match.Dispose()
+                }
+              } finally {
+                $store.Close()
+              }
+            }
           }
           $paths = @([string]$env:TASK27_PROOF_EXE) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
           if ($paths.Count -gt 0) {
             Remove-Item -LiteralPath $paths -Force -ErrorAction SilentlyContinue
           }
-          exit 0
 
       - name: Generate deterministic 360 and EDR evidence
         shell: pwsh
