@@ -42,27 +42,31 @@ class Task27AuthenticodeContract(unittest.TestCase):
     def test_ci_proof_identity_is_generated_off_windows(self):
         text = TASK27.read_text()
         self.assertIn("Generate ephemeral Authenticode proof identity on Ubuntu", text)
-        self.assertIn("openssl req", text)
+        self.assertIn("task27-signing-root.cer", text)
         self.assertIn("task27-signing-proof.pfx", text)
         self.assertIn("task27-signing-proof.cer", text)
         self.assertNotIn("New-SelfSignedCertificate", text)
         self.assertNotIn("[Security.Cryptography.RSA]::Create", text)
         self.assertNotIn("Get-Command openssl.exe", text)
 
-    def test_ci_proof_identity_is_end_entity_not_root_ca(self):
+    def test_ci_proof_uses_real_root_to_leaf_chain(self):
         text = TASK27.read_text()
+        self.assertIn("basicConstraints = critical,CA:TRUE", text)
+        self.assertIn("keyUsage = critical,keyCertSign,cRLSign", text)
         self.assertIn("basicConstraints = critical,CA:FALSE", text)
         self.assertIn("keyUsage = critical,digitalSignature", text)
-        self.assertNotIn("basicConstraints = critical,CA:TRUE", text)
-        self.assertNotIn("keyCertSign", text)
+        self.assertIn("openssl x509 -req", text)
+        self.assertIn("-CA \"$work/root.pem\"", text)
+        self.assertIn("-certfile \"$work/root.pem\"", text)
 
-    def test_ci_trust_import_is_noninteractive_and_does_not_touch_root(self):
+    def test_ci_trust_import_installs_private_root_and_publisher_noninteractively(self):
         text = TASK27.read_text()
         self.assertIn("X509Store", text)
+        self.assertIn("StoreLocation]::LocalMachine", text)
+        self.assertIn("'Root'", text)
         self.assertIn("StoreLocation]::CurrentUser", text)
+        self.assertIn("'TrustedPublisher'", text)
         self.assertIn("OpenFlags]::ReadWrite", text)
-        self.assertIn("@('TrustedPeople','TrustedPublisher')", text)
-        self.assertNotIn("@('Root','TrustedPublisher')", text)
         self.assertNotIn("certutil.exe -user -addstore", text)
         self.assertNotIn("certutil.exe -user -delstore", text)
 
