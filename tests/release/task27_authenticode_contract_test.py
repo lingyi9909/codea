@@ -20,6 +20,12 @@ class Task27AuthenticodeContract(unittest.TestCase):
         self.assertIn("finally", text)
         self.assertNotIn("BEGIN PRIVATE KEY", text)
 
+    def test_signtool_discovery_is_bounded(self):
+        text = SIGN.read_text()
+        self.assertIn("Windows Kits", text)
+        self.assertNotIn("-Recurse", text)
+        self.assertIn("x64", text)
+
     def test_verification_requires_valid_authenticode(self):
         text = VERIFY.read_text()
         self.assertIn("Get-AuthenticodeSignature", text)
