@@ -1,6 +1,6 @@
 # Task 27 Report — Windows Trust Chain & Installed Runtime Reliability
 
-Task 27 production implementation and automated verification are complete. Human acceptance is still pending.
+Task 27 production implementation, automated verification, and human acceptance are complete.
 
 Production implementation checkpoint: `0390d4697cfee3832d0fa3703bbb35a85f4df2f3`
 
@@ -13,7 +13,7 @@ Task 27 closes the Windows trust/reliability gaps without changing the Codea Run
 - a native Windows installed-package lifecycle Gate exercises fresh install, MOTW install, `CODEA_HOME` containing spaces, forward upgrade, rollback, and reselect upgrade using the real packaged `codea.exe` / bundled OpenCode `v1.18.11`;
 - Windows release signing remains fail-closed and uses real `signtool.exe` SHA256 Authenticode signing plus `Get-AuthenticodeSignature` verification;
 - CI mechanical proof uses an ephemeral two-level trust chain (`Root CA -> code-signing leaf`) generated on Ubuntu, then validates the signed executable as `Valid` on a Windows hosted runner;
-- the same temporary signing identity now drives a full Stable Finalized Release E2E through `finalize-release.ps1 -Channel stable`;
+- the same temporary signing identity drives a full Stable Finalized Release E2E through `finalize-release.ps1 -Channel stable`;
 - deterministic Windows security evidence records final release SHA256, Codea/OpenCode identity and the finalized signer status/subject/thumbprint;
 - Task 26 native Windows regression is rerun after all Task 27 lifecycle/signing/finalization checks.
 
@@ -26,7 +26,7 @@ During fresh Windows execution, the Gate exposed and corrected concrete test/rel
 3. lifecycle diagnostics were made parse-safe (`${Scenario}:`).
 4. lifecycle helper parameters no longer shadow PowerShell's read-only `$HOME`; they use `$CodeaHome`.
 5. installed shim health checks invoke `codea doctor` through the installed `bin` directory on `PATH`, matching real user usage and validating `CODEA_HOME` paths containing spaces.
-6. User acceptance found that the prior Task 27 Gate signed only an extracted `codea.exe`, not the final release archive. RED run `33178564371` failed the new Authenticode contract until a real Stable Finalized Release E2E was wired.
+6. Human review found that the prior Task 27 Gate signed only an extracted `codea.exe`, not the final release archive. RED run `33178564371` failed the new Authenticode contract until a real Stable Finalized Release E2E was wired.
 
 No Authenticode validity requirement, Runtime health assertion, process cleanup requirement, lifecycle scenario, MOTW self-heal, Installer Unblock, or bounded access-denied retry was relaxed.
 
@@ -34,7 +34,7 @@ No Authenticode validity requirement, Runtime health assertion, process cleanup 
 
 Fresh implementation head `0390d4697cfee3832d0fa3703bbb35a85f4df2f3`, Task 27 Gate run `33178843283`: **PASS**.
 
-The Windows Gate now proves the complete chain:
+The Windows Gate proves the complete chain:
 
 ```text
 formal unsigned Windows ZIP
@@ -65,7 +65,7 @@ The positive E2E validates on the finalized ZIP:
 
 ## Fresh exact-head automated evidence
 
-Run `33178843283`: **SUCCESS**
+Implementation run `33178843283`: **SUCCESS**
 
 - Task 27 trust contract: PASS
 - Task 27 Authenticode contract: PASS
@@ -81,12 +81,17 @@ Run `33178843283`: **SUCCESS**
 - finalized signed package lifecycle (`fresh / MOTW / spaces / upgrade / rollback`): PASS
 - final Task 26 native Windows regression: PASS
 
-## Human acceptance
+Administrative closeout head `246837585f7d68ecbc867e455f0eceb4a70a1a3a`, Task 27 Gate run `33179384852`: **SUCCESS**.
 
-- Accepted: **NO — pending user re-review**
+## Human acceptance and integration
+
+- Accepted: **YES — 2026-08-28**
 - Automated verification: **PASS**
 - Task Gate: **PASS**
 - Implementation checkpoint: `0390d4697cfee3832d0fa3703bbb35a85f4df2f3`
 - Fresh implementation Gate: `33178843283` — **PASS**
+- Fresh administrative closeout Gate: `33179384852` — **PASS**
+- Integrated to `main` through PR #1
+- Merge commit: `09404791f221d803c278210a57a99cf471aea14d`
 
-Current status: **AWAITING ACCEPTANCE**
+Current status: **COMPLETED**
