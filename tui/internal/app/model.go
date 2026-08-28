@@ -116,12 +116,13 @@ type Model struct {
 	// Task 23/24 workspace state. Model choice is session-scoped and Agent choice
 	// stays entirely in Codea-owned application state; neither adds vendor UI
 	// state to AgentRuntime.
-	modelPicker   modelPickerModel
-	agentPicker   agentPickerModel
-	sessionModels map[runtime.SessionID]runtime.ModelRef
-	workspaceInfo WorkspaceInfo
-	currentAgent  string
-	doctorService *doctor.Service
+	modelPicker        modelPickerModel
+	agentPicker        agentPickerModel
+	sessionModels      map[runtime.SessionID]runtime.ModelRef
+	workspaceInfo      WorkspaceInfo
+	currentAgent       string
+	doctorService      *doctor.Service
+	repoContextService RepoContextService
 
 	// sessionPanel is the session list/resume overlay. It owns cursor and
 	// visibility; the Application feeds it Codea-domain session items.

@@ -1,0 +1,24 @@
+name: Task 28 TDD GREEN
+
+on:
+  push:
+    branches: [task28-tdd-green]
+
+permissions:
+  contents: read
+
+jobs:
+  green:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.5'
+          cache-dependency-path: tui/go.sum
+      - name: Task 28.6 focused GREEN
+        working-directory: tui
+        run: GOTOOLCHAIN=local go test ./internal/app ./cmd/codea -run 'RepoContext|RepoMapComposition' -count=1
+      - name: Architecture boundary
+        working-directory: tui
+        run: GOTOOLCHAIN=local go test ./tests/architecture -count=1

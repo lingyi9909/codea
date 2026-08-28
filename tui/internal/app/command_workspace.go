@@ -319,6 +319,15 @@ func (m *Model) startPromptWithAgent(displayText, promptText, agent string) tea.
 	m.input = ""
 	m.startTaskMetric(req.Agent)
 
+	if m.repoContextService != nil {
+		return RepoContextCmd(m.repoContextService, repoPromptIntent{
+			request:     req,
+			displayText: displayText,
+			promptText:  promptText,
+			queryText:   promptText,
+		})
+	}
+
 	if m.sessionID == "" {
 		m.pendingPrompt = &req
 		return CreateSessionCmd(m.runtimeClient, strings.TrimSpace(displayText))
