@@ -12,6 +12,7 @@ on:
       - 'tests/release/**'
       - 'docs/execution-state.yaml'
       - 'docs/task-reports/task-27.md'
+      - 'docs/release/**'
       - '.github/workflows/task27-windows-trust-gates.yml'
       - '.github/workflows/windows-release.yml'
   workflow_dispatch:
@@ -37,6 +38,8 @@ jobs:
         run: python tests/task27_windows_trust_contract_test.py
       - name: Task 27 Authenticode contract
         run: python tests/release/task27_authenticode_contract_test.py
+      - name: Task 27 security evidence contract
+        run: python tests/release/task27_security_evidence_contract_test.py
 
   build-formal-windows-package:
     runs-on: ubuntu-24.04
@@ -131,6 +134,18 @@ jobs:
             }
             Remove-Item -LiteralPath $pfx,$cer,$proofExe -Force -ErrorAction SilentlyContinue
           }
+
+      - name: Generate deterministic 360 and EDR evidence
+        shell: pwsh
+        run: |
+          $archive = Get-ChildItem -LiteralPath task27-artifact -Filter 'codea-*-windows-x64.zip' -File | Select-Object -First 1
+          if (-not $archive) { throw 'formal Windows release zip missing' }
+          $evidence = Join-Path $env:RUNNER_TEMP 'task27-security-evidence.json'
+          & ./packaging/platform/windows/build-security-evidence.ps1 -Archive $archive.FullName -GitCommit '${{ github.sha }}' -ReleaseTag 'task27-ci' -Output $evidence
+          $json = Get-Content -LiteralPath $evidence -Raw | ConvertFrom-Json
+          if ($json.releaseSha256 -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $archive.FullName).Hash.ToLowerInvariant()) { throw 'security evidence release SHA256 mismatch' }
+          if ($json.openCodeVersion -ne '1.18.11') { throw 'security evidence OpenCode version mismatch' }
+          Get-Content -LiteralPath $evidence
 
       - name: Windows installed-package real lifecycle smoke - fresh install MOTW upgrade rollback
         shell: pwsh
