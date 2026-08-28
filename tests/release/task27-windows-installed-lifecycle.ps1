@@ -51,14 +51,18 @@ function Invoke-InstalledRuntimeHealth([string]$CodeaHome, [string]$Scenario) {
   $shim = Join-Path $CodeaHome 'bin\codea.cmd'
   if (-not (Test-Path -LiteralPath $shim -PathType Leaf)) { throw "${Scenario}: installed codea.cmd missing" }
 
+  $shimDir = Split-Path -Parent $shim
   $stdout = Join-Path $work ($Scenario + '-doctor.stdout.txt')
   $stderr = Join-Path $work ($Scenario + '-doctor.stderr.txt')
   $oldHome = $env:CODEA_HOME
+  $oldPath = $env:PATH
   try {
     $env:CODEA_HOME = $CodeaHome
-    $p = Start-Process -FilePath 'cmd.exe' -ArgumentList @('/d','/s','/c',('"' + $shim + '" doctor')) -NoNewWindow -Wait -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
+    $env:PATH = $shimDir + ';' + $oldPath
+    $p = Start-Process -FilePath 'cmd.exe' -ArgumentList @('/d','/s','/c','codea doctor') -NoNewWindow -Wait -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
   } finally {
     $env:CODEA_HOME = $oldHome
+    $env:PATH = $oldPath
   }
   $text = ((Get-Content -LiteralPath $stdout -Raw -ErrorAction SilentlyContinue) + "`n" + (Get-Content -LiteralPath $stderr -Raw -ErrorAction SilentlyContinue))
   Write-Host "===== $Scenario doctor output ====="
