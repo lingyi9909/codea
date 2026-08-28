@@ -9,16 +9,21 @@ fail() {
   exit 1
 }
 
-# Architecture boundary: Repo Intelligence and Application remain Codea-owned.
-if grep -R -nE '"codea/tui/internal/opencode(/generated|/client)?"|"codea/tui/internal/opencode/generated|"codea/tui/internal/opencode/client' \
-  "$TUI/internal/repoctx" "$TUI/internal/app" --include='*.go'; then
-  fail "repoctx/application imports vendor OpenCode implementation packages"
+# Architecture boundary applies to shipped Application/Repo Intelligence code.
+# Integration tests may intentionally instantiate OpenCode adapters to exercise
+# the boundary end-to-end, so *_test.go is excluded from this source-import gate.
+if grep -R -nE --include='*.go' --exclude='*_test.go' \
+  '"codea/tui/internal/opencode(/generated|/client)?"|"codea/tui/internal/opencode/generated|"codea/tui/internal/opencode/client' \
+  "$TUI/internal/repoctx" "$TUI/internal/app"; then
+  fail "repoctx/application production code imports vendor OpenCode implementation packages"
 fi
-if grep -R -nE '"net/http"|"net/url"|"net/rpc"' "$TUI/internal/repoctx" --include='*.go'; then
-  fail "repoctx imports network libraries"
+if grep -R -nE --include='*.go' --exclude='*_test.go' \
+  '"net/http"|"net/url"|"net/rpc"' "$TUI/internal/repoctx"; then
+  fail "repoctx production code imports network libraries"
 fi
-if grep -R -nE 'import[[:space:]]+"C"' "$TUI/internal/repoctx" --include='*.go'; then
-  fail "repoctx requires CGO"
+if grep -R -nE --include='*.go' --exclude='*_test.go' \
+  'import[[:space:]]+"C"' "$TUI/internal/repoctx"; then
+  fail "repoctx production code requires CGO"
 fi
 if grep -Eiq 'tree[-_]?sitter|go-tree-sitter' "$TUI/go.mod"; then
   fail "tree-sitter/parser dependency found in tui/go.mod"
