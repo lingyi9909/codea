@@ -47,15 +47,15 @@ function Assert-NoMotw([string]$Path) {
   if ($stream) { throw "installed runtime still carries Zone.Identifier: $Path" }
 }
 
-function Invoke-InstalledRuntimeHealth([string]$Home, [string]$Scenario) {
-  $shim = Join-Path $Home 'bin\codea.cmd'
+function Invoke-InstalledRuntimeHealth([string]$CodeaHome, [string]$Scenario) {
+  $shim = Join-Path $CodeaHome 'bin\codea.cmd'
   if (-not (Test-Path -LiteralPath $shim -PathType Leaf)) { throw "${Scenario}: installed codea.cmd missing" }
 
   $stdout = Join-Path $work ($Scenario + '-doctor.stdout.txt')
   $stderr = Join-Path $work ($Scenario + '-doctor.stderr.txt')
   $oldHome = $env:CODEA_HOME
   try {
-    $env:CODEA_HOME = $Home
+    $env:CODEA_HOME = $CodeaHome
     $p = Start-Process -FilePath 'cmd.exe' -ArgumentList @('/d','/s','/c',('"' + $shim + '" doctor')) -NoNewWindow -Wait -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
   } finally {
     $env:CODEA_HOME = $oldHome
@@ -73,14 +73,14 @@ function Invoke-InstalledRuntimeHealth([string]$Home, [string]$Scenario) {
   Write-Host "TASK27 $Scenario Runtime Health PASS"
 }
 
-function Install-And-Health([string]$PackageDir, [string]$Home, [string]$Scenario) {
-  Remove-Item -LiteralPath $Home -Recurse -Force -ErrorAction SilentlyContinue
-  $env:CODEA_HOME = $Home
+function Install-And-Health([string]$PackageDir, [string]$CodeaHome, [string]$Scenario) {
+  Remove-Item -LiteralPath $CodeaHome -Recurse -Force -ErrorAction SilentlyContinue
+  $env:CODEA_HOME = $CodeaHome
   & (Join-Path $repo 'packaging/platform/windows/install.ps1') -PackageDir $PackageDir
   $version = (Get-Content -LiteralPath (Join-Path $PackageDir 'VERSION') -Raw).Trim()
-  $installed = Join-Path $Home ('versions\' + $version)
+  $installed = Join-Path $CodeaHome ('versions\' + $version)
   Assert-NoMotw (Join-Path $installed 'bin\opencode.exe')
-  Invoke-InstalledRuntimeHealth $Home $Scenario
+  Invoke-InstalledRuntimeHealth $CodeaHome $Scenario
   return $installed
 }
 
