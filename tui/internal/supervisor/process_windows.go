@@ -28,7 +28,13 @@ var (
 const (
 	jobObjectExtendedLimitInformationClass = 9
 	jobObjectLimitKillOnJobClose           = 0x00002000
-	processAllAccess                       = 0x001F0FFF
+	// AssignProcessToJobObject requires exactly PROCESS_SET_QUOTA and
+	// PROCESS_TERMINATE on the process handle. Requesting PROCESS_ALL_ACCESS
+	// broadens the security surface and can trigger endpoint-protection
+	// heuristics without providing any capability Codea needs here.
+	processSetQuota  uintptr = 0x00000100
+	processTerminate uintptr = 0x00000001
+	processJobAccess         = processSetQuota | processTerminate
 	// Endpoint protection can briefly hold a newly installed executable while
 	// scanning it. Retry only ERROR_ACCESS_DENIED for up to ~5 seconds.
 	runtimeStartMaxAttempts = 6
@@ -148,7 +154,7 @@ func attachProcess(cmd *exec.Cmd) error {
 		return win32Err("SetInformationJobObject", lastErr)
 	}
 
-	process, _, lastErr := procOpenProcess.Call(processAllAccess, 0, uintptr(cmd.Process.Pid))
+	process, _, lastErr := procOpenProcess.Call(processJobAccess, 0, uintptr(cmd.Process.Pid))
 	if process == 0 {
 		_ = closeHandle(job)
 		return win32Err("OpenProcess", lastErr)
