@@ -166,7 +166,7 @@ jobs:
           $cert = [Security.Cryptography.X509Certificates.X509Certificate2]::new($cer)
           try {
             $thumbprint = $cert.Thumbprint
-            foreach ($storeName in @('Root','TrustedPublisher')) {
+            foreach ($storeName in @('TrustedPeople','TrustedPublisher')) {
               $store = [Security.Cryptography.X509Certificates.X509Store]::new(
                 $storeName,
                 [Security.Cryptography.X509Certificates.StoreLocation]::CurrentUser
@@ -209,7 +209,7 @@ jobs:
         run: |
           $thumb = [string]$env:TASK27_PROOF_THUMBPRINT
           if (-not [string]::IsNullOrWhiteSpace($thumb)) {
-            foreach ($storeName in @('Root','TrustedPublisher')) {
+            foreach ($storeName in @('TrustedPeople','TrustedPublisher')) {
               $store = [Security.Cryptography.X509Certificates.X509Store]::new(
                 $storeName,
                 [Security.Cryptography.X509Certificates.StoreLocation]::CurrentUser
