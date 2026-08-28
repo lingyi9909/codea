@@ -1,0 +1,22 @@
+name: Task 27 Workflow Lint
+
+on:
+  push:
+    branches: [task27-windows-trust-chain]
+    paths:
+      - '.github/workflows/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  actionlint:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.5'
+      - name: Lint Task 27 and Windows release workflows
+        run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.7 .github/workflows/task27-windows-trust-gates.yml .github/workflows/windows-release.yml

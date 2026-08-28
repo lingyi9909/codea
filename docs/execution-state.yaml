@@ -1,43 +1,43 @@
 schemaVersion: 2
 project: codea-v1.1
 plan: docs/superpowers/specs/2026-08-26-codea-v1.1-agent-workspace-design.md
-taskOrder: ["0", "1", "2", "2A", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26"]
+taskOrder: ["0", "1", "2", "2A", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27"]
 current:
-  task: "26"
+  task: "27"
   step: 5
-  status: completed
-  nextAction: Codea V1.1 已完成全部 Task 0-26 并通过人工验收；进入 main 合并与新版本发布收口。
+  status: awaiting_acceptance
+  nextAction: 等待用户定向复验 Task 27 Stable Finalized Release E2E；未明确验收通过前保持 humanAccepted=false。
 checkpoint:
-  commit: a85ef424f463837a6bf72239923940b185069b96
-  updatedAt: "2026-08-27T14:50:00Z"
+  commit: 0390d4697cfee3832d0fa3703bbb35a85f4df2f3
+  updatedAt: "2026-08-28T14:16:00Z"
 verification:
   status: pass
   commands:
-    - "Task 26 V1.1 Integration and Acceptance Gates run 33083017554"
-    - "Windows job 98558246021: go test ./... -count=1 PASS"
-    - "Windows job 98558246021: go build ./... PASS"
-    - "Real Agent G6-G7: 15/15 PASS"
-    - "Real Runtime G11-G13: 17/17 PASS"
-    - "Dual Runtime Parity G12.1: 12/12 PASS"
+    - "Task 27 Windows Trust Chain Gates run 33178843283"
   errorSummary: ""
-  recoveryAdvice: "V1.1 implementation and acceptance are complete. Previously deferred company-intranet-only Task 17/G15 evidence remains deferred and must not be represented as stable-release certification."
+  recoveryAdvice: "Task 27 Stable Finalized Release E2E、final signed ZIP lifecycle、Authenticode、security evidence 与 Task 26 native regression 已全部通过；等待用户定向复验。"
 taskGate:
   status: pass
   gateItems:
-    task26Integration: pass
-    task22Through25Regression: pass
-    architectureBoundary: pass
-    linuxRegression: pass
-    macOSNativeRegression: pass
-    windowsNativeRegression: pass
-    windowsNativeTestIndependentExit: pass
-    windowsNativeBuildIndependentExit: pass
-    offlinePackaging: pass
-    v11ReleaseTargets: pass
-    releaseParityG3ThroughG14: pass
-    dualRuntimeParity12Of12: pass
+    task27TrustContract: pass
+    windowsFreshInstallRuntime: pass
+    windowsMOTWInstallRuntime: pass
+    windowsSpacesRuntime: pass
+    windowsUpgradeRuntime: pass
+    windowsRollbackRuntime: pass
+    windowsOpenCodeHealth: pass
+    accessDeniedBoundedRetry: pass
+    processTreeCleanup: pass
+    task26WindowsNativeRegression: pass
+    authenticodeMechanicalProof: pass
+    stableWithoutCredentialsFailClosed: pass
+    stableFinalizedReleaseE2E: pass
+    stableFinalizedManifestRebind: pass
+    stableFinalizedZipSha256: pass
+    stableFinalizedSecurityEvidence: pass
+    windowsSecurityEvidence: pass
 humanAcceptance:
-  accepted: true
+  accepted: false
 task17Gate:
   task17PackagingContract: pass
   task17ThreePlatformBuildEvidence: pass
@@ -53,7 +53,7 @@ tasks:
   "5": {status: completed, completedSteps: [1, 2, 3, 4, 5, 6], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: cbe692aaff6700c257d3e0806801dcf8d3396870, report: docs/task-reports/task-05.md}
   "6": {status: completed, completedSteps: [1, 2, 3, 4, 5], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: df5c582aa803f55bb091dabaf3a3cf41e0f02f78, report: docs/task-reports/task-06.md}
   "7": {status: completed, completedSteps: [1, 2, 3, 4, 5, 6], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: 0e523e8d70cb5c3357b9e8beb7a1dae6b2480e46, report: docs/task-reports/task-07.md}
-  "8": {status: completed, completedSteps: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: 716b8c1e87ebd865d2c8fae47e3aa36c8c0c4865, report: docs/task-reports/task-08.md}
+  "8": {status: completed, completedSteps: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: 716b8c1e87d865d2c8fae47e3aa36c8c0c4865, report: docs/task-reports/task-08.md}
   "9": {status: completed, completedSteps: [1, 2, 3, 4, 5], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: ac9392c1a6ffe5ca773455b6240a8149010bfe42, report: docs/task-reports/task-09.md}
   "10": {status: completed, completedSteps: [1, 2, 3, 4, 5, 6, 7], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: eb5359dc26e322b777feaf6ddf6cbfdbbccbc685, report: docs/task-reports/task-10.md}
   "11": {status: completed, completedSteps: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: a77cd96448894b515eb9ec5530659cd922b8b839, report: docs/task-reports/task-11.md}
@@ -72,3 +72,4 @@ tasks:
   "24": {status: completed, completedSteps: [1, 2, 3, 4, 5], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: b9b6476a20d45bd06bbb25d2ad258f1a97f97749, report: docs/task-reports/task-24.md}
   "25": {status: completed, completedSteps: [1, 2, 3, 4, 5], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: efec3c084e43e99b80fcc28f525e583626ccc614, report: docs/task-reports/task-25.md}
   "26": {status: completed, completedSteps: [1, 2, 3, 4, 5], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: a85ef424f463837a6bf72239923940b185069b96, report: docs/task-reports/task-26.md}
+  "27": {status: awaiting_acceptance, completedSteps: [1, 2, 3, 4, 5], verificationStatus: pass, taskGateStatus: pass, humanAccepted: false, checkpoint: 0390d4697cfee3832d0fa3703bbb35a85f4df2f3, report: docs/task-reports/task-27.md}

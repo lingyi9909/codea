@@ -1,0 +1,68 @@
+param(
+  [Parameter(Mandatory=$true)][string[]]$File,
+  [Parameter(Mandatory=$true)][string]$PfxPath,
+  [Parameter(Mandatory=$true)][string]$PfxPassword,
+  [string]$TimestampUrl = ''
+)
+
+$ErrorActionPreference = 'Stop'
+$codeSigningEku = '1.3.6.1.5.5.7.3.3'
+
+function Resolve-SignTool {
+  $cmd = Get-Command signtool.exe -ErrorAction SilentlyContinue
+  if ($cmd) { return $cmd.Source }
+
+  $kits = Join-Path ${env:ProgramFiles(x86)} 'Windows Kits\10\bin'
+  if (Test-Path -LiteralPath $kits -PathType Container) {
+    # Search only the documented SDK layout. Do not recursively enumerate the
+    # entire Windows Kits tree: that made the release gate effectively
+    # unbounded on hosted/enterprise runners.
+    $versionDirs = @(Get-ChildItem -LiteralPath $kits -Directory -ErrorAction SilentlyContinue |
+      Sort-Object Name -Descending)
+    foreach ($versionDir in $versionDirs) {
+      $candidate = Join-Path $versionDir.FullName 'x64\signtool.exe'
+      if (Test-Path -LiteralPath $candidate -PathType Leaf) { return $candidate }
+    }
+    $legacy = Join-Path $kits 'x64\signtool.exe'
+    if (Test-Path -LiteralPath $legacy -PathType Leaf) { return $legacy }
+  }
+  throw 'signtool.exe not found; install the Windows SDK signing tools'
+}
+
+if (-not (Test-Path -LiteralPath $PfxPath -PathType Leaf)) { throw "PFX not found: $PfxPath" }
+$resolvedPfx = (Resolve-Path -LiteralPath $PfxPath).Path
+$signTool = Resolve-SignTool
+Write-Host "Using SignTool: $signTool"
+$cert = $null
+try {
+  $flags = [Security.Cryptography.X509Certificates.X509KeyStorageFlags]::EphemeralKeySet
+  $cert = [Security.Cryptography.X509Certificates.X509Certificate2]::new($resolvedPfx, $PfxPassword, $flags)
+  if (-not $cert.HasPrivateKey) { throw 'signing certificate does not contain a private key' }
+  if ($cert.NotAfter.ToUniversalTime() -le [DateTime]::UtcNow) { throw 'signing certificate is expired' }
+
+  $ekuExtension = $cert.Extensions | Where-Object { $_.Oid.Value -eq '2.5.29.37' } | Select-Object -First 1
+  $hasCodeSigningEku = $false
+  if ($ekuExtension) {
+    $typedEku = [Security.Cryptography.X509Certificates.X509EnhancedKeyUsageExtension]$ekuExtension
+    foreach ($oid in $typedEku.EnhancedKeyUsages) {
+      if ($oid.Value -eq $codeSigningEku) { $hasCodeSigningEku = $true; break }
+    }
+  }
+  if (-not $hasCodeSigningEku) { throw "signing certificate missing Code Signing EKU $codeSigningEku" }
+
+  $thumbprint = ($cert.Thumbprint -replace '\s','').ToUpperInvariant()
+  foreach ($item in $File) {
+    if (-not (Test-Path -LiteralPath $item -PathType Leaf)) { throw "file to sign not found: $item" }
+    $resolved = (Resolve-Path -LiteralPath $item).Path
+    $args = @('sign', '/fd', 'SHA256', '/f', $resolvedPfx, '/p', $PfxPassword, '/sha1', $thumbprint)
+    if (-not [string]::IsNullOrWhiteSpace($TimestampUrl)) {
+      $args += @('/tr', $TimestampUrl, '/td', 'SHA256')
+    }
+    $args += $resolved
+    & $signTool @args
+    if ($LASTEXITCODE -ne 0) { throw "signtool signing failed for $resolved with exit code $LASTEXITCODE" }
+  }
+} finally {
+  if ($cert) { $cert.Dispose() }
+  $PfxPassword = $null
+}
