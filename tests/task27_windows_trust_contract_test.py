@@ -13,6 +13,7 @@ class Task27WindowsTrustContract(unittest.TestCase):
         cls.process_windows = (ROOT / "tui/internal/supervisor/process_windows.go").read_text()
         cls.installer = (ROOT / "packaging/platform/windows/install.ps1").read_text()
         cls.workflow = (ROOT / ".github/workflows/task27-windows-trust-gates.yml").read_text()
+        cls.lifecycle = (ROOT / "tests/release/task27-windows-installed-lifecycle.ps1").read_text()
 
     def test_task26_is_accepted_and_task27_is_active(self):
         task26 = self.state["tasks"]["26"]
@@ -54,6 +55,10 @@ class Task27WindowsTrustContract(unittest.TestCase):
         ]
         for token in required:
             self.assertIn(token, self.workflow)
+
+    def test_lifecycle_diagnostics_are_powershell_parse_safe(self):
+        self.assertIn("${Scenario}:", self.lifecycle)
+        self.assertNotIn("$Scenario:", self.lifecycle)
 
 
 if __name__ == "__main__":
