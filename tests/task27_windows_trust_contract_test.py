@@ -64,6 +64,12 @@ class Task27WindowsTrustContract(unittest.TestCase):
         self.assertIn("[string]$CodeaHome", self.lifecycle)
         self.assertNotIn("[string]$Home", self.lifecycle)
 
+    def test_lifecycle_invokes_installed_shim_via_path_for_space_safe_windows_usage(self):
+        self.assertIn("$shimDir = Split-Path -Parent $shim", self.lifecycle)
+        self.assertIn("$env:PATH = $shimDir + ';' + $oldPath", self.lifecycle)
+        self.assertIn("@('/d','/s','/c','codea doctor')", self.lifecycle)
+        self.assertNotIn("('\\\"' + $shim + '\\" doctor')", self.lifecycle)
+
 
 if __name__ == "__main__":
     unittest.main()
