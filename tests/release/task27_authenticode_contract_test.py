@@ -7,6 +7,7 @@ VERIFY = ROOT / "packaging/platform/windows/verify-signature.ps1"
 FINALIZE = ROOT / "packaging/platform/windows/finalize-release.ps1"
 RELEASE = ROOT / ".github/workflows/windows-release.yml"
 TASK27 = ROOT / ".github/workflows/task27-windows-trust-gates.yml"
+STABLE_E2E = ROOT / "tests/release/task27-stable-finalized-release-e2e.ps1"
 
 
 class Task27AuthenticodeContract(unittest.TestCase):
@@ -82,6 +83,29 @@ class Task27AuthenticodeContract(unittest.TestCase):
         self.assertIn("sign-release.ps1", finalizer)
         self.assertIn("verify-signature.ps1", finalizer)
         self.assertIn("throw", finalizer)
+
+    def test_task27_executes_full_stable_finalizer_e2e(self):
+        workflow = TASK27.read_text()
+        self.assertTrue(STABLE_E2E.exists())
+        e2e = STABLE_E2E.read_text()
+        self.assertIn("Stable Finalized Release E2E", workflow)
+        self.assertIn("finalize-release.ps1", workflow)
+        self.assertIn("-Channel stable", workflow)
+        self.assertIn("CODEA_WINDOWS_SIGNING_PFX_BASE64", workflow)
+        self.assertIn("task27-stable-finalized-release-e2e.ps1", workflow)
+        self.assertIn("Get-AuthenticodeSignature", e2e)
+        self.assertIn("manifest.json", e2e)
+        self.assertIn(".sha256", e2e)
+        self.assertIn("signatureStatus", e2e)
+        self.assertIn("signerThumbprint", e2e)
+        self.assertIn("task27-windows-installed-lifecycle.ps1", e2e)
+
+    def test_task27_negative_stable_without_credentials_fails_closed(self):
+        workflow = TASK27.read_text()
+        self.assertIn("Stable without signing credentials fails closed", workflow)
+        self.assertIn("CODEA_WINDOWS_SIGNING_PFX_BASE64", workflow)
+        self.assertIn("CODEA_WINDOWS_SIGNING_PFX_PASSWORD", workflow)
+        self.assertIn("expected stable finalizer to fail without signing credentials", workflow)
 
 
 if __name__ == "__main__":
