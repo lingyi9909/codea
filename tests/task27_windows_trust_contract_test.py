@@ -68,7 +68,7 @@ class Task27WindowsTrustContract(unittest.TestCase):
         self.assertIn("$shimDir = Split-Path -Parent $shim", self.lifecycle)
         self.assertIn("$env:PATH = $shimDir + ';' + $oldPath", self.lifecycle)
         self.assertIn("@('/d','/s','/c','codea doctor')", self.lifecycle)
-        self.assertNotIn("('\\\"' + $shim + '\\" doctor')", self.lifecycle)
+        self.assertIn("$env:PATH = $oldPath", self.lifecycle)
 
 
 if __name__ == "__main__":
