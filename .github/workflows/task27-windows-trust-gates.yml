@@ -82,8 +82,8 @@ jobs:
           CN = Codea Task27 CI Ephemeral
 
           [ext]
-          basicConstraints = critical,CA:TRUE
-          keyUsage = critical,digitalSignature,keyCertSign
+          basicConstraints = critical,CA:FALSE
+          keyUsage = critical,digitalSignature
           extendedKeyUsage = codeSigning
           subjectKeyIdentifier = hash
           authorityKeyIdentifier = keyid:always,issuer
