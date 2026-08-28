@@ -49,7 +49,7 @@ function Assert-NoMotw([string]$Path) {
 
 function Invoke-InstalledRuntimeHealth([string]$Home, [string]$Scenario) {
   $shim = Join-Path $Home 'bin\codea.cmd'
-  if (-not (Test-Path -LiteralPath $shim -PathType Leaf)) { throw "$Scenario: installed codea.cmd missing" }
+  if (-not (Test-Path -LiteralPath $shim -PathType Leaf)) { throw "${Scenario}: installed codea.cmd missing" }
 
   $stdout = Join-Path $work ($Scenario + '-doctor.stdout.txt')
   $stderr = Join-Path $work ($Scenario + '-doctor.stderr.txt')
@@ -65,10 +65,10 @@ function Invoke-InstalledRuntimeHealth([string]$Home, [string]$Scenario) {
   Write-Host $text
 
   if ($text -match '(?i)access is denied|CreateProcess.+(?:failed|denied)|Runtime 启动失败|start runtime:') {
-    throw "$Scenario: historical Windows startup failure reproduced"
+    throw "${Scenario}: historical Windows startup failure reproduced"
   }
   if ($text -notmatch '(?m)^PASS\s+Runtime 健康\s+-\s+OpenCode 1\.18\.11 healthy\s*$') {
-    throw "$Scenario: OpenCode v1.18.11 Runtime Health PASS evidence missing (doctor exit=$($p.ExitCode))"
+    throw "${Scenario}: OpenCode v1.18.11 Runtime Health PASS evidence missing (doctor exit=$($p.ExitCode))"
   }
   Write-Host "TASK27 $Scenario Runtime Health PASS"
 }
