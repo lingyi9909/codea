@@ -77,6 +77,7 @@ jobs:
   windows-trust-regression:
     needs: build-formal-windows-package
     runs-on: windows-2025
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -98,8 +99,9 @@ jobs:
         shell: pwsh
         run: go test ./internal/supervisor -run 'TestJobObjectUsesMinimalProcessRights|TestStartRuntimeCommandRetriesTransientAccessDenied|TestStartRuntimeCommandDoesNotRetryOtherErrors|TestStopTerminatesProcessTree|TestStopForceKillFallback' -count=1 -v
 
-      - name: Authenticode mechanical signing proof
+      - name: Prepare ephemeral Authenticode proof material
         shell: pwsh
+        timeout-minutes: 3
         run: |
           $ErrorActionPreference = 'Stop'
           $archive = Get-ChildItem -LiteralPath task27-artifact -Filter 'codea-*-windows-x64.zip' -File | Select-Object -First 1
@@ -116,24 +118,44 @@ jobs:
           $password = ConvertTo-SecureString $passwordText -AsPlainText -Force
           $pfx = Join-Path $env:RUNNER_TEMP 'task27-signing-proof.pfx'
           $cer = Join-Path $env:RUNNER_TEMP 'task27-signing-proof.cer'
-          $cert = $null
-          try {
-            $cert = New-SelfSignedCertificate -Type CodeSigningCert -Subject 'CN=Codea Task27 CI Ephemeral' -CertStoreLocation 'Cert:\CurrentUser\My' -HashAlgorithm SHA256 -KeyExportPolicy Exportable
-            Export-PfxCertificate -Cert $cert -FilePath $pfx -Password $password | Out-Null
-            Export-Certificate -Cert $cert -FilePath $cer | Out-Null
-            Import-Certificate -FilePath $cer -CertStoreLocation 'Cert:\CurrentUser\Root' | Out-Null
-            Import-Certificate -FilePath $cer -CertStoreLocation 'Cert:\CurrentUser\TrustedPublisher' | Out-Null
+          $cert = New-SelfSignedCertificate -Type CodeSigningCert -Subject 'CN=Codea Task27 CI Ephemeral' -CertStoreLocation 'Cert:\CurrentUser\My' -HashAlgorithm SHA256 -KeyExportPolicy Exportable
+          Export-PfxCertificate -Cert $cert -FilePath $pfx -Password $password | Out-Null
+          Export-Certificate -Cert $cert -FilePath $cer | Out-Null
+          Import-Certificate -FilePath $cer -CertStoreLocation 'Cert:\CurrentUser\Root' | Out-Null
+          Import-Certificate -FilePath $cer -CertStoreLocation 'Cert:\CurrentUser\TrustedPublisher' | Out-Null
 
-            & ./packaging/platform/windows/sign-release.ps1 -File $proofExe -PfxPath $pfx -PfxPassword $passwordText
-            & ./packaging/platform/windows/verify-signature.ps1 -File $proofExe -ExpectedThumbprint $cert.Thumbprint -ExpectedSubject 'Codea Task27 CI Ephemeral'
-          } finally {
-            if ($cert) {
-              foreach ($store in @('Cert:\CurrentUser\My','Cert:\CurrentUser\Root','Cert:\CurrentUser\TrustedPublisher')) {
-                Get-ChildItem -LiteralPath $store | Where-Object Thumbprint -eq $cert.Thumbprint | Remove-Item -Force -ErrorAction SilentlyContinue
-              }
+          "TASK27_PROOF_EXE=$proofExe" >> $env:GITHUB_ENV
+          "TASK27_PROOF_PFX=$pfx" >> $env:GITHUB_ENV
+          "TASK27_PROOF_CER=$cer" >> $env:GITHUB_ENV
+          "TASK27_PROOF_PASSWORD=$passwordText" >> $env:GITHUB_ENV
+          "TASK27_PROOF_THUMBPRINT=$($cert.Thumbprint)" >> $env:GITHUB_ENV
+          Write-Host "Prepared ephemeral Code Signing cert $($cert.Thumbprint)"
+
+      - name: Sign Authenticode proof executable
+        shell: pwsh
+        timeout-minutes: 3
+        run: |
+          $ErrorActionPreference = 'Stop'
+          & ./packaging/platform/windows/sign-release.ps1 -File $env:TASK27_PROOF_EXE -PfxPath $env:TASK27_PROOF_PFX -PfxPassword $env:TASK27_PROOF_PASSWORD
+
+      - name: Verify Authenticode proof signature
+        shell: pwsh
+        timeout-minutes: 3
+        run: |
+          $ErrorActionPreference = 'Stop'
+          & ./packaging/platform/windows/verify-signature.ps1 -File $env:TASK27_PROOF_EXE -ExpectedThumbprint $env:TASK27_PROOF_THUMBPRINT -ExpectedSubject 'Codea Task27 CI Ephemeral'
+
+      - name: Cleanup ephemeral Authenticode proof material
+        if: always()
+        shell: pwsh
+        run: |
+          $thumb = $env:TASK27_PROOF_THUMBPRINT
+          if (-not [string]::IsNullOrWhiteSpace($thumb)) {
+            foreach ($store in @('Cert:\CurrentUser\My','Cert:\CurrentUser\Root','Cert:\CurrentUser\TrustedPublisher')) {
+              Get-ChildItem -LiteralPath $store -ErrorAction SilentlyContinue | Where-Object Thumbprint -eq $thumb | Remove-Item -Force -ErrorAction SilentlyContinue
             }
-            Remove-Item -LiteralPath $pfx,$cer,$proofExe -Force -ErrorAction SilentlyContinue
           }
+          Remove-Item -LiteralPath $env:TASK27_PROOF_PFX,$env:TASK27_PROOF_CER,$env:TASK27_PROOF_EXE -Force -ErrorAction SilentlyContinue
 
       - name: Generate deterministic 360 and EDR evidence
         shell: pwsh
@@ -149,6 +171,7 @@ jobs:
 
       - name: Windows installed-package real lifecycle smoke - fresh install MOTW upgrade rollback
         shell: pwsh
+        timeout-minutes: 12
         run: |
           $archive = Get-ChildItem -LiteralPath task27-artifact -Filter 'codea-*-windows-x64.zip' -File | Select-Object -First 1
           if (-not $archive) { throw 'formal Windows release zip missing' }
