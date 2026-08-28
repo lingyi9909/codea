@@ -4,32 +4,33 @@ plan: docs/superpowers/specs/2026-08-26-codea-v1.1-agent-workspace-design.md
 taskOrder: ["0", "1", "2", "2A", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27"]
 current:
   task: "27"
-  step: 1
-  status: in_progress
-  nextAction: 实施 Task 27 Windows Trust Chain：保持 Runtime 启动可靠性保护，先完成最小进程权限、真实 installed-package lifecycle、Authenticode 发布链和 360 evidence bundle。
+  step: 5
+  status: awaiting_acceptance
+  nextAction: 等待用户人工验收 Task 27 Windows Trust Chain；未明确验收通过前保持 humanAccepted=false。
 checkpoint:
-  commit: c1173cf4a01040dd2e0063d4ae00aa0061e2994c
-  updatedAt: "2026-08-28T01:50:00Z"
+  commit: 29b6196c0e949548539c64ea61a022cf5e210dc9
+  updatedAt: "2026-08-28T08:24:00Z"
 verification:
-  status: not_run
-  commands: []
+  status: pass
+  commands:
+    - "Task 27 Windows Trust Chain Gates run 33154929611"
   errorSummary: ""
-  recoveryAdvice: "Task 27 开发中；未完成 fresh Windows lifecycle Gate 前不得标记通过。"
+  recoveryAdvice: "Task 27 fresh Windows lifecycle、Authenticode、security evidence 与 Task 26 native regression 已全部通过；等待用户人工验收。"
 taskGate:
-  status: not_evaluated
+  status: pass
   gateItems:
-    task27TrustContract: not_run
-    windowsFreshInstallRuntime: not_run
-    windowsMOTWInstallRuntime: not_run
-    windowsSpacesRuntime: not_run
-    windowsUpgradeRuntime: not_run
-    windowsRollbackRuntime: not_run
-    windowsOpenCodeHealth: not_run
-    accessDeniedBoundedRetry: not_run
-    processTreeCleanup: not_run
-    task26WindowsNativeRegression: not_run
-    authenticodeMechanicalProof: not_run
-    windowsSecurityEvidence: not_run
+    task27TrustContract: pass
+    windowsFreshInstallRuntime: pass
+    windowsMOTWInstallRuntime: pass
+    windowsSpacesRuntime: pass
+    windowsUpgradeRuntime: pass
+    windowsRollbackRuntime: pass
+    windowsOpenCodeHealth: pass
+    accessDeniedBoundedRetry: pass
+    processTreeCleanup: pass
+    task26WindowsNativeRegression: pass
+    authenticodeMechanicalProof: pass
+    windowsSecurityEvidence: pass
 humanAcceptance:
   accepted: false
 task17Gate:
@@ -47,7 +48,7 @@ tasks:
   "5": {status: completed, completedSteps: [1, 2, 3, 4, 5, 6], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: cbe692aaff6700c257d3e0806801dcf8d3396870, report: docs/task-reports/task-05.md}
   "6": {status: completed, completedSteps: [1, 2, 3, 4, 5], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: df5c582aa803f55bb091dabaf3a3cf41e0f02f78, report: docs/task-reports/task-06.md}
   "7": {status: completed, completedSteps: [1, 2, 3, 4, 5, 6], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: 0e523e8d70cb5c3357b9e8beb7a1dae6b2480e46, report: docs/task-reports/task-07.md}
-  "8": {status: completed, completedSteps: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: 716b8c1e87ebd865d2c8fae47e3aa36c8c0c4865, report: docs/task-reports/task-08.md}
+  "8": {status: completed, completedSteps: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: 716b8c1e87d865d2c8fae47e3aa36c8c0c4865, report: docs/task-reports/task-08.md}
   "9": {status: completed, completedSteps: [1, 2, 3, 4, 5], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: ac9392c1a6ffe5ca773455b6240a8149010bfe42, report: docs/task-reports/task-09.md}
   "10": {status: completed, completedSteps: [1, 2, 3, 4, 5, 6, 7], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: eb5359dc26e322b777feaf6ddf6cbfdbbccbc685, report: docs/task-reports/task-10.md}
   "11": {status: completed, completedSteps: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: a77cd96448894b515eb9ec5530659cd922b8b839, report: docs/task-reports/task-11.md}
@@ -66,4 +67,4 @@ tasks:
   "24": {status: completed, completedSteps: [1, 2, 3, 4, 5], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: b9b6476a20d45bd06bbb25d2ad258f1a97f97749, report: docs/task-reports/task-24.md}
   "25": {status: completed, completedSteps: [1, 2, 3, 4, 5], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: efec3c084e43e99b80fcc28f525e583626ccc614, report: docs/task-reports/task-25.md}
   "26": {status: completed, completedSteps: [1, 2, 3, 4, 5], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: a85ef424f463837a6bf72239923940b185069b96, report: docs/task-reports/task-26.md}
-  "27": {status: in_progress, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: c1173cf4a01040dd2e0063d4ae00aa0061e2994c, report: docs/task-reports/task-27.md}
+  "27": {status: awaiting_acceptance, completedSteps: [1, 2, 3, 4, 5], verificationStatus: pass, taskGateStatus: pass, humanAccepted: false, checkpoint: 29b6196c0e949548539c64ea61a022cf5e210dc9, report: docs/task-reports/task-27.md}
