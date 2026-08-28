@@ -40,10 +40,17 @@ class Task27AuthenticodeContract(unittest.TestCase):
         self.assertIn("openssl req", text)
         self.assertIn("task27-signing-proof.pfx", text)
         self.assertIn("task27-signing-proof.cer", text)
-        self.assertIn("certutil.exe", text)
         self.assertNotIn("New-SelfSignedCertificate", text)
         self.assertNotIn("[Security.Cryptography.RSA]::Create", text)
         self.assertNotIn("Get-Command openssl.exe", text)
+
+    def test_ci_trust_import_is_noninteractive(self):
+        text = TASK27.read_text()
+        self.assertIn("X509Store", text)
+        self.assertIn("StoreLocation]::CurrentUser", text)
+        self.assertIn("OpenFlags]::ReadWrite", text)
+        self.assertNotIn("certutil.exe -user -addstore", text)
+        self.assertNotIn("certutil.exe -user -delstore", text)
 
     def test_stable_release_requires_signing_credentials_through_finalizer(self):
         workflow = RELEASE.read_text()
