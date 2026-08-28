@@ -201,15 +201,16 @@ jobs:
           $evidence = "dist-release/codea-$env:RELEASE_VERSION-windows-security-evidence.json"
           $notes = Join-Path $env:RUNNER_TEMP 'release-notes.md'
           $sig = (Get-Content -LiteralPath $evidence -Raw | ConvertFrom-Json).signatureStatus
-          @"
-Windows x64 downloadable package for Codea $env:RELEASE_VERSION.
-
-Publisher signature status: $sig. The package also includes deterministic Windows security evidence for 360/EDR false-positive handling.
-
-Download ``codea-$env:RELEASE_VERSION-windows-x64.zip``, extract it, then run ``install/install.ps1`` from PowerShell.
-
-Stable Windows releases fail closed without production Authenticode credentials. Company-intranet G15 certification remains a separate release requirement.
-"@ | Set-Content -LiteralPath $notes -Encoding UTF8
+          $noteLines = @(
+            "Windows x64 downloadable package for Codea $env:RELEASE_VERSION.",
+            "",
+            "Publisher signature status: $sig. The package also includes deterministic Windows security evidence for 360/EDR false-positive handling.",
+            "",
+            "Download codea-$env:RELEASE_VERSION-windows-x64.zip, extract it, then run install/install.ps1 from PowerShell.",
+            "",
+            "Stable Windows releases fail closed without production Authenticode credentials. Company-intranet G15 certification remains a separate release requirement."
+          )
+          $noteLines | Set-Content -LiteralPath $notes -Encoding UTF8
 
           & gh release view $env:RELEASE_TAG *> $null
           $exists = ($LASTEXITCODE -eq 0)
