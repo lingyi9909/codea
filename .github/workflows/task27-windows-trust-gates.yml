@@ -121,59 +121,77 @@ jobs:
           }
           Write-Host 'Extracted formal release codea.exe for signing proof.'
 
-          $passwordText = [guid]::NewGuid().ToString('N')
-          $pfx = Join-Path $env:RUNNER_TEMP 'task27-signing-proof.pfx'
-          $cer = Join-Path $env:RUNNER_TEMP 'task27-signing-proof.cer'
-          Remove-Item -LiteralPath $pfx,$cer -Force -ErrorAction SilentlyContinue
-
-          $rsa = [Security.Cryptography.RSA]::Create(2048)
-          $cert = $null
-          $publicCert = $null
-          try {
-            $request = [Security.Cryptography.X509Certificates.CertificateRequest]::new(
-              'CN=Codea Task27 CI Ephemeral',
-              $rsa,
-              [Security.Cryptography.HashAlgorithmName]::SHA256,
-              [Security.Cryptography.RSASignaturePadding]::Pkcs1
-            )
-            $oids = [Security.Cryptography.OidCollection]::new()
-            [void]$oids.Add([Security.Cryptography.Oid]::new('1.3.6.1.5.5.7.3.3'))
-            $request.CertificateExtensions.Add(
-              [Security.Cryptography.X509Certificates.X509EnhancedKeyUsageExtension]::new($oids, $false)
-            )
-            $cert = $request.CreateSelfSigned([DateTimeOffset]::UtcNow.AddMinutes(-5), [DateTimeOffset]::UtcNow.AddDays(1))
-            [IO.File]::WriteAllBytes(
-              $pfx,
-              $cert.Export([Security.Cryptography.X509Certificates.X509ContentType]::Pfx, $passwordText)
-            )
-            [IO.File]::WriteAllBytes(
-              $cer,
-              $cert.Export([Security.Cryptography.X509Certificates.X509ContentType]::Cert)
-            )
-            $publicCert = [Security.Cryptography.X509Certificates.X509Certificate2]::new($cer)
-            foreach ($storeName in @('Root','TrustedPublisher')) {
-              $store = [Security.Cryptography.X509Certificates.X509Store]::new(
-                $storeName,
-                [Security.Cryptography.X509Certificates.StoreLocation]::CurrentUser
-              )
-              try {
-                $store.Open([Security.Cryptography.X509Certificates.OpenFlags]::ReadWrite)
-                $store.Add($publicCert)
-              } finally {
-                $store.Close()
+          $opensslCommand = Get-Command openssl.exe -ErrorAction SilentlyContinue
+          $openssl = if ($opensslCommand) { $opensslCommand.Source } else { $null }
+          if (-not $openssl) {
+            foreach ($candidate in @(
+              'C:\Program Files\Git\mingw64\bin\openssl.exe',
+              'C:\Program Files\Git\usr\bin\openssl.exe'
+            )) {
+              if (Test-Path -LiteralPath $candidate -PathType Leaf) {
+                $openssl = $candidate
+                break
               }
             }
+          }
+          if (-not $openssl) { throw 'openssl.exe not found on Windows runner' }
+          Write-Host "Using OpenSSL: $openssl"
+
+          $passwordText = [guid]::NewGuid().ToString('N')
+          $key = Join-Path $env:RUNNER_TEMP 'task27-signing-proof.key.pem'
+          $pem = Join-Path $env:RUNNER_TEMP 'task27-signing-proof.cert.pem'
+          $pfx = Join-Path $env:RUNNER_TEMP 'task27-signing-proof.pfx'
+          $cer = Join-Path $env:RUNNER_TEMP 'task27-signing-proof.cer'
+          $config = Join-Path $env:RUNNER_TEMP 'task27-signing-proof.openssl.cnf'
+          Remove-Item -LiteralPath $key,$pem,$pfx,$cer,$config -Force -ErrorAction SilentlyContinue
+
+          @"
+          [req]
+          distinguished_name = dn
+          x509_extensions = ext
+          prompt = no
+
+          [dn]
+          CN = Codea Task27 CI Ephemeral
+
+          [ext]
+          basicConstraints = critical,CA:TRUE
+          keyUsage = critical,digitalSignature,keyCertSign
+          extendedKeyUsage = codeSigning
+          subjectKeyIdentifier = hash
+          authorityKeyIdentifier = keyid:always,issuer
+          "@ | Set-Content -LiteralPath $config -Encoding ascii
+
+          try {
+            & $openssl req -x509 -newkey rsa:2048 -nodes -keyout $key -out $pem -days 1 -sha256 -config $config
+            if ($LASTEXITCODE -ne 0) { throw "openssl certificate generation failed with exit code $LASTEXITCODE" }
+
+            & $openssl pkcs12 -export -out $pfx -inkey $key -in $pem -passout "pass:$passwordText"
+            if ($LASTEXITCODE -ne 0) { throw "openssl PFX export failed with exit code $LASTEXITCODE" }
+
+            & $openssl x509 -in $pem -outform der -out $cer
+            if ($LASTEXITCODE -ne 0) { throw "openssl DER export failed with exit code $LASTEXITCODE" }
+
+            $cert = [Security.Cryptography.X509Certificates.X509Certificate2]::new($cer)
+            try {
+              $thumbprint = $cert.Thumbprint
+            } finally {
+              $cert.Dispose()
+            }
+
+            & certutil.exe -user -addstore -f Root $cer | Out-Host
+            if ($LASTEXITCODE -ne 0) { throw "certutil Root import failed with exit code $LASTEXITCODE" }
+            & certutil.exe -user -addstore -f TrustedPublisher $cer | Out-Host
+            if ($LASTEXITCODE -ne 0) { throw "certutil TrustedPublisher import failed with exit code $LASTEXITCODE" }
 
             "TASK27_PROOF_EXE=$proofExe" >> $env:GITHUB_ENV
             "TASK27_PROOF_PFX=$pfx" >> $env:GITHUB_ENV
             "TASK27_PROOF_CER=$cer" >> $env:GITHUB_ENV
             "TASK27_PROOF_PASSWORD=$passwordText" >> $env:GITHUB_ENV
-            "TASK27_PROOF_THUMBPRINT=$($cert.Thumbprint)" >> $env:GITHUB_ENV
-            Write-Host "Prepared deterministic ephemeral Code Signing cert $($cert.Thumbprint)"
+            "TASK27_PROOF_THUMBPRINT=$thumbprint" >> $env:GITHUB_ENV
+            Write-Host "Prepared OpenSSL ephemeral Code Signing cert $thumbprint"
           } finally {
-            if ($publicCert) { $publicCert.Dispose() }
-            if ($cert) { $cert.Dispose() }
-            $rsa.Dispose()
+            Remove-Item -LiteralPath $key,$pem,$config -Force -ErrorAction SilentlyContinue
           }
 
       - name: Sign Authenticode proof executable
@@ -196,35 +214,21 @@ jobs:
         run: |
           $thumb = [string]$env:TASK27_PROOF_THUMBPRINT
           if (-not [string]::IsNullOrWhiteSpace($thumb)) {
-            foreach ($storeName in @('Root','TrustedPublisher')) {
-              $store = [Security.Cryptography.X509Certificates.X509Store]::new(
-                $storeName,
-                [Security.Cryptography.X509Certificates.StoreLocation]::CurrentUser
-              )
-              try {
-                $store.Open([Security.Cryptography.X509Certificates.OpenFlags]::ReadWrite)
-                $matches = $store.Certificates.Find(
-                  [Security.Cryptography.X509Certificates.X509FindType]::FindByThumbprint,
-                  $thumb,
-                  $false
-                )
-                foreach ($match in $matches) {
-                  $store.Remove($match)
-                  $match.Dispose()
-                }
-              } finally {
-                $store.Close()
-              }
-            }
+            & certutil.exe -user -delstore Root $thumb *> $null
+            & certutil.exe -user -delstore TrustedPublisher $thumb *> $null
           }
           $paths = @(
             [string]$env:TASK27_PROOF_PFX,
             [string]$env:TASK27_PROOF_CER,
-            [string]$env:TASK27_PROOF_EXE
+            [string]$env:TASK27_PROOF_EXE,
+            (Join-Path $env:RUNNER_TEMP 'task27-signing-proof.key.pem'),
+            (Join-Path $env:RUNNER_TEMP 'task27-signing-proof.cert.pem'),
+            (Join-Path $env:RUNNER_TEMP 'task27-signing-proof.openssl.cnf')
           ) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
           if ($paths.Count -gt 0) {
             Remove-Item -LiteralPath $paths -Force -ErrorAction SilentlyContinue
           }
+          exit 0
 
       - name: Generate deterministic 360 and EDR evidence
         shell: pwsh
