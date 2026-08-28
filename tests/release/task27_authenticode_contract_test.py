@@ -34,6 +34,11 @@ class Task27AuthenticodeContract(unittest.TestCase):
         self.assertIn("Thumbprint", text)
         self.assertIn("throw", text)
 
+    def test_verification_error_messages_are_powershell_parse_safe(self):
+        text = VERIFY.read_text()
+        self.assertIn("${resolved}:", text)
+        self.assertNotIn("$resolved:", text)
+
     def test_ci_proof_identity_is_generated_off_windows(self):
         text = TASK27.read_text()
         self.assertIn("Generate ephemeral Authenticode proof identity on Ubuntu", text)
