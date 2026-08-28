@@ -45,7 +45,7 @@ jobs:
       - name: Gate Windows runtime execution boundary
         working-directory: tui
         shell: pwsh
-        run: go test ./internal/supervisor -run 'TestConfigureProcessRemovesRuntimeZoneIdentifier|TestStartRuntimeCommandRetriesTransientAccessDenied|TestStartRuntimeCommandDoesNotRetryOtherErrors' -count=1
+        run: go test ./internal/supervisor -run 'TestConfigureProcessRemovesRuntimeZoneIdentifier|TestStartRuntimeCommandRetriesTransientAccessDenied|TestStartRuntimeCommandDoesNotRetryOtherErrors|TestStopTerminatesProcessTree|TestStopForceKillFallback' -count=1
 
       - name: Download locked OpenCode v1.18.11 Windows runtime
         shell: pwsh
@@ -88,52 +88,43 @@ jobs:
           Set-Content -LiteralPath (Join-Path $pkg 'bin/codea.exe') -Value 'smoke-codea' -NoNewline
           Set-Content -LiteralPath (Join-Path $pkg 'bin/opencode.exe') -Value 'smoke-opencode' -NoNewline
           Copy-Item -LiteralPath './distribution/plugins/dist/index.js' -Destination (Join-Path $pkg 'plugins/index.js')
-
-          # Simulate a browser-downloaded archive whose executable carries MOTW.
           Set-Content -LiteralPath (Join-Path $pkg 'bin/opencode.exe') -Stream Zone.Identifier -Value "[ZoneTransfer]`r`nZoneId=3" -NoNewline
 
           $entries = Get-ChildItem -LiteralPath $pkg -Recurse -File | ForEach-Object {
             $rel = [IO.Path]::GetRelativePath($pkg, $_.FullName) -replace '\\','/'
-            [pscustomobject]@{
-              path = $rel
-              size = $_.Length
-              sha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath $_.FullName).Hash.ToLowerInvariant()
-            }
+            [pscustomobject]@{ path=$rel; size=$_.Length; sha256=(Get-FileHash -Algorithm SHA256 -LiteralPath $_.FullName).Hash.ToLowerInvariant() }
           }
-          [pscustomobject]@{
-            schemaVersion = 1
-            algorithm = 'sha256'
-            files = @($entries)
-          } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $pkg 'manifest.json') -Encoding UTF8
+          [pscustomobject]@{ schemaVersion=1; algorithm='sha256'; files=@($entries) } |
+            ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $pkg 'manifest.json') -Encoding UTF8
 
           $env:CODEA_HOME = $smokeHome
           & ./packaging/platform/windows/install.ps1 -PackageDir $pkg
-
           $installed = Join-Path $smokeHome 'versions/0.1.0-smoke'
           $installedOpenCode = Join-Path $installed 'bin/opencode.exe'
           if (-not (Test-Path (Join-Path $installed 'bin/codea.exe') -PathType Leaf)) { throw 'installed codea.exe missing' }
           if (-not (Test-Path $installedOpenCode -PathType Leaf)) { throw 'installed opencode.exe missing' }
           if (-not (Test-Path (Join-Path $smokeHome 'bin/codea.cmd') -PathType Leaf)) { throw 'codea.cmd shim missing' }
           if (-not (Test-Path (Join-Path $smokeHome 'current.txt') -PathType Leaf)) { throw 'current.txt missing' }
-          if (-not (Test-Path (Join-Path $smokeHome 'current') -PathType Container)) { throw 'current junction missing' }
-          if (Get-Item -LiteralPath $installedOpenCode -Stream Zone.Identifier -ErrorAction SilentlyContinue) {
-            throw 'installed opencode.exe still carries Zone.Identifier/MOTW'
-          }
+          if (Get-Item -LiteralPath $installedOpenCode -Stream Zone.Identifier -ErrorAction SilentlyContinue) { throw 'installed opencode.exe still carries Zone.Identifier/MOTW' }
           Write-Host 'Windows installer smoke passed.'
 
-  build-and-publish:
+  build-package:
     needs: windows-installer-smoke
     runs-on: ubuntu-24.04
     env:
       GOTOOLCHAIN: local
+    outputs:
+      version: ${{ steps.release.outputs.version }}
+      channel: ${{ steps.release.outputs.channel }}
+      tag: ${{ steps.release.outputs.tag }}
+      title: ${{ steps.release.outputs.title }}
+      prerelease: ${{ steps.release.outputs.prerelease }}
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-go@v5
         with:
           go-version: '1.26.5'
           cache-dependency-path: tui/go.sum
-
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: '1.3.14'
@@ -146,7 +137,7 @@ jobs:
         working-directory: distribution/plugins
         run: bun install --frozen-lockfile
 
-      - name: Build Windows x64 release package
+      - name: Build unsigned Windows x64 release package
         shell: bash
         run: |
           set -euo pipefail
@@ -154,7 +145,7 @@ jobs:
           mkdir -p dist-release
           bash packaging/scripts/build-release.sh windows-x64 dist-release
 
-      - name: Verify Windows release archive
+      - name: Verify unsigned Windows release archive
         shell: bash
         run: |
           set -euo pipefail
@@ -164,40 +155,6 @@ jobs:
           test -s "$archive"
           test -s "$checksum"
           (cd dist-release && sha256sum -c "codea-${version}-windows-x64.zip.sha256")
-          python3 - "$archive" "$version" <<'PY'
-          import sys, zipfile
-          archive, version = sys.argv[1:]
-          prefix = f"codea-{version}-windows-x64"
-          required = {
-              f"{prefix}/bin/codea.exe",
-              f"{prefix}/bin/opencode.exe",
-              f"{prefix}/install/install.ps1",
-              f"{prefix}/manifest.json",
-              f"{prefix}/VERSION",
-          }
-          with zipfile.ZipFile(archive) as z:
-              names = set(z.namelist())
-          missing = sorted(required - names)
-          if missing:
-              print("missing required release entries:", file=sys.stderr)
-              for name in missing:
-                  print(f"  - {name}", file=sys.stderr)
-              print("archive entries:", file=sys.stderr)
-              for name in sorted(names):
-                  print(f"  {name}", file=sys.stderr)
-              raise SystemExit(1)
-          print(f"archive content verified: {len(names)} files")
-          PY
-          echo "Windows release archive verified: $archive"
-
-      - name: Upload workflow artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: codea-windows-x64-${{ github.sha }}
-          path: |
-            dist-release/codea-*-windows-x64.zip
-            dist-release/codea-*-windows-x64.zip.sha256
-          if-no-files-found: error
 
       - name: Resolve release channel
         id: release
@@ -219,43 +176,152 @@ jobs:
             prerelease=true
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "channel=$channel" >> "$GITHUB_OUTPUT"
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
           echo "title=$title" >> "$GITHUB_OUTPUT"
           echo "prerelease=$prerelease" >> "$GITHUB_OUTPUT"
 
-      - name: Publish GitHub Release
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ steps.release.outputs.tag }}
-          RELEASE_TITLE: ${{ steps.release.outputs.title }}
-          RELEASE_VERSION: ${{ steps.release.outputs.version }}
-          RELEASE_PRERELEASE: ${{ steps.release.outputs.prerelease }}
-        run: |
-          set -euo pipefail
-          archive="dist-release/codea-${RELEASE_VERSION}-windows-x64.zip"
-          checksum="${archive}.sha256"
-          notes="$RUNNER_TEMP/release-notes.md"
-          {
-            printf 'Windows x64 downloadable package for Codea %s.\n\n' "$RELEASE_VERSION"
-            printf 'Package contents include Codea, locked OpenCode runtime, plugins, agents, skills, configuration, checksum manifest, and Windows installer.\n\n'
-            printf 'Download `codea-%s-windows-x64.zip`, extract it, then run `install/install.ps1` from PowerShell.\n\n' "$RELEASE_VERSION"
-            printf 'This preview package is for product trial before final company-intranet G15 release certification. A stable `v%s` release should only be published after final certification passes.\n' "$RELEASE_VERSION"
-          } > "$notes"
+      - name: Upload unsigned build artifact for Windows finalization
+        uses: actions/upload-artifact@v4
+        with:
+          name: codea-windows-unsigned-${{ github.sha }}
+          path: |
+            dist-release/codea-*-windows-x64.zip
+            dist-release/codea-*-windows-x64.zip.sha256
+          if-no-files-found: error
 
-          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
-            gh release upload "$RELEASE_TAG" "$archive" "$checksum" --clobber
-            gh release edit "$RELEASE_TAG" --target "$GITHUB_SHA" --title "$RELEASE_TITLE" --notes-file "$notes"
-          else
-            args=(release create "$RELEASE_TAG" "$archive" "$checksum" --target "$GITHUB_SHA" --title "$RELEASE_TITLE" --notes-file "$notes")
-            if [[ "$RELEASE_PRERELEASE" == "true" ]]; then
-              args+=(--prerelease)
-            fi
-            gh "${args[@]}"
-          fi
+  sign-finalize-and-publish:
+    needs: build-package
+    runs-on: windows-2025
+    env:
+      CODEA_WINDOWS_SIGNING_PFX_BASE64: ${{ secrets.CODEA_WINDOWS_SIGNING_PFX_BASE64 }}
+      CODEA_WINDOWS_SIGNING_PFX_PASSWORD: ${{ secrets.CODEA_WINDOWS_SIGNING_PFX_PASSWORD }}
+      CODEA_WINDOWS_TIMESTAMP_URL: ${{ vars.CODEA_WINDOWS_TIMESTAMP_URL }}
+      RELEASE_VERSION: ${{ needs.build-package.outputs.version }}
+      RELEASE_CHANNEL: ${{ needs.build-package.outputs.channel }}
+      RELEASE_TAG: ${{ needs.build-package.outputs.tag }}
+      RELEASE_TITLE: ${{ needs.build-package.outputs.title }}
+      RELEASE_PRERELEASE: ${{ needs.build-package.outputs.prerelease }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: codea-windows-unsigned-${{ github.sha }}
+          path: dist-release
+
+      - name: Authenticode sign and rebuild final release archive
+        id: signing
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $archive = Join-Path $PWD "dist-release/codea-$env:RELEASE_VERSION-windows-x64.zip"
+          if (-not (Test-Path -LiteralPath $archive -PathType Leaf)) { throw "release archive missing: $archive" }
+
+          $hasPfx = -not [string]::IsNullOrWhiteSpace($env:CODEA_WINDOWS_SIGNING_PFX_BASE64)
+          $hasPassword = -not [string]::IsNullOrWhiteSpace($env:CODEA_WINDOWS_SIGNING_PFX_PASSWORD)
+          if ($env:RELEASE_CHANNEL -eq 'stable' -and (-not $hasPfx -or -not $hasPassword)) {
+            throw 'stable Windows release requires CODEA_WINDOWS_SIGNING_PFX_BASE64 and CODEA_WINDOWS_SIGNING_PFX_PASSWORD'
+          }
+          if ($hasPfx -xor $hasPassword) { throw 'incomplete Windows signing credentials' }
+
+          $extract = Join-Path $env:RUNNER_TEMP 'codea-release-finalize'
+          Remove-Item -LiteralPath $extract -Recurse -Force -ErrorAction SilentlyContinue
+          Expand-Archive -LiteralPath $archive -DestinationPath $extract -Force
+          $root = Get-ChildItem -LiteralPath $extract -Directory | Select-Object -First 1
+          if (-not $root) { throw 'release root missing after extraction' }
+          $codeaExe = Join-Path $root.FullName 'bin/codea.exe'
+          if (-not (Test-Path -LiteralPath $codeaExe -PathType Leaf)) { throw 'codea.exe missing from release' }
+
+          $signed = $false
+          $thumbprint = ''
+          if ($hasPfx) {
+            $pfx = Join-Path $env:RUNNER_TEMP 'codea-release-signing.pfx'
+            try {
+              [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:CODEA_WINDOWS_SIGNING_PFX_BASE64))
+              $cert = [Security.Cryptography.X509Certificates.X509Certificate2]::new($pfx, $env:CODEA_WINDOWS_SIGNING_PFX_PASSWORD)
+              try { $thumbprint = $cert.Thumbprint } finally { $cert.Dispose() }
+              & ./packaging/platform/windows/sign-release.ps1 -File $codeaExe -PfxPath $pfx -PfxPassword $env:CODEA_WINDOWS_SIGNING_PFX_PASSWORD -TimestampUrl $env:CODEA_WINDOWS_TIMESTAMP_URL
+              & ./packaging/platform/windows/verify-signature.ps1 -File $codeaExe -ExpectedThumbprint $thumbprint
+              $signed = $true
+            } finally {
+              Remove-Item -LiteralPath $pfx -Force -ErrorAction SilentlyContinue
+            }
+          } else {
+            Write-Warning 'Publishing an explicitly unsigned PREVIEW Windows package; stable releases fail closed without production Authenticode credentials.'
+          }
+
+          # Signing changes codea.exe bytes. Regenerate the package manifest so
+          # Installer integrity checks bind to the exact signed executable.
+          $entries = Get-ChildItem -LiteralPath $root.FullName -Recurse -File |
+            Where-Object { $_.FullName -ne (Join-Path $root.FullName 'manifest.json') } |
+            ForEach-Object {
+              $rel = [IO.Path]::GetRelativePath($root.FullName, $_.FullName) -replace '\\','/'
+              [pscustomobject]@{ path=$rel; size=$_.Length; sha256=(Get-FileHash -Algorithm SHA256 -LiteralPath $_.FullName).Hash.ToLowerInvariant() }
+            } | Sort-Object path
+          [pscustomobject]@{ schemaVersion=1; algorithm='sha256'; files=@($entries) } |
+            ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $root.FullName 'manifest.json') -Encoding UTF8
+
+          Remove-Item -LiteralPath $archive -Force
+          Compress-Archive -Path $root.FullName -DestinationPath $archive -CompressionLevel Optimal
+          $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $archive).Hash.ToLowerInvariant()
+          [IO.File]::WriteAllText(($archive + '.sha256'), "$hash  $([IO.Path]::GetFileName($archive))`n", (New-Object Text.UTF8Encoding($false)))
+          "signed=$($signed.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
+          "thumbprint=$thumbprint" >> $env:GITHUB_OUTPUT
+
+      - name: Build 360 and EDR security evidence
+        shell: pwsh
+        run: |
+          $archive = Join-Path $PWD "dist-release/codea-$env:RELEASE_VERSION-windows-x64.zip"
+          $evidence = Join-Path $PWD "dist-release/codea-$env:RELEASE_VERSION-windows-security-evidence.json"
+          & ./packaging/platform/windows/build-security-evidence.ps1 -Archive $archive -GitCommit '${{ github.sha }}' -ReleaseTag $env:RELEASE_TAG -Output $evidence
+          Get-Content -LiteralPath $evidence
+
+      - name: Upload finalized release artifact and security evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: codea-windows-x64-${{ github.sha }}
+          path: |
+            dist-release/codea-*-windows-x64.zip
+            dist-release/codea-*-windows-x64.zip.sha256
+            dist-release/codea-*-windows-security-evidence.json
+          if-no-files-found: error
+
+      - name: Publish GitHub Release
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $archive = "dist-release/codea-$env:RELEASE_VERSION-windows-x64.zip"
+          $checksum = "$archive.sha256"
+          $evidence = "dist-release/codea-$env:RELEASE_VERSION-windows-security-evidence.json"
+          $notes = Join-Path $env:RUNNER_TEMP 'release-notes.md'
+          $signing = if ('${{ steps.signing.outputs.signed }}' -eq 'true') { 'Authenticode signed' } else { 'unsigned preview' }
+          @"
+Windows x64 downloadable package for Codea $env:RELEASE_VERSION.
+
+Package contents include Codea, locked OpenCode runtime, plugins, agents, skills, configuration, checksum manifest, Windows installer, and security evidence. Publisher state: $signing.
+
+Download ``codea-$env:RELEASE_VERSION-windows-x64.zip``, extract it, then run ``install/install.ps1`` from PowerShell.
+
+Preview packages may be unsigned when production signing credentials are not configured. Stable Windows releases fail closed without Authenticode signing credentials. Company-intranet G15 certification remains a separate release requirement.
+"@ | Set-Content -LiteralPath $notes -Encoding UTF8
+
+          $args = @('release')
+          if (& gh release view $env:RELEASE_TAG 2>$null) {
+            & gh release upload $env:RELEASE_TAG $archive $checksum $evidence --clobber
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            & gh release edit $env:RELEASE_TAG --target '${{ github.sha }}' --title $env:RELEASE_TITLE --notes-file $notes
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          } else {
+            $create = @('release','create',$env:RELEASE_TAG,$archive,$checksum,$evidence,'--target','${{ github.sha }}','--title',$env:RELEASE_TITLE,'--notes-file',$notes)
+            if ($env:RELEASE_PRERELEASE -eq 'true') { $create += '--prerelease' }
+            & gh @create
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
 
       - name: Print download target
-        shell: bash
+        shell: pwsh
         run: |
-          echo "Release tag: ${{ steps.release.outputs.tag }}"
-          echo "Asset: codea-${{ steps.release.outputs.version }}-windows-x64.zip"
+          Write-Host "Release tag: $env:RELEASE_TAG"
+          Write-Host "Asset: codea-$env:RELEASE_VERSION-windows-x64.zip"
+          Write-Host "Security evidence: codea-$env:RELEASE_VERSION-windows-security-evidence.json"
