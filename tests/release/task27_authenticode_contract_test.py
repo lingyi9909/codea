@@ -4,6 +4,7 @@ import unittest
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 SIGN = ROOT / "packaging/platform/windows/sign-release.ps1"
 VERIFY = ROOT / "packaging/platform/windows/verify-signature.ps1"
+FINALIZE = ROOT / "packaging/platform/windows/finalize-release.ps1"
 RELEASE = ROOT / ".github/workflows/windows-release.yml"
 
 
@@ -26,13 +27,18 @@ class Task27AuthenticodeContract(unittest.TestCase):
         self.assertIn("Thumbprint", text)
         self.assertIn("throw", text)
 
-    def test_stable_release_requires_signing_credentials(self):
-        text = RELEASE.read_text()
-        self.assertIn("CODEA_WINDOWS_SIGNING_PFX_BASE64", text)
-        self.assertIn("CODEA_WINDOWS_SIGNING_PFX_PASSWORD", text)
-        self.assertIn("stable", text)
-        self.assertIn("sign-release.ps1", text)
-        self.assertIn("verify-signature.ps1", text)
+    def test_stable_release_requires_signing_credentials_through_finalizer(self):
+        workflow = RELEASE.read_text()
+        finalizer = FINALIZE.read_text()
+        self.assertIn("CODEA_WINDOWS_SIGNING_PFX_BASE64", workflow)
+        self.assertIn("CODEA_WINDOWS_SIGNING_PFX_PASSWORD", workflow)
+        self.assertIn("finalize-release.ps1", workflow)
+        self.assertIn("stable", finalizer)
+        self.assertIn("CODEA_WINDOWS_SIGNING_PFX_BASE64", finalizer)
+        self.assertIn("CODEA_WINDOWS_SIGNING_PFX_PASSWORD", finalizer)
+        self.assertIn("sign-release.ps1", finalizer)
+        self.assertIn("verify-signature.ps1", finalizer)
+        self.assertIn("throw", finalizer)
 
 
 if __name__ == "__main__":
