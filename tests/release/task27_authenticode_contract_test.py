@@ -6,6 +6,7 @@ SIGN = ROOT / "packaging/platform/windows/sign-release.ps1"
 VERIFY = ROOT / "packaging/platform/windows/verify-signature.ps1"
 FINALIZE = ROOT / "packaging/platform/windows/finalize-release.ps1"
 RELEASE = ROOT / ".github/workflows/windows-release.yml"
+TASK27 = ROOT / ".github/workflows/task27-windows-trust-gates.yml"
 
 
 class Task27AuthenticodeContract(unittest.TestCase):
@@ -32,6 +33,13 @@ class Task27AuthenticodeContract(unittest.TestCase):
         self.assertIn("Valid", text)
         self.assertIn("Thumbprint", text)
         self.assertIn("throw", text)
+
+    def test_ci_proof_keygen_avoids_windows_cng_hang(self):
+        text = TASK27.read_text()
+        self.assertIn("openssl.exe", text)
+        self.assertIn("certutil.exe", text)
+        self.assertNotIn("New-SelfSignedCertificate", text)
+        self.assertNotIn("[Security.Cryptography.RSA]::Create", text)
 
     def test_stable_release_requires_signing_credentials_through_finalizer(self):
         workflow = RELEASE.read_text()
