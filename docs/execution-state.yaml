@@ -5,17 +5,18 @@ taskOrder: ["0", "1", "2", "2A", "3", "4", "5", "6", "7", "8", "9", "10", "11", 
 current:
   task: "27"
   step: 5
-  status: awaiting_acceptance
-  nextAction: 等待用户定向复验 Task 27 Stable Finalized Release E2E；未明确验收通过前保持 humanAccepted=false。
+  status: completed
+  nextAction: Task 0-27 全部完成并通过人工验收；进入主分支发布与后续维护。
 checkpoint:
   commit: 0390d4697cfee3832d0fa3703bbb35a85f4df2f3
-  updatedAt: "2026-08-28T14:16:00Z"
+  updatedAt: "2026-08-28T14:38:00Z"
 verification:
   status: pass
   commands:
     - "Task 27 Windows Trust Chain Gates run 33178843283"
+    - "Task 27 Windows Trust Chain Gates closeout run 33179384852"
   errorSummary: ""
-  recoveryAdvice: "Task 27 Stable Finalized Release E2E、final signed ZIP lifecycle、Authenticode、security evidence 与 Task 26 native regression 已全部通过；等待用户定向复验。"
+  recoveryAdvice: "Task 27 Stable Finalized Release E2E、final signed ZIP lifecycle、Authenticode、security evidence 与 Task 26 native regression 全部通过；Task 27 已人工验收并合入 main。"
 taskGate:
   status: pass
   gateItems:
@@ -37,7 +38,7 @@ taskGate:
     stableFinalizedSecurityEvidence: pass
     windowsSecurityEvidence: pass
 humanAcceptance:
-  accepted: false
+  accepted: true
 task17Gate:
   task17PackagingContract: pass
   task17ThreePlatformBuildEvidence: pass
@@ -72,4 +73,4 @@ tasks:
   "24": {status: completed, completedSteps: [1, 2, 3, 4, 5], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: b9b6476a20d45bd06bbb25d2ad258f1a97f97749, report: docs/task-reports/task-24.md}
   "25": {status: completed, completedSteps: [1, 2, 3, 4, 5], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: efec3c084e43e99b80fcc28f525e583626ccc614, report: docs/task-reports/task-25.md}
   "26": {status: completed, completedSteps: [1, 2, 3, 4, 5], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: a85ef424f463837a6bf72239923940b185069b96, report: docs/task-reports/task-26.md}
-  "27": {status: awaiting_acceptance, completedSteps: [1, 2, 3, 4, 5], verificationStatus: pass, taskGateStatus: pass, humanAccepted: false, checkpoint: 0390d4697cfee3832d0fa3703bbb35a85f4df2f3, report: docs/task-reports/task-27.md}
+  "27": {status: completed, completedSteps: [1, 2, 3, 4, 5], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: 0390d4697cfee3832d0fa3703bbb35a85f4df2f3, report: docs/task-reports/task-27.md}
