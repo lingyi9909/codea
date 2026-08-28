@@ -1,0 +1,64 @@
+name: Task 27 Windows Trust Chain Gates
+
+on:
+  push:
+    branches: [task27-windows-trust-chain, develop]
+    paths:
+      - 'tui/**'
+      - 'packaging/platform/windows/**'
+      - 'packaging/scripts/**'
+      - 'tests/task27_windows_trust_contract_test.py'
+      - 'tests/release/**'
+      - 'docs/execution-state.yaml'
+      - 'docs/task-reports/task-27.md'
+      - '.github/workflows/task27-windows-trust-gates.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: task27-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contract:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install contract dependency
+        run: pip install PyYAML==6.0.2
+      - name: Task 27 trust contract
+        run: python tests/task27_windows_trust_contract_test.py
+
+  windows-trust-regression:
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.5'
+          cache-dependency-path: tui/go.sum
+      - name: Full native Windows Go regression
+        working-directory: tui
+        shell: pwsh
+        run: go test ./... -count=1
+      - name: Windows bounded access-denied and process-tree regression
+        working-directory: tui
+        shell: pwsh
+        run: go test ./internal/supervisor -run 'TestStartRuntimeCommandRetriesTransientAccessDenied|TestStartRuntimeCommandDoesNotRetryOtherErrors|TestStopTerminatesProcessTree|TestStopForceKillFallback' -count=1 -v
+      - name: Authenticode mechanical signing proof
+        shell: pwsh
+        run: |
+          # sign-release.ps1 / verify-signature.ps1 are implemented by Task 27.
+          if (-not (Test-Path 'packaging/platform/windows/sign-release.ps1')) { throw 'sign-release.ps1 missing' }
+          if (-not (Test-Path 'packaging/platform/windows/verify-signature.ps1')) { throw 'verify-signature.ps1 missing' }
+      - name: Windows installed-package real lifecycle smoke
+        shell: pwsh
+        run: |
+          # Required scenario labels: fresh install, MOTW, upgrade, rollback.
+          if (-not (Test-Path 'tests/release/task27-windows-installed-lifecycle.ps1')) { throw 'task27-windows-installed-lifecycle.ps1 missing' }
+          & 'tests/release/task27-windows-installed-lifecycle.ps1'
