@@ -60,6 +60,10 @@ class Task27WindowsTrustContract(unittest.TestCase):
         self.assertIn("${Scenario}:", self.lifecycle)
         self.assertNotIn("$Scenario:", self.lifecycle)
 
+    def test_lifecycle_does_not_shadow_readonly_home_variable(self):
+        self.assertIn("[string]$CodeaHome", self.lifecycle)
+        self.assertNotIn("[string]$Home", self.lifecycle)
+
 
 if __name__ == "__main__":
     unittest.main()
