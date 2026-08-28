@@ -5,13 +5,15 @@ on:
     branches: [task27-windows-trust-chain, develop]
     paths:
       - 'tui/**'
-      - 'packaging/platform/windows/**'
-      - 'packaging/scripts/**'
+      - 'distribution/**'
+      - 'runtime/**'
+      - 'packaging/**'
       - 'tests/task27_windows_trust_contract_test.py'
       - 'tests/release/**'
       - 'docs/execution-state.yaml'
       - 'docs/task-reports/task-27.md'
       - '.github/workflows/task27-windows-trust-gates.yml'
+      - '.github/workflows/windows-release.yml'
   workflow_dispatch:
 
 permissions:
@@ -36,7 +38,41 @@ jobs:
       - name: Task 27 Authenticode contract
         run: python tests/release/task27_authenticode_contract_test.py
 
+  build-formal-windows-package:
+    runs-on: ubuntu-24.04
+    env:
+      GOTOOLCHAIN: local
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.5'
+          cache-dependency-path: tui/go.sum
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.3.14'
+      - name: Install enterprise plugin dependencies
+        working-directory: distribution/plugins
+        run: bun install --frozen-lockfile
+      - name: Build formal Windows x64 release zip
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf dist-task27
+          mkdir -p dist-task27
+          bash packaging/scripts/build-release.sh windows-x64 dist-task27
+          ls -lh dist-task27/codea-*-windows-x64.zip dist-task27/codea-*-windows-x64.zip.sha256
+      - name: Upload formal Windows release zip
+        uses: actions/upload-artifact@v4
+        with:
+          name: task27-formal-windows-release-${{ github.sha }}
+          path: |
+            dist-task27/codea-*-windows-x64.zip
+            dist-task27/codea-*-windows-x64.zip.sha256
+          if-no-files-found: error
+
   windows-trust-regression:
+    needs: build-formal-windows-package
     runs-on: windows-2025
     steps:
       - uses: actions/checkout@v4
@@ -44,22 +80,70 @@ jobs:
         with:
           go-version: '1.26.5'
           cache-dependency-path: tui/go.sum
+      - uses: actions/download-artifact@v4
+        with:
+          name: task27-formal-windows-release-${{ github.sha }}
+          path: task27-artifact
+
       - name: Full native Windows Go regression
         working-directory: tui
         shell: pwsh
         run: go test ./... -count=1
+
       - name: Windows bounded access-denied and process-tree regression
         working-directory: tui
         shell: pwsh
-        run: go test ./internal/supervisor -run 'TestStartRuntimeCommandRetriesTransientAccessDenied|TestStartRuntimeCommandDoesNotRetryOtherErrors|TestStopTerminatesProcessTree|TestStopForceKillFallback' -count=1 -v
+        run: go test ./internal/supervisor -run 'TestJobObjectUsesMinimalProcessRights|TestStartRuntimeCommandRetriesTransientAccessDenied|TestStartRuntimeCommandDoesNotRetryOtherErrors|TestStopTerminatesProcessTree|TestStopForceKillFallback' -count=1 -v
+
       - name: Authenticode mechanical signing proof
         shell: pwsh
         run: |
-          if (-not (Test-Path 'packaging/platform/windows/sign-release.ps1')) { throw 'sign-release.ps1 missing' }
-          if (-not (Test-Path 'packaging/platform/windows/verify-signature.ps1')) { throw 'verify-signature.ps1 missing' }
-      - name: Windows installed-package real lifecycle smoke
+          $ErrorActionPreference = 'Stop'
+          $archive = Get-ChildItem -LiteralPath task27-artifact -Filter 'codea-*-windows-x64.zip' -File | Select-Object -First 1
+          if (-not $archive) { throw 'formal Windows release zip missing' }
+          $extract = Join-Path $env:RUNNER_TEMP 'task27-signing-proof'
+          Remove-Item -LiteralPath $extract -Recurse -Force -ErrorAction SilentlyContinue
+          Expand-Archive -LiteralPath $archive.FullName -DestinationPath $extract -Force
+          $sourceExe = Get-ChildItem -LiteralPath $extract -Recurse -Filter codea.exe -File | Select-Object -First 1
+          if (-not $sourceExe) { throw 'codea.exe missing from formal release zip' }
+          $proofExe = Join-Path $env:RUNNER_TEMP 'codea-task27-signing-proof.exe'
+          Copy-Item -LiteralPath $sourceExe.FullName -Destination $proofExe -Force
+
+          $passwordText = [guid]::NewGuid().ToString('N')
+          $password = ConvertTo-SecureString $passwordText -AsPlainText -Force
+          $pfx = Join-Path $env:RUNNER_TEMP 'task27-signing-proof.pfx'
+          $cer = Join-Path $env:RUNNER_TEMP 'task27-signing-proof.cer'
+          $cert = $null
+          try {
+            $cert = New-SelfSignedCertificate -Type CodeSigningCert -Subject 'CN=Codea Task27 CI Ephemeral' -CertStoreLocation 'Cert:\CurrentUser\My' -HashAlgorithm SHA256 -KeyExportPolicy Exportable
+            Export-PfxCertificate -Cert $cert -FilePath $pfx -Password $password | Out-Null
+            Export-Certificate -Cert $cert -FilePath $cer | Out-Null
+            Import-Certificate -FilePath $cer -CertStoreLocation 'Cert:\CurrentUser\Root' | Out-Null
+            Import-Certificate -FilePath $cer -CertStoreLocation 'Cert:\CurrentUser\TrustedPublisher' | Out-Null
+
+            & ./packaging/platform/windows/sign-release.ps1 -File $proofExe -PfxPath $pfx -PfxPassword $passwordText
+            & ./packaging/platform/windows/verify-signature.ps1 -File $proofExe -ExpectedThumbprint $cert.Thumbprint -ExpectedSubject 'Codea Task27 CI Ephemeral'
+          } finally {
+            if ($cert) {
+              foreach ($store in @('Cert:\CurrentUser\My','Cert:\CurrentUser\Root','Cert:\CurrentUser\TrustedPublisher')) {
+                Get-ChildItem -LiteralPath $store | Where-Object Thumbprint -eq $cert.Thumbprint | Remove-Item -Force -ErrorAction SilentlyContinue
+              }
+            }
+            Remove-Item -LiteralPath $pfx,$cer,$proofExe -Force -ErrorAction SilentlyContinue
+          }
+
+      - name: Windows installed-package real lifecycle smoke - fresh install MOTW upgrade rollback
         shell: pwsh
         run: |
-          # Required scenario labels: fresh install, MOTW, upgrade, rollback.
-          if (-not (Test-Path 'tests/release/task27-windows-installed-lifecycle.ps1')) { throw 'task27-windows-installed-lifecycle.ps1 missing' }
-          & 'tests/release/task27-windows-installed-lifecycle.ps1'
+          $archive = Get-ChildItem -LiteralPath task27-artifact -Filter 'codea-*-windows-x64.zip' -File | Select-Object -First 1
+          if (-not $archive) { throw 'formal Windows release zip missing' }
+          & ./tests/release/task27-windows-installed-lifecycle.ps1 -Archive $archive.FullName
+
+      - name: Confirm Task 26 Windows native regression remains green
+        working-directory: tui
+        shell: pwsh
+        run: |
+          go test ./... -count=1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          go build ./...
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
