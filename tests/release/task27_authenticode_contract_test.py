@@ -49,6 +49,13 @@ class Task27AuthenticodeContract(unittest.TestCase):
         self.assertNotIn("[Security.Cryptography.RSA]::Create", text)
         self.assertNotIn("Get-Command openssl.exe", text)
 
+    def test_ci_proof_identity_is_end_entity_not_root_ca(self):
+        text = TASK27.read_text()
+        self.assertIn("basicConstraints = critical,CA:FALSE", text)
+        self.assertIn("keyUsage = critical,digitalSignature", text)
+        self.assertNotIn("basicConstraints = critical,CA:TRUE", text)
+        self.assertNotIn("keyCertSign", text)
+
     def test_ci_trust_import_is_noninteractive_and_does_not_touch_root(self):
         text = TASK27.read_text()
         self.assertIn("X509Store", text)
