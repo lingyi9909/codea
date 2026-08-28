@@ -30,16 +30,23 @@ try {
   $flags = [Security.Cryptography.X509Certificates.X509KeyStorageFlags]::EphemeralKeySet
   $cert = [Security.Cryptography.X509Certificates.X509Certificate2]::new($resolvedPfx, $PfxPassword, $flags)
   if (-not $cert.HasPrivateKey) { throw 'signing certificate does not contain a private key' }
-  if ($cert.NotAfter -le [DateTime]::UtcNow) { throw 'signing certificate is expired' }
-  $eku = $cert.Extensions | Where-Object { $_.Oid.Value -eq '2.5.29.37' } | Select-Object -First 1
-  if (-not $eku -or -not ($eku.Format($false) -match 'Code Signing|1\.3\.6\.1\.5\.5\.7\.3\.3')) {
-    throw "signing certificate missing Code Signing EKU $codeSigningEku"
-  }
+  if ($cert.NotAfter.ToUniversalTime() -le [DateTime]::UtcNow) { throw 'signing certificate is expired' }
 
+  $ekuExtension = $cert.Extensions | Where-Object { $_.Oid.Value -eq '2.5.29.37' } | Select-Object -First 1
+  $hasCodeSigningEku = $false
+  if ($ekuExtension) {
+    $typedEku = [Security.Cryptography.X509Certificates.X509EnhancedKeyUsageExtension]$ekuExtension
+    foreach ($oid in $typedEku.EnhancedKeyUsages) {
+      if ($oid.Value -eq $codeSigningEku) { $hasCodeSigningEku = $true; break }
+    }
+  }
+  if (-not $hasCodeSigningEku) { throw "signing certificate missing Code Signing EKU $codeSigningEku" }
+
+  $thumbprint = ($cert.Thumbprint -replace '\s','').ToUpperInvariant()
   foreach ($item in $File) {
     if (-not (Test-Path -LiteralPath $item -PathType Leaf)) { throw "file to sign not found: $item" }
     $resolved = (Resolve-Path -LiteralPath $item).Path
-    $args = @('sign', '/fd', 'SHA256', '/f', $resolvedPfx, '/p', $PfxPassword)
+    $args = @('sign', '/fd', 'SHA256', '/f', $resolvedPfx, '/p', $PfxPassword, '/sha1', $thumbprint)
     if (-not [string]::IsNullOrWhiteSpace($TimestampUrl)) {
       $args += @('/tr', $TimestampUrl, '/td', 'SHA256')
     }
