@@ -34,12 +34,16 @@ class Task27AuthenticodeContract(unittest.TestCase):
         self.assertIn("Thumbprint", text)
         self.assertIn("throw", text)
 
-    def test_ci_proof_keygen_avoids_windows_cng_hang(self):
+    def test_ci_proof_identity_is_generated_off_windows(self):
         text = TASK27.read_text()
-        self.assertIn("openssl.exe", text)
+        self.assertIn("Generate ephemeral Authenticode proof identity on Ubuntu", text)
+        self.assertIn("openssl req", text)
+        self.assertIn("task27-signing-proof.pfx", text)
+        self.assertIn("task27-signing-proof.cer", text)
         self.assertIn("certutil.exe", text)
         self.assertNotIn("New-SelfSignedCertificate", text)
         self.assertNotIn("[Security.Cryptography.RSA]::Create", text)
+        self.assertNotIn("Get-Command openssl.exe", text)
 
     def test_stable_release_requires_signing_credentials_through_finalizer(self):
         workflow = RELEASE.read_text()
