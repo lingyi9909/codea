@@ -11,13 +11,20 @@ $codeSigningEku = '1.3.6.1.5.5.7.3.3'
 function Resolve-SignTool {
   $cmd = Get-Command signtool.exe -ErrorAction SilentlyContinue
   if ($cmd) { return $cmd.Source }
+
   $kits = Join-Path ${env:ProgramFiles(x86)} 'Windows Kits\10\bin'
-  if (Test-Path $kits) {
-    $candidate = Get-ChildItem -LiteralPath $kits -Recurse -Filter signtool.exe -File -ErrorAction SilentlyContinue |
-      Where-Object { $_.FullName -match '\\x64\\signtool\.exe$' } |
-      Sort-Object FullName -Descending |
-      Select-Object -First 1
-    if ($candidate) { return $candidate.FullName }
+  if (Test-Path -LiteralPath $kits -PathType Container) {
+    # Search only the documented SDK layout. Do not recursively enumerate the
+    # entire Windows Kits tree: that made the release gate effectively
+    # unbounded on hosted/enterprise runners.
+    $versionDirs = @(Get-ChildItem -LiteralPath $kits -Directory -ErrorAction SilentlyContinue |
+      Sort-Object Name -Descending)
+    foreach ($versionDir in $versionDirs) {
+      $candidate = Join-Path $versionDir.FullName 'x64\signtool.exe'
+      if (Test-Path -LiteralPath $candidate -PathType Leaf) { return $candidate }
+    }
+    $legacy = Join-Path $kits 'x64\signtool.exe'
+    if (Test-Path -LiteralPath $legacy -PathType Leaf) { return $legacy }
   }
   throw 'signtool.exe not found; install the Windows SDK signing tools'
 }
@@ -25,6 +32,7 @@ function Resolve-SignTool {
 if (-not (Test-Path -LiteralPath $PfxPath -PathType Leaf)) { throw "PFX not found: $PfxPath" }
 $resolvedPfx = (Resolve-Path -LiteralPath $PfxPath).Path
 $signTool = Resolve-SignTool
+Write-Host "Using SignTool: $signTool"
 $cert = $null
 try {
   $flags = [Security.Cryptography.X509Certificates.X509KeyStorageFlags]::EphemeralKeySet
