@@ -72,36 +72,77 @@ jobs:
           set -euo pipefail
           work="$(mktemp -d)"
           trap 'rm -rf "$work"' EXIT
-          cat > "$work/openssl.cnf" <<'EOF'
+
+          cat > "$work/root.cnf" <<'EOF'
           [req]
           distinguished_name = dn
           x509_extensions = ext
           prompt = no
 
           [dn]
-          CN = Codea Task27 CI Ephemeral
+          CN = Codea Task27 CI Root
 
+          [ext]
+          basicConstraints = critical,CA:TRUE,pathlen:0
+          keyUsage = critical,keyCertSign,cRLSign
+          subjectKeyIdentifier = hash
+          authorityKeyIdentifier = keyid:always,issuer
+          EOF
+
+          cat > "$work/leaf-request.cnf" <<'EOF'
+          [req]
+          distinguished_name = dn
+          prompt = no
+
+          [dn]
+          CN = Codea Task27 CI Ephemeral
+          EOF
+
+          cat > "$work/leaf-ext.cnf" <<'EOF'
           [ext]
           basicConstraints = critical,CA:FALSE
           keyUsage = critical,digitalSignature
           extendedKeyUsage = codeSigning
           subjectKeyIdentifier = hash
-          authorityKeyIdentifier = keyid:always,issuer
+          authorityKeyIdentifier = keyid,issuer
           EOF
+
           openssl req -x509 -newkey rsa:2048 -nodes \
-            -keyout "$work/key.pem" \
-            -out "$work/cert.pem" \
-            -days 1 -sha256 -config "$work/openssl.cnf"
+            -keyout "$work/root.key" \
+            -out "$work/root.pem" \
+            -days 1 -sha256 -config "$work/root.cnf"
+
+          openssl req -new -newkey rsa:2048 -nodes \
+            -keyout "$work/leaf.key" \
+            -out "$work/leaf.csr" \
+            -config "$work/leaf-request.cnf"
+
+          openssl x509 -req \
+            -in "$work/leaf.csr" \
+            -CA "$work/root.pem" \
+            -CAkey "$work/root.key" \
+            -CAcreateserial \
+            -out "$work/leaf.pem" \
+            -days 1 -sha256 \
+            -extfile "$work/leaf-ext.cnf" \
+            -extensions ext
+
           openssl pkcs12 -export \
             -out dist-task27/task27-signing-proof.pfx \
-            -inkey "$work/key.pem" \
-            -in "$work/cert.pem" \
+            -inkey "$work/leaf.key" \
+            -in "$work/leaf.pem" \
+            -certfile "$work/root.pem" \
             -passout pass:task27-ci-ephemeral
-          openssl x509 -in "$work/cert.pem" -outform der \
+          openssl x509 -in "$work/leaf.pem" -outform der \
             -out dist-task27/task27-signing-proof.cer
-          openssl x509 -in "$work/cert.pem" -noout -subject -fingerprint -sha256
+          openssl x509 -in "$work/root.pem" -outform der \
+            -out dist-task27/task27-signing-root.cer
+          openssl verify -CAfile "$work/root.pem" "$work/leaf.pem"
+          openssl x509 -in "$work/leaf.pem" -noout -subject -issuer -fingerprint -sha256
+          openssl x509 -in "$work/root.pem" -noout -subject -fingerprint -sha256
           test -s dist-task27/task27-signing-proof.pfx
           test -s dist-task27/task27-signing-proof.cer
+          test -s dist-task27/task27-signing-root.cer
 
       - name: Upload formal Windows release zip
         uses: actions/upload-artifact@v4
@@ -112,6 +153,7 @@ jobs:
             dist-task27/codea-*-windows-x64.zip.sha256
             dist-task27/task27-signing-proof.pfx
             dist-task27/task27-signing-proof.cer
+            dist-task27/task27-signing-root.cer
           if-no-files-found: error
 
   windows-trust-regression:
@@ -148,6 +190,7 @@ jobs:
           if (-not $archive) { throw 'formal Windows release zip missing' }
           $pfx = (Resolve-Path -LiteralPath 'task27-artifact/task27-signing-proof.pfx').Path
           $cer = (Resolve-Path -LiteralPath 'task27-artifact/task27-signing-proof.cer').Path
+          $rootCer = (Resolve-Path -LiteralPath 'task27-artifact/task27-signing-root.cer').Path
 
           $proofExe = Join-Path $env:RUNNER_TEMP 'codea-task27-signing-proof.exe'
           Remove-Item -LiteralPath $proofExe -Force -ErrorAction SilentlyContinue
@@ -163,31 +206,47 @@ jobs:
           }
           Write-Host 'Extracted formal release codea.exe for signing proof.'
 
-          $cert = [Security.Cryptography.X509Certificates.X509Certificate2]::new($cer)
+          $leafCert = [Security.Cryptography.X509Certificates.X509Certificate2]::new($cer)
+          $rootCert = [Security.Cryptography.X509Certificates.X509Certificate2]::new($rootCer)
           try {
-            $thumbprint = $cert.Thumbprint
-            foreach ($storeName in @('TrustedPeople','TrustedPublisher')) {
-              $store = [Security.Cryptography.X509Certificates.X509Store]::new(
-                $storeName,
-                [Security.Cryptography.X509Certificates.StoreLocation]::CurrentUser
-              )
-              try {
-                $store.Open([Security.Cryptography.X509Certificates.OpenFlags]::ReadWrite)
-                $store.Add($cert)
-              } finally {
-                $store.Close()
-              }
+            $thumbprint = $leafCert.Thumbprint
+            $rootThumbprint = $rootCert.Thumbprint
+
+            "TASK27_PROOF_EXE=$proofExe" >> $env:GITHUB_ENV
+            "TASK27_PROOF_PFX=$pfx" >> $env:GITHUB_ENV
+            "TASK27_PROOF_CER=$cer" >> $env:GITHUB_ENV
+            "TASK27_PROOF_ROOT_CER=$rootCer" >> $env:GITHUB_ENV
+            "TASK27_PROOF_PASSWORD=task27-ci-ephemeral" >> $env:GITHUB_ENV
+            "TASK27_PROOF_THUMBPRINT=$thumbprint" >> $env:GITHUB_ENV
+            "TASK27_PROOF_ROOT_THUMBPRINT=$rootThumbprint" >> $env:GITHUB_ENV
+
+            $rootStore = [Security.Cryptography.X509Certificates.X509Store]::new(
+              'Root',
+              [Security.Cryptography.X509Certificates.StoreLocation]::LocalMachine
+            )
+            try {
+              $rootStore.Open([Security.Cryptography.X509Certificates.OpenFlags]::ReadWrite)
+              $rootStore.Add($rootCert)
+            } finally {
+              $rootStore.Close()
+            }
+
+            $publisherStore = [Security.Cryptography.X509Certificates.X509Store]::new(
+              'TrustedPublisher',
+              [Security.Cryptography.X509Certificates.StoreLocation]::CurrentUser
+            )
+            try {
+              $publisherStore.Open([Security.Cryptography.X509Certificates.OpenFlags]::ReadWrite)
+              $publisherStore.Add($leafCert)
+            } finally {
+              $publisherStore.Close()
             }
           } finally {
-            $cert.Dispose()
+            $leafCert.Dispose()
+            $rootCert.Dispose()
           }
 
-          "TASK27_PROOF_EXE=$proofExe" >> $env:GITHUB_ENV
-          "TASK27_PROOF_PFX=$pfx" >> $env:GITHUB_ENV
-          "TASK27_PROOF_CER=$cer" >> $env:GITHUB_ENV
-          "TASK27_PROOF_PASSWORD=task27-ci-ephemeral" >> $env:GITHUB_ENV
-          "TASK27_PROOF_THUMBPRINT=$thumbprint" >> $env:GITHUB_ENV
-          Write-Host "Prepared Ubuntu-generated ephemeral Code Signing cert $thumbprint"
+          Write-Host "Prepared trusted Authenticode chain root=$rootThumbprint leaf=$thumbprint"
 
       - name: Sign Authenticode proof executable
         shell: pwsh
@@ -207,29 +266,50 @@ jobs:
         if: always()
         shell: pwsh
         run: |
-          $thumb = [string]$env:TASK27_PROOF_THUMBPRINT
-          if (-not [string]::IsNullOrWhiteSpace($thumb)) {
-            foreach ($storeName in @('TrustedPeople','TrustedPublisher')) {
-              $store = [Security.Cryptography.X509Certificates.X509Store]::new(
-                $storeName,
-                [Security.Cryptography.X509Certificates.StoreLocation]::CurrentUser
+          $leafThumb = [string]$env:TASK27_PROOF_THUMBPRINT
+          if (-not [string]::IsNullOrWhiteSpace($leafThumb)) {
+            $publisherStore = [Security.Cryptography.X509Certificates.X509Store]::new(
+              'TrustedPublisher',
+              [Security.Cryptography.X509Certificates.StoreLocation]::CurrentUser
+            )
+            try {
+              $publisherStore.Open([Security.Cryptography.X509Certificates.OpenFlags]::ReadWrite)
+              $matches = $publisherStore.Certificates.Find(
+                [Security.Cryptography.X509Certificates.X509FindType]::FindByThumbprint,
+                $leafThumb,
+                $false
               )
-              try {
-                $store.Open([Security.Cryptography.X509Certificates.OpenFlags]::ReadWrite)
-                $matches = $store.Certificates.Find(
-                  [Security.Cryptography.X509Certificates.X509FindType]::FindByThumbprint,
-                  $thumb,
-                  $false
-                )
-                foreach ($match in $matches) {
-                  $store.Remove($match)
-                  $match.Dispose()
-                }
-              } finally {
-                $store.Close()
+              foreach ($match in $matches) {
+                $publisherStore.Remove($match)
+                $match.Dispose()
               }
+            } finally {
+              $publisherStore.Close()
             }
           }
+
+          $rootThumb = [string]$env:TASK27_PROOF_ROOT_THUMBPRINT
+          if (-not [string]::IsNullOrWhiteSpace($rootThumb)) {
+            $rootStore = [Security.Cryptography.X509Certificates.X509Store]::new(
+              'Root',
+              [Security.Cryptography.X509Certificates.StoreLocation]::LocalMachine
+            )
+            try {
+              $rootStore.Open([Security.Cryptography.X509Certificates.OpenFlags]::ReadWrite)
+              $matches = $rootStore.Certificates.Find(
+                [Security.Cryptography.X509Certificates.X509FindType]::FindByThumbprint,
+                $rootThumb,
+                $false
+              )
+              foreach ($match in $matches) {
+                $rootStore.Remove($match)
+                $match.Dispose()
+              }
+            } finally {
+              $rootStore.Close()
+            }
+          }
+
           $paths = @([string]$env:TASK27_PROOF_EXE) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
           if ($paths.Count -gt 0) {
             Remove-Item -LiteralPath $paths -Force -ErrorAction SilentlyContinue
