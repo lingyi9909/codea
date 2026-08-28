@@ -108,7 +108,7 @@ jobs:
           if (Get-Item -LiteralPath $installedOpenCode -Stream Zone.Identifier -ErrorAction SilentlyContinue) { throw 'installed opencode.exe still carries Zone.Identifier/MOTW' }
           Write-Host 'Windows installer smoke passed.'
 
-  build-package:
+  build_package:
     needs: windows-installer-smoke
     runs-on: ubuntu-24.04
     env:
@@ -190,18 +190,18 @@ jobs:
             dist-release/codea-*-windows-x64.zip.sha256
           if-no-files-found: error
 
-  sign-finalize-and-publish:
-    needs: build-package
+  sign_finalize_and_publish:
+    needs: build_package
     runs-on: windows-2025
     env:
       CODEA_WINDOWS_SIGNING_PFX_BASE64: ${{ secrets.CODEA_WINDOWS_SIGNING_PFX_BASE64 }}
       CODEA_WINDOWS_SIGNING_PFX_PASSWORD: ${{ secrets.CODEA_WINDOWS_SIGNING_PFX_PASSWORD }}
       CODEA_WINDOWS_TIMESTAMP_URL: ${{ vars.CODEA_WINDOWS_TIMESTAMP_URL }}
-      RELEASE_VERSION: ${{ needs.build-package.outputs.version }}
-      RELEASE_CHANNEL: ${{ needs.build-package.outputs.channel }}
-      RELEASE_TAG: ${{ needs.build-package.outputs.tag }}
-      RELEASE_TITLE: ${{ needs.build-package.outputs.title }}
-      RELEASE_PRERELEASE: ${{ needs.build-package.outputs.prerelease }}
+      RELEASE_VERSION: ${{ needs.build_package.outputs.version }}
+      RELEASE_CHANNEL: ${{ needs.build_package.outputs.channel }}
+      RELEASE_TAG: ${{ needs.build_package.outputs.tag }}
+      RELEASE_TITLE: ${{ needs.build_package.outputs.title }}
+      RELEASE_PRERELEASE: ${{ needs.build_package.outputs.prerelease }}
       GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v4
@@ -251,8 +251,6 @@ jobs:
             Write-Warning 'Publishing an explicitly unsigned PREVIEW Windows package; stable releases fail closed without production Authenticode credentials.'
           }
 
-          # Signing changes codea.exe bytes. Regenerate the package manifest so
-          # Installer integrity checks bind to the exact signed executable.
           $entries = Get-ChildItem -LiteralPath $root.FullName -Recurse -File |
             Where-Object { $_.FullName -ne (Join-Path $root.FullName 'manifest.json') } |
             ForEach-Object {
@@ -306,8 +304,9 @@ Download ``codea-$env:RELEASE_VERSION-windows-x64.zip``, extract it, then run ``
 Preview packages may be unsigned when production signing credentials are not configured. Stable Windows releases fail closed without Authenticode signing credentials. Company-intranet G15 certification remains a separate release requirement.
 "@ | Set-Content -LiteralPath $notes -Encoding UTF8
 
-          $args = @('release')
-          if (& gh release view $env:RELEASE_TAG 2>$null) {
+          & gh release view $env:RELEASE_TAG *> $null
+          $exists = ($LASTEXITCODE -eq 0)
+          if ($exists) {
             & gh release upload $env:RELEASE_TAG $archive $checksum $evidence --clobber
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
             & gh release edit $env:RELEASE_TAG --target '${{ github.sha }}' --title $env:RELEASE_TITLE --notes-file $notes
