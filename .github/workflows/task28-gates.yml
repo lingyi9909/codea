@@ -1,0 +1,92 @@
+name: Task 28 Repo Intelligence Gates
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [develop]
+    paths:
+      - 'tui/**'
+      - 'distribution/plugins/**'
+      - 'tests/task28-repo-intelligence.sh'
+      - 'docs/task-reports/task-28.md'
+      - 'docs/execution-state.yaml'
+      - '.github/workflows/task28-gates.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: task28-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux-task28:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.5'
+          cache-dependency-path: tui/go.sum
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.3.14'
+
+      - name: Task 28 mechanical acceptance
+        run: bash tests/task28-repo-intelligence.sh
+
+      - name: Full Go regression
+        working-directory: tui
+        run: GOTOOLCHAIN=local go test ./... -count=1
+
+      - name: Install enterprise plugin dependencies
+        working-directory: distribution/plugins
+        run: bun install --frozen-lockfile
+
+      - name: Plugin regression
+        working-directory: distribution/plugins
+        run: |
+          bun test
+          bun run build
+
+  windows-task28:
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.5'
+          cache-dependency-path: tui/go.sum
+
+      - name: Native Windows Task 28 focused regression
+        working-directory: tui
+        shell: pwsh
+        run: |
+          $env:GOTOOLCHAIN='local'
+          $env:CGO_ENABLED='0'
+          go test ./internal/repoctx ./internal/app ./cmd/codea -run 'Repo|Task28|Professional|Submit' -count=1
+          go build ./cmd/codea
+
+      - name: Native Windows full Go regression
+        working-directory: tui
+        shell: pwsh
+        run: |
+          $env:GOTOOLCHAIN='local'
+          $env:CGO_ENABLED='0'
+          go test ./... -count=1
+
+  macos-task28:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.5'
+          cache-dependency-path: tui/go.sum
+
+      - name: Native macOS Task 28 and full Go regression
+        working-directory: tui
+        run: |
+          GOTOOLCHAIN=local go test ./internal/repoctx ./internal/app ./cmd/codea -run 'Repo|Task28|Professional|Submit' -count=1
+          GOTOOLCHAIN=local go test ./... -count=1
+          GOTOOLCHAIN=local go build ./cmd/codea
