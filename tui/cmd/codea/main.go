@@ -16,6 +16,7 @@ import (
 	"codea/tui/internal/app"
 	"codea/tui/internal/command"
 	"codea/tui/internal/opencode"
+	"codea/tui/internal/repoctx"
 	"codea/tui/internal/skill"
 	"codea/tui/internal/supervisor"
 
@@ -101,6 +102,7 @@ func run() error {
 	model.SetCommandRegistry(commandRegistry)
 	model.SetSkillManager(skill.NewManager(roots, store, targetDir, projectDir, adapter, policy))
 	model.SetDoctorService(doctorService)
+	model.SetRepoContextService(repoctx.NewService(projectDir))
 	model.SetWorkspaceInfo(app.WorkspaceInfo{
 		CodeaVersion:    installedCodeaVersion(),
 		RuntimeProvider: "OpenCode",

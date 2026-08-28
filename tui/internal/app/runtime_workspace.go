@@ -109,9 +109,9 @@ func DoctorServiceCmd(service *doctor.Service) tea.Cmd {
 	}
 }
 
-// handleRuntimeWorkspaceMessage centralizes Task 23/24 async workspace results
-// and Task 25 bounded spinner animation so the main Bubble Tea Update loop only
-// needs one Codea-owned hook.
+// handleRuntimeWorkspaceMessage centralizes Codea-owned asynchronous workspace
+// results, including Task 28 Repo Context preparation, before the main Update
+// switch handles Runtime lifecycle messages.
 func (m *Model) handleRuntimeWorkspaceMessage(msg tea.Msg) (bool, tea.Cmd) {
 	// A tick still falls through to the main Update switch so streaming buffers
 	// are flushed and the next TickCmd is scheduled. We only advance the visual
@@ -126,6 +126,9 @@ func (m *Model) handleRuntimeWorkspaceMessage(msg tea.Msg) (bool, tea.Cmd) {
 	}
 
 	switch msg := msg.(type) {
+	case repoContextResultMsg:
+		return true, m.handleRepoContextResult(msg)
+
 	case listModelsResultMsg:
 		if msg.sessionID == "" || msg.sessionID != m.sessionID {
 			return true, nil
