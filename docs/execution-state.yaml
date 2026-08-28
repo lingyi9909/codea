@@ -1,43 +1,37 @@
 schemaVersion: 2
 project: codea-v1.1
 plan: docs/superpowers/specs/2026-08-26-codea-v1.1-agent-workspace-design.md
-taskOrder: ["0", "1", "2", "2A", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26"]
+taskOrder: ["0", "1", "2", "2A", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27"]
 current:
-  task: "26"
-  step: 5
-  status: completed
-  nextAction: Codea V1.1 已完成全部 Task 0-26 并通过人工验收；进入 main 合并与新版本发布收口。
+  task: "27"
+  step: 1
+  status: in_progress
+  nextAction: 实施 Task 27 Windows Trust Chain：保持 Runtime 启动可靠性保护，先完成最小进程权限、真实 installed-package lifecycle、Authenticode 发布链和 360 evidence bundle。
 checkpoint:
-  commit: a85ef424f463837a6bf72239923940b185069b96
-  updatedAt: "2026-08-27T14:50:00Z"
+  commit: c1173cf4a01040dd2e0063d4ae00aa0061e2994c
+  updatedAt: "2026-08-28T01:50:00Z"
 verification:
-  status: pass
-  commands:
-    - "Task 26 V1.1 Integration and Acceptance Gates run 33083017554"
-    - "Windows job 98558246021: go test ./... -count=1 PASS"
-    - "Windows job 98558246021: go build ./... PASS"
-    - "Real Agent G6-G7: 15/15 PASS"
-    - "Real Runtime G11-G13: 17/17 PASS"
-    - "Dual Runtime Parity G12.1: 12/12 PASS"
+  status: not_run
+  commands: []
   errorSummary: ""
-  recoveryAdvice: "V1.1 implementation and acceptance are complete. Previously deferred company-intranet-only Task 17/G15 evidence remains deferred and must not be represented as stable-release certification."
+  recoveryAdvice: "Task 27 开发中；未完成 fresh Windows lifecycle Gate 前不得标记通过。"
 taskGate:
-  status: pass
+  status: not_evaluated
   gateItems:
-    task26Integration: pass
-    task22Through25Regression: pass
-    architectureBoundary: pass
-    linuxRegression: pass
-    macOSNativeRegression: pass
-    windowsNativeRegression: pass
-    windowsNativeTestIndependentExit: pass
-    windowsNativeBuildIndependentExit: pass
-    offlinePackaging: pass
-    v11ReleaseTargets: pass
-    releaseParityG3ThroughG14: pass
-    dualRuntimeParity12Of12: pass
+    task27TrustContract: not_run
+    windowsFreshInstallRuntime: not_run
+    windowsMOTWInstallRuntime: not_run
+    windowsSpacesRuntime: not_run
+    windowsUpgradeRuntime: not_run
+    windowsRollbackRuntime: not_run
+    windowsOpenCodeHealth: not_run
+    accessDeniedBoundedRetry: not_run
+    processTreeCleanup: not_run
+    task26WindowsNativeRegression: not_run
+    authenticodeMechanicalProof: not_run
+    windowsSecurityEvidence: not_run
 humanAcceptance:
-  accepted: true
+  accepted: false
 task17Gate:
   task17PackagingContract: pass
   task17ThreePlatformBuildEvidence: pass
@@ -72,3 +66,4 @@ tasks:
   "24": {status: completed, completedSteps: [1, 2, 3, 4, 5], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: b9b6476a20d45bd06bbb25d2ad258f1a97f97749, report: docs/task-reports/task-24.md}
   "25": {status: completed, completedSteps: [1, 2, 3, 4, 5], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: efec3c084e43e99b80fcc28f525e583626ccc614, report: docs/task-reports/task-25.md}
   "26": {status: completed, completedSteps: [1, 2, 3, 4, 5], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: a85ef424f463837a6bf72239923940b185069b96, report: docs/task-reports/task-26.md}
+  "27": {status: in_progress, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: c1173cf4a01040dd2e0063d4ae00aa0061e2994c, report: docs/task-reports/task-27.md}
