@@ -262,6 +262,56 @@ jobs:
           $ErrorActionPreference = 'Stop'
           & ./packaging/platform/windows/verify-signature.ps1 -File $env:TASK27_PROOF_EXE -ExpectedThumbprint $env:TASK27_PROOF_THUMBPRINT -ExpectedSubject 'Codea Task27 CI Ephemeral'
 
+      - name: Stable without signing credentials fails closed
+        shell: pwsh
+        timeout-minutes: 3
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $archive = Get-ChildItem -LiteralPath task27-artifact -Filter 'codea-*-windows-x64.zip' -File | Select-Object -First 1
+          if (-not $archive) { throw 'formal Windows release zip missing' }
+          $negativeArchive = Join-Path $env:RUNNER_TEMP 'task27-negative-stable.zip'
+          $negativeEvidence = Join-Path $env:RUNNER_TEMP 'task27-negative-stable-evidence.json'
+          Remove-Item -LiteralPath $negativeArchive,$negativeEvidence,($negativeArchive + '.sha256') -Force -ErrorAction SilentlyContinue
+          Copy-Item -LiteralPath $archive.FullName -Destination $negativeArchive
+          $beforeHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $negativeArchive).Hash
+          Remove-Item Env:CODEA_WINDOWS_SIGNING_PFX_BASE64 -ErrorAction SilentlyContinue
+          Remove-Item Env:CODEA_WINDOWS_SIGNING_PFX_PASSWORD -ErrorAction SilentlyContinue
+          $failedClosed = $false
+          try {
+            & ./packaging/platform/windows/finalize-release.ps1 -Archive $negativeArchive -Channel stable -GitCommit '${{ github.sha }}' -ReleaseTag 'task27-ci-negative' -EvidenceOutput $negativeEvidence
+          } catch {
+            if ($_.Exception.Message -notmatch 'stable Windows release requires') { throw }
+            $failedClosed = $true
+            Write-Host "Expected stable credential failure: $($_.Exception.Message)"
+          }
+          if (-not $failedClosed) { throw 'expected stable finalizer to fail without signing credentials' }
+          if (Test-Path -LiteralPath $negativeEvidence) { throw 'stable fail-closed path unexpectedly generated security evidence' }
+          if (Test-Path -LiteralPath ($negativeArchive + '.sha256')) { throw 'stable fail-closed path unexpectedly generated finalized SHA256 sidecar' }
+          $afterHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $negativeArchive).Hash
+          if ($afterHash -ne $beforeHash) { throw 'stable fail-closed path mutated unsigned archive' }
+          Write-Host 'TASK27_STABLE_WITHOUT_CREDENTIALS_FAIL_CLOSED PASS'
+
+      - name: Stable Finalized Release E2E
+        shell: pwsh
+        timeout-minutes: 15
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $archive = Get-ChildItem -LiteralPath task27-artifact -Filter 'codea-*-windows-x64.zip' -File | Select-Object -First 1
+          if (-not $archive) { throw 'formal Windows release zip missing' }
+          $evidence = Join-Path $PWD 'task27-artifact/task27-stable-security-evidence.json'
+          $env:CODEA_WINDOWS_SIGNING_PFX_BASE64 = [Convert]::ToBase64String([IO.File]::ReadAllBytes($env:TASK27_PROOF_PFX))
+          $env:CODEA_WINDOWS_SIGNING_PFX_PASSWORD = $env:TASK27_PROOF_PASSWORD
+          Remove-Item Env:CODEA_WINDOWS_TIMESTAMP_URL -ErrorAction SilentlyContinue
+          try {
+            & ./packaging/platform/windows/finalize-release.ps1 -Archive $archive.FullName -Channel stable -GitCommit '${{ github.sha }}' -ReleaseTag 'task27-ci' -EvidenceOutput $evidence
+            & ./tests/release/task27-stable-finalized-release-e2e.ps1 -Archive $archive.FullName -Evidence $evidence -ExpectedThumbprint $env:TASK27_PROOF_THUMBPRINT
+          } finally {
+            Remove-Item Env:CODEA_WINDOWS_SIGNING_PFX_BASE64 -ErrorAction SilentlyContinue
+            Remove-Item Env:CODEA_WINDOWS_SIGNING_PFX_PASSWORD -ErrorAction SilentlyContinue
+          }
+          "TASK27_STABLE_EVIDENCE=$evidence" >> $env:GITHUB_ENV
+          Write-Host 'TASK27_STABLE_FINALIZED_RELEASE_E2E PASS'
+
       - name: Cleanup ephemeral Authenticode proof material
         if: always()
         shell: pwsh
@@ -315,17 +365,19 @@ jobs:
             Remove-Item -LiteralPath $paths -Force -ErrorAction SilentlyContinue
           }
 
-      - name: Generate deterministic 360 and EDR evidence
+      - name: Verify finalized 360 and EDR evidence
         shell: pwsh
         run: |
           $archive = Get-ChildItem -LiteralPath task27-artifact -Filter 'codea-*-windows-x64.zip' -File | Select-Object -First 1
-          if (-not $archive) { throw 'formal Windows release zip missing' }
-          $evidence = Join-Path $env:RUNNER_TEMP 'task27-security-evidence.json'
-          & ./packaging/platform/windows/build-security-evidence.ps1 -Archive $archive.FullName -GitCommit '${{ github.sha }}' -ReleaseTag 'task27-ci' -Output $evidence
-          $json = Get-Content -LiteralPath $evidence -Raw | ConvertFrom-Json
+          if (-not $archive) { throw 'finalized Windows release zip missing' }
+          if (-not (Test-Path -LiteralPath $env:TASK27_STABLE_EVIDENCE -PathType Leaf)) { throw 'stable finalizer security evidence missing' }
+          $json = Get-Content -LiteralPath $env:TASK27_STABLE_EVIDENCE -Raw | ConvertFrom-Json
           if ($json.releaseSha256 -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $archive.FullName).Hash.ToLowerInvariant()) { throw 'security evidence release SHA256 mismatch' }
           if ($json.openCodeVersion -ne '1.18.11') { throw 'security evidence OpenCode version mismatch' }
-          Get-Content -LiteralPath $evidence
+          if ($json.signatureStatus -ne 'Valid') { throw "security evidence signature status is $($json.signatureStatus), expected Valid" }
+          if ([string]::IsNullOrWhiteSpace([string]$json.signerSubject)) { throw 'security evidence signer subject missing' }
+          if ([string]::IsNullOrWhiteSpace([string]$json.signerThumbprint)) { throw 'security evidence signer thumbprint missing' }
+          Get-Content -LiteralPath $env:TASK27_STABLE_EVIDENCE
 
       - name: Windows installed-package real lifecycle smoke - fresh install MOTW upgrade rollback
         shell: pwsh
