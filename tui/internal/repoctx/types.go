@@ -59,6 +59,7 @@ type SourceFile struct {
 	Symbols    []Symbol
 	Relations  []Relation
 	Unresolved []string
+	candidates []relationCandidate
 }
 
 type RepositoryIndex struct {
@@ -66,6 +67,7 @@ type RepositoryIndex struct {
 	Symbols    []Symbol
 	Relations  []Relation
 	Unresolved []string
+	candidates []relationCandidate
 }
 
 type Query struct {
