@@ -19,11 +19,11 @@ foreach ($item in $File) {
   if (-not [string]::IsNullOrWhiteSpace($ExpectedThumbprint)) {
     $want = ($ExpectedThumbprint -replace '\s','').ToUpperInvariant()
     if ($thumbprint.ToUpperInvariant() -ne $want) {
-      throw "Thumbprint mismatch for $resolved: $thumbprint != $want"
+      throw "Thumbprint mismatch for ${resolved}: $thumbprint != $want"
     }
   }
   if (-not [string]::IsNullOrWhiteSpace($ExpectedSubject) -and $signature.SignerCertificate.Subject -notlike "*$ExpectedSubject*") {
-    throw "Signer subject mismatch for $resolved: $($signature.SignerCertificate.Subject)"
+    throw "Signer subject mismatch for ${resolved}: $($signature.SignerCertificate.Subject)"
   }
 
   [pscustomobject]@{
