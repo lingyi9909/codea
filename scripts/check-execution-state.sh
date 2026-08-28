@@ -34,10 +34,10 @@ task_gate_states = {"not_evaluated", "pass", "fail", "unable_to_evaluate"}
 if state.get("schemaVersion") != 2:
     raise SystemExit("FAIL: schemaVersion must be 2")
 
-expected_task_order = ["0", "1", "2", "2A"] + [str(i) for i in range(3, 27)]
+expected_task_order = ["0", "1", "2", "2A"] + [str(i) for i in range(3, 33)]
 task_order = state.get("taskOrder")
 if task_order != expected_task_order:
-    raise SystemExit("FAIL: taskOrder must match the Codea V1 execution order")
+    raise SystemExit("FAIL: taskOrder must match the Codea execution order through V1.2")
 
 tasks = state.get("tasks")
 if not isinstance(tasks, dict) or set(tasks) != set(task_order):

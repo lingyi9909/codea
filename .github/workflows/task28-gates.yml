@@ -8,6 +8,7 @@ on:
       - 'tui/**'
       - 'distribution/plugins/**'
       - 'tests/task28-repo-intelligence.sh'
+      - 'scripts/check-execution-state.sh'
       - 'docs/task-reports/task-28.md'
       - 'docs/execution-state.yaml'
       - '.github/workflows/task28-gates.yml'
@@ -31,6 +32,9 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: '1.3.14'
+
+      - name: Validate V1.2 execution state
+        run: bash scripts/check-execution-state.sh
 
       - name: Task 28 mechanical acceptance
         run: bash tests/task28-repo-intelligence.sh
