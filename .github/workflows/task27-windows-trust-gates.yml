@@ -65,6 +65,44 @@ jobs:
           mkdir -p dist-task27
           bash packaging/scripts/build-release.sh windows-x64 dist-task27
           ls -lh dist-task27/codea-*-windows-x64.zip dist-task27/codea-*-windows-x64.zip.sha256
+
+      - name: Generate ephemeral Authenticode proof identity on Ubuntu
+        shell: bash
+        run: |
+          set -euo pipefail
+          work="$(mktemp -d)"
+          trap 'rm -rf "$work"' EXIT
+          cat > "$work/openssl.cnf" <<'EOF'
+          [req]
+          distinguished_name = dn
+          x509_extensions = ext
+          prompt = no
+
+          [dn]
+          CN = Codea Task27 CI Ephemeral
+
+          [ext]
+          basicConstraints = critical,CA:TRUE
+          keyUsage = critical,digitalSignature,keyCertSign
+          extendedKeyUsage = codeSigning
+          subjectKeyIdentifier = hash
+          authorityKeyIdentifier = keyid:always,issuer
+          EOF
+          openssl req -x509 -newkey rsa:2048 -nodes \
+            -keyout "$work/key.pem" \
+            -out "$work/cert.pem" \
+            -days 1 -sha256 -config "$work/openssl.cnf"
+          openssl pkcs12 -export \
+            -out dist-task27/task27-signing-proof.pfx \
+            -inkey "$work/key.pem" \
+            -in "$work/cert.pem" \
+            -passout pass:task27-ci-ephemeral
+          openssl x509 -in "$work/cert.pem" -outform der \
+            -out dist-task27/task27-signing-proof.cer
+          openssl x509 -in "$work/cert.pem" -noout -subject -fingerprint -sha256
+          test -s dist-task27/task27-signing-proof.pfx
+          test -s dist-task27/task27-signing-proof.cer
+
       - name: Upload formal Windows release zip
         uses: actions/upload-artifact@v4
         with:
@@ -72,6 +110,8 @@ jobs:
           path: |
             dist-task27/codea-*-windows-x64.zip
             dist-task27/codea-*-windows-x64.zip.sha256
+            dist-task27/task27-signing-proof.pfx
+            dist-task27/task27-signing-proof.cer
           if-no-files-found: error
 
   windows-trust-regression:
@@ -106,6 +146,8 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $archive = Get-ChildItem -LiteralPath task27-artifact -Filter 'codea-*-windows-x64.zip' -File | Select-Object -First 1
           if (-not $archive) { throw 'formal Windows release zip missing' }
+          $pfx = (Resolve-Path -LiteralPath 'task27-artifact/task27-signing-proof.pfx').Path
+          $cer = (Resolve-Path -LiteralPath 'task27-artifact/task27-signing-proof.cer').Path
 
           $proofExe = Join-Path $env:RUNNER_TEMP 'codea-task27-signing-proof.exe'
           Remove-Item -LiteralPath $proofExe -Force -ErrorAction SilentlyContinue
@@ -121,78 +163,24 @@ jobs:
           }
           Write-Host 'Extracted formal release codea.exe for signing proof.'
 
-          $opensslCommand = Get-Command openssl.exe -ErrorAction SilentlyContinue
-          $openssl = if ($opensslCommand) { $opensslCommand.Source } else { $null }
-          if (-not $openssl) {
-            foreach ($candidate in @(
-              'C:\Program Files\Git\mingw64\bin\openssl.exe',
-              'C:\Program Files\Git\usr\bin\openssl.exe'
-            )) {
-              if (Test-Path -LiteralPath $candidate -PathType Leaf) {
-                $openssl = $candidate
-                break
-              }
-            }
-          }
-          if (-not $openssl) { throw 'openssl.exe not found on Windows runner' }
-          Write-Host "Using OpenSSL: $openssl"
-
-          $passwordText = [guid]::NewGuid().ToString('N')
-          $key = Join-Path $env:RUNNER_TEMP 'task27-signing-proof.key.pem'
-          $pem = Join-Path $env:RUNNER_TEMP 'task27-signing-proof.cert.pem'
-          $pfx = Join-Path $env:RUNNER_TEMP 'task27-signing-proof.pfx'
-          $cer = Join-Path $env:RUNNER_TEMP 'task27-signing-proof.cer'
-          $config = Join-Path $env:RUNNER_TEMP 'task27-signing-proof.openssl.cnf'
-          Remove-Item -LiteralPath $key,$pem,$pfx,$cer,$config -Force -ErrorAction SilentlyContinue
-
-          @"
-          [req]
-          distinguished_name = dn
-          x509_extensions = ext
-          prompt = no
-
-          [dn]
-          CN = Codea Task27 CI Ephemeral
-
-          [ext]
-          basicConstraints = critical,CA:TRUE
-          keyUsage = critical,digitalSignature,keyCertSign
-          extendedKeyUsage = codeSigning
-          subjectKeyIdentifier = hash
-          authorityKeyIdentifier = keyid:always,issuer
-          "@ | Set-Content -LiteralPath $config -Encoding ascii
-
+          $cert = [Security.Cryptography.X509Certificates.X509Certificate2]::new($cer)
           try {
-            & $openssl req -x509 -newkey rsa:2048 -nodes -keyout $key -out $pem -days 1 -sha256 -config $config
-            if ($LASTEXITCODE -ne 0) { throw "openssl certificate generation failed with exit code $LASTEXITCODE" }
-
-            & $openssl pkcs12 -export -out $pfx -inkey $key -in $pem -passout "pass:$passwordText"
-            if ($LASTEXITCODE -ne 0) { throw "openssl PFX export failed with exit code $LASTEXITCODE" }
-
-            & $openssl x509 -in $pem -outform der -out $cer
-            if ($LASTEXITCODE -ne 0) { throw "openssl DER export failed with exit code $LASTEXITCODE" }
-
-            $cert = [Security.Cryptography.X509Certificates.X509Certificate2]::new($cer)
-            try {
-              $thumbprint = $cert.Thumbprint
-            } finally {
-              $cert.Dispose()
-            }
-
-            & certutil.exe -user -addstore -f Root $cer | Out-Host
-            if ($LASTEXITCODE -ne 0) { throw "certutil Root import failed with exit code $LASTEXITCODE" }
-            & certutil.exe -user -addstore -f TrustedPublisher $cer | Out-Host
-            if ($LASTEXITCODE -ne 0) { throw "certutil TrustedPublisher import failed with exit code $LASTEXITCODE" }
-
-            "TASK27_PROOF_EXE=$proofExe" >> $env:GITHUB_ENV
-            "TASK27_PROOF_PFX=$pfx" >> $env:GITHUB_ENV
-            "TASK27_PROOF_CER=$cer" >> $env:GITHUB_ENV
-            "TASK27_PROOF_PASSWORD=$passwordText" >> $env:GITHUB_ENV
-            "TASK27_PROOF_THUMBPRINT=$thumbprint" >> $env:GITHUB_ENV
-            Write-Host "Prepared OpenSSL ephemeral Code Signing cert $thumbprint"
+            $thumbprint = $cert.Thumbprint
           } finally {
-            Remove-Item -LiteralPath $key,$pem,$config -Force -ErrorAction SilentlyContinue
+            $cert.Dispose()
           }
+
+          & certutil.exe -user -addstore -f Root $cer | Out-Host
+          if ($LASTEXITCODE -ne 0) { throw "certutil Root import failed with exit code $LASTEXITCODE" }
+          & certutil.exe -user -addstore -f TrustedPublisher $cer | Out-Host
+          if ($LASTEXITCODE -ne 0) { throw "certutil TrustedPublisher import failed with exit code $LASTEXITCODE" }
+
+          "TASK27_PROOF_EXE=$proofExe" >> $env:GITHUB_ENV
+          "TASK27_PROOF_PFX=$pfx" >> $env:GITHUB_ENV
+          "TASK27_PROOF_CER=$cer" >> $env:GITHUB_ENV
+          "TASK27_PROOF_PASSWORD=task27-ci-ephemeral" >> $env:GITHUB_ENV
+          "TASK27_PROOF_THUMBPRINT=$thumbprint" >> $env:GITHUB_ENV
+          Write-Host "Prepared Ubuntu-generated ephemeral Code Signing cert $thumbprint"
 
       - name: Sign Authenticode proof executable
         shell: pwsh
@@ -217,14 +205,7 @@ jobs:
             & certutil.exe -user -delstore Root $thumb *> $null
             & certutil.exe -user -delstore TrustedPublisher $thumb *> $null
           }
-          $paths = @(
-            [string]$env:TASK27_PROOF_PFX,
-            [string]$env:TASK27_PROOF_CER,
-            [string]$env:TASK27_PROOF_EXE,
-            (Join-Path $env:RUNNER_TEMP 'task27-signing-proof.key.pem'),
-            (Join-Path $env:RUNNER_TEMP 'task27-signing-proof.cert.pem'),
-            (Join-Path $env:RUNNER_TEMP 'task27-signing-proof.openssl.cnf')
-          ) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+          $paths = @([string]$env:TASK27_PROOF_EXE) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
           if ($paths.Count -gt 0) {
             Remove-Item -LiteralPath $paths -Force -ErrorAction SilentlyContinue
           }
