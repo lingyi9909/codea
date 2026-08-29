@@ -86,11 +86,14 @@ func applyTaskPlanMetadata(state *TaskExecutionState, metadata map[string]string
 }
 
 func (m *Model) renderTaskProgress() string {
+	if m.activeTurnID == "" {
+		return ""
+	}
 	state := m.taskExecution
 	if !state.PlanSeen || state.TotalSteps < 3 || state.TotalSteps > 7 {
 		return ""
 	}
-	if m.activeTurnID != "" && state.RootTurnID != m.activeTurnID {
+	if state.RootTurnID != m.activeTurnID {
 		return ""
 	}
 	base := fmt.Sprintf("Plan · %d/%d", state.CompletedSteps, state.TotalSteps)
