@@ -13,6 +13,7 @@ export * from "./permissions";
 
 export * from "./task-state/types";
 export * from "./task-state/store";
+export * from "./task-state/gate";
 
 export * from "./tools/types";
 export * from "./tools/errors";

