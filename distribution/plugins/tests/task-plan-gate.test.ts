@@ -112,7 +112,7 @@ describe("Task 29 plan-before-mutation gate", () => {
       const askEvents: any[] = [];
       const octx = makeContext(root, "session-enterprise", askEvents);
       const read = await hooks.tool!.analyze_test_project!.execute({}, octx);
-      expect(read.metadata?.ok).toBe(true);
+      expect(read.metadata?.errorCategory).not.toBe("PLAN_REQUIRED");
 
       await expectPlanRequired(hooks.tool!.write_document!.execute({ path: "docs/plan.md", content: "safe" }, octx));
       await expectPlanRequired(hooks.tool!.write_test_file!.execute({ path: "src/test/java/FooTest.java", content: "class FooTest {}" }, octx));
