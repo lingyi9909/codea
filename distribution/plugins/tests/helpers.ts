@@ -23,6 +23,7 @@ export function makeContext(projectRoot: string): { ctx: ToolContext; logPath: s
   const guard = new RuntimeSecurityGuard(audit);
   const ctx: ToolContext = {
     sessionId: "test-session",
+    rootTurnId: "test-root",
     agent: "unit-test-generator",
     projectRoot,
     audit,
