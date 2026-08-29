@@ -1,0 +1,99 @@
+name: Task 29 Agent Planning Gates
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [develop]
+    paths:
+      - 'tui/**'
+      - 'distribution/plugins/**'
+      - 'distribution/agents/**'
+      - 'distribution/skills/**'
+      - 'tests/task29-agent-planning.sh'
+      - 'tests/task29-agent-planning-contract.sh'
+      - 'scripts/check-execution-state.sh'
+      - 'docs/task-reports/task-29.md'
+      - 'docs/execution-state.yaml'
+      - '.github/workflows/task29-gates.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: task29-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux-task29:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.5'
+          cache-dependency-path: tui/go.sum
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.3.14'
+
+      - name: Validate V1.2 execution state
+        run: bash scripts/check-execution-state.sh
+
+      - name: Install enterprise plugin dependencies
+        working-directory: distribution/plugins
+        run: bun install --frozen-lockfile
+
+      - name: Task 29 mechanical acceptance
+        run: bash tests/task29-agent-planning.sh
+
+      - name: Full plugin regression and build
+        working-directory: distribution/plugins
+        run: |
+          bun test
+          bun run build
+
+      - name: Full Go regression
+        working-directory: tui
+        run: GOTOOLCHAIN=local go test ./... -count=1
+
+  windows-task29:
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.5'
+          cache-dependency-path: tui/go.sum
+
+      - name: Native Windows Task 29 focused regression and build
+        working-directory: tui
+        shell: pwsh
+        run: |
+          $env:GOTOOLCHAIN='local'
+          $env:CGO_ENABLED='0'
+          go test ./internal/app ./internal/runtime ./internal/opencode ./internal/agent -run 'TaskExecution|TaskPlan|ToolMetadata|Trace|Session|Professional|Agent|Materialize|TaskStrategy' -count=1
+          go build ./cmd/codea
+
+      - name: Native Windows full Go regression
+        working-directory: tui
+        shell: pwsh
+        run: |
+          $env:GOTOOLCHAIN='local'
+          $env:CGO_ENABLED='0'
+          go test ./... -count=1
+
+  macos-task29:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.5'
+          cache-dependency-path: tui/go.sum
+
+      - name: Native macOS Task 29 focused and full Go regression
+        working-directory: tui
+        run: |
+          GOTOOLCHAIN=local go test ./internal/app ./internal/runtime ./internal/opencode ./internal/agent -run 'TaskExecution|TaskPlan|ToolMetadata|Trace|Session|Professional|Agent|Materialize|TaskStrategy' -count=1
+          GOTOOLCHAIN=local go test ./... -count=1
+          GOTOOLCHAIN=local go build ./cmd/codea
