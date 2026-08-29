@@ -19,3 +19,6 @@ jobs:
       - name: Professional agent and task strategy regression
         working-directory: tui
         run: GOTOOLCHAIN=local go test ./internal/agent ./internal/app -run 'Professional|Agent|Materialize|TaskStrategy' -count=1
+      - name: Full Application regression
+        working-directory: tui
+        run: GOTOOLCHAIN=local go test ./internal/app -count=1
