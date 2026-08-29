@@ -1,0 +1,26 @@
+name: Task 30 Completion Gate Proof
+
+on:
+  push:
+    branches: [task30-tdd-completion]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: task30-completion-proof
+  cancel-in-progress: true
+
+jobs:
+  completion-proof:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.5'
+      - name: Run Step 5 focused Go proof
+        working-directory: tui
+        env:
+          GOTOOLCHAIN: local
+        run: go test ./internal/app -run 'VerificationGate|Completion|Unverified|AssistantProse' -count=1
