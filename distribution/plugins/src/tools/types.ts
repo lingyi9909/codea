@@ -27,6 +27,7 @@ export interface WriteOwnership {
 
 export interface ToolContext {
   sessionId: string;
+  rootTurnId: string;
   agent: string;
   projectRoot: string;
   audit: AuditLogger;
