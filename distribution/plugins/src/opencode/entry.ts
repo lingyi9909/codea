@@ -6,6 +6,7 @@ import { RuntimeSecurityGuard } from "../runtime-security-guard";
 import { validateNativeReadPath } from "../security/path-policy";
 import { DifyClient, difyConfigFromEnv } from "../dify-query";
 import { TaskStateStore } from "../task-state/store";
+import { requirePlan } from "../task-state/gate";
 import { collectReviewContextTool } from "../tools/collect-review-context";
 import { analyzeTestProjectTool } from "../tools/analyze-test-project";
 import { writeTestFileTool } from "../tools/write-test-file";
@@ -104,11 +105,38 @@ type CodeaTool = {
   execute(params: unknown, ctx: CodeaToolContext): Promise<CodeaToolResult<unknown>>;
 };
 
+async function requirePlanForOperation(
+  taskState: TaskStateStore,
+  guard: RuntimeSecurityGuard,
+  sessionId: string,
+  agent: string,
+  tool: string,
+  action: string,
+  projectRoot: string,
+): Promise<void> {
+  try {
+    await requirePlan(taskState, sessionId, `${tool}:${action}`);
+  } catch (error: any) {
+    guard.after({
+      sessionId,
+      agent,
+      tool,
+      action,
+      projectRoot,
+      durationMs: 0,
+      ok: false,
+      errorCategory: error?.category ?? "PLAN_REQUIRED",
+    });
+    throw error;
+  }
+}
+
 function adaptTool(
   name: string,
   codeaTool: CodeaTool,
   audit: AuditLogger,
   guard: RuntimeSecurityGuard,
+  taskState: TaskStateStore,
   ownershipFactory?: OwnershipFactory,
 ): ToolDefinition {
   return {
@@ -119,6 +147,10 @@ function adaptTool(
       const ownership = ownershipFactory ? ownershipFactory(octx.sessionID, octx.agent) : undefined;
       const codeaCtx = toCodeaContext(octx, audit, guard, ownership);
       octx.metadata({ metadata: { codeaPlugin: CODEA_PLUGIN_ID } });
+
+      if (APPROVAL_ACTIONS.has(action)) {
+        await requirePlanForOperation(taskState, guard, octx.sessionID, octx.agent, name, action, octx.directory);
+      }
 
       const before = guard.before({
         sessionId: octx.sessionID, agent: octx.agent, tool: name, action,
@@ -192,16 +224,16 @@ export const plugin: PluginModule = {
     };
 
     const tools: Record<string, ToolDefinition> = {
-      collect_review_context: adaptTool("collect_review_context", collectReviewContextTool, audit, guard),
-      analyze_test_project: adaptTool("analyze_test_project", analyzeTestProjectTool, audit, guard),
-      write_test_file: adaptTool("write_test_file", writeTestFileTool, audit, guard, ownershipFactory),
-      run_project_test: adaptTool("run_project_test", runProjectTestTool, audit, guard),
-      extract_api_spec: adaptTool("extract_api_spec", extractApiSpecTool, audit, guard),
-      validate_api_example: adaptTool("validate_api_example", validateApiExampleTool, audit, guard),
-      write_document: adaptTool("write_document", writeDocumentTool, audit, guard),
-      task_plan: adaptTool("task_plan", createTaskPlanTool(taskState), audit, guard),
-      task_step: adaptTool("task_step", createTaskStepTool(taskState), audit, guard),
-      task_status: adaptTool("task_status", createTaskStatusTool(taskState), audit, guard),
+      collect_review_context: adaptTool("collect_review_context", collectReviewContextTool, audit, guard, taskState),
+      analyze_test_project: adaptTool("analyze_test_project", analyzeTestProjectTool, audit, guard, taskState),
+      write_test_file: adaptTool("write_test_file", writeTestFileTool, audit, guard, taskState, ownershipFactory),
+      run_project_test: adaptTool("run_project_test", runProjectTestTool, audit, guard, taskState),
+      extract_api_spec: adaptTool("extract_api_spec", extractApiSpecTool, audit, guard, taskState),
+      validate_api_example: adaptTool("validate_api_example", validateApiExampleTool, audit, guard, taskState),
+      write_document: adaptTool("write_document", writeDocumentTool, audit, guard, taskState),
+      task_plan: adaptTool("task_plan", createTaskPlanTool(taskState), audit, guard, taskState),
+      task_step: adaptTool("task_step", createTaskStepTool(taskState), audit, guard, taskState),
+      task_status: adaptTool("task_status", createTaskStatusTool(taskState), audit, guard, taskState),
       "dify-query": buildDifyTool(dify, audit, guard),
     };
 
@@ -210,11 +242,16 @@ export const plugin: PluginModule = {
       "tool.execute.before": async (hookInput, output) => {
         const tool = hookInput.tool;
         if (tool === "bash") {
+          await requirePlanForOperation(taskState, guard, hookInput.sessionID, "", tool, "execute", input.directory);
           const command = (output.args as any)?.command;
           if (typeof command !== "string") return;
           const decision = guard.before({ sessionId: hookInput.sessionID, agent: "", tool: "bash", action: "execute", projectRoot: input.directory, command });
           if (decision.decision === "deny") throw new Error(decision.reason ?? "command denied");
           return;
+        }
+
+        if (NATIVE_MUTATION_TOOLS.has(tool)) {
+          await requirePlanForOperation(taskState, guard, hookInput.sessionID, "", tool, "write", input.directory);
         }
 
         if (NATIVE_PATH_TOOLS.has(tool)) {
