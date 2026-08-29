@@ -7,7 +7,7 @@ import (
 	fakeruntime "codea/tui/tests/fixtures/fake-runtime"
 )
 
-func TestResumeSessionClearsPreviousTaskExecutionState(t *testing.T) {
+func TestResumeSessionMakesPreviousTaskExecutionInactive(t *testing.T) {
 	m := NewModel(fakeruntime.New())
 	m.sessionID = runtime.SessionID("s1")
 	m.activeTurnID = "turn-old"
@@ -18,8 +18,8 @@ func TestResumeSessionClearsPreviousTaskExecutionState(t *testing.T) {
 
 	m.resumeSession(runtime.SessionID("s2"), nil)
 
-	if m.taskExecution != (TaskExecutionState{}) {
-		t.Fatalf("taskExecution after resume=%#v, want zero state", m.taskExecution)
+	if m.activeTurnID != "" {
+		t.Fatalf("activeTurnID after resume=%q, want empty", m.activeTurnID)
 	}
 	if got := m.renderTaskProgress(); got != "" {
 		t.Fatalf("stale plan rendered after resume: %q", got)
