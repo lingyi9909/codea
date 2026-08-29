@@ -21,13 +21,69 @@ type TaskExecutionState struct {
 	VerifyAttempts    int
 	VerifyPassed      bool
 	AutoContinuation int
+	messageRoots      map[string]string
 }
 
 func (m *Model) resetTaskExecution(turnID string) {
-	m.taskExecution = TaskExecutionState{RootTurnID: strings.TrimSpace(turnID)}
+	root := strings.TrimSpace(turnID)
+	m.taskExecution = TaskExecutionState{RootTurnID: root, messageRoots: make(map[string]string)}
+	if root != "" {
+		m.taskExecution.messageRoots[root] = root
+	}
+}
+
+func (m *Model) recordMessageRoot(messageID, rootTurnID string) {
+	messageID = strings.TrimSpace(messageID)
+	rootTurnID = strings.TrimSpace(rootTurnID)
+	if messageID == "" || rootTurnID == "" {
+		return
+	}
+	if m.taskExecution.messageRoots == nil {
+		m.taskExecution.messageRoots = make(map[string]string)
+	}
+	m.taskExecution.messageRoots[messageID] = rootTurnID
+}
+
+func (m *Model) rootTurnForMessage(messageID string) string {
+	messageID = strings.TrimSpace(messageID)
+	if messageID == "" {
+		return ""
+	}
+	return m.taskExecution.messageRoots[messageID]
+}
+
+func (m *Model) observeMessageRoot(ev runtime.Event) {
+	if ev.Type != "message.updated" || strings.TrimSpace(ev.MessageID) == "" {
+		return
+	}
+	if ev.SessionID != "" && m.sessionID != "" && runtime.SessionID(ev.SessionID) != m.sessionID {
+		return
+	}
+	if strings.TrimSpace(ev.MessageRole) != "assistant" {
+		return
+	}
+	parent := strings.TrimSpace(ev.ParentMessageID)
+	if parent == "" {
+		return
+	}
+	root := m.rootTurnForMessage(parent)
+	if root == "" && parent == m.activeTurnID {
+		root = parent
+	}
+	if root != "" {
+		m.recordMessageRoot(ev.MessageID, root)
+	}
+}
+
+func (m *Model) eventRootTurnID(ev runtime.Event) string {
+	if strings.TrimSpace(ev.MessageID) == "" {
+		return m.activeTurnID
+	}
+	return m.rootTurnForMessage(ev.MessageID)
 }
 
 func (m *Model) observeTaskExecutionEvent(ev runtime.Event) {
+	m.observeMessageRoot(ev)
 	if m.activeTurnID == "" {
 		return
 	}
@@ -37,8 +93,11 @@ func (m *Model) observeTaskExecutionEvent(ev runtime.Event) {
 	if ev.SessionID != "" && m.sessionID != "" && runtime.SessionID(ev.SessionID) != m.sessionID {
 		return
 	}
-	if ev.MessageID != "" && ev.MessageID != m.taskExecution.RootTurnID {
-		return
+	if ev.MessageID != "" {
+		root := m.eventRootTurnID(ev)
+		if root == "" || root != m.taskExecution.RootTurnID {
+			return
+		}
 	}
 	if ev.Tool == nil {
 		return
