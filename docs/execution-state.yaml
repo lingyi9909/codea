@@ -6,10 +6,10 @@ current:
   task: "28"
   step: 7
   status: awaiting_acceptance
-  nextAction: Task 28 独立审核整改与 fresh Task Gate 已通过；等待人工验收，验收后进入 Task 29。
+  nextAction: Task 28 最终 Go import identity 整改与 fresh Task Gate 已通过；等待人工验收，验收后进入 Task 29。
 checkpoint:
-  commit: 7ced3e8e4ab0ef97e53e134e03091d1e391a7d78
-  updatedAt: "2026-08-29T03:25:47Z"
+  commit: 2dbdc75e90dcc959b62160b035ac9233d96b6cf9
+  updatedAt: "2026-08-29T03:51:46Z"
 verification:
   status: pass
   commands:
@@ -19,8 +19,11 @@ verification:
     - "Task 28 remediation RED run 33230939358"
     - "Task 28 remediation GREEN run 33231261488"
     - "Task 28 remediation fresh Gates run 33231296329"
+    - "Task 28 external Go import collision RED run 33232024503"
+    - "Task 28 external Go import collision GREEN run 33232101753"
+    - "Task 28 final remediation fresh Gates run 33232361094"
   errorSummary: ""
-  recoveryAdvice: "Task 28 reviewer remediation、formal negative regressions、mechanical acceptance、Linux/Windows/macOS Go 回归、Windows CGO=0 build 与 plugin regression 全部通过；当前只等待人工验收。"
+  recoveryAdvice: "Task 28 reviewer remediation、external-module collision regression、mechanical acceptance、Linux/Windows/macOS Go 回归、Windows CGO=0 build 与 plugin regression 全部通过；当前只等待人工验收。"
 taskGate:
   status: pass
   gateItems:
@@ -38,6 +41,7 @@ taskGate:
     javaGenericDeclaredTypeParsing: pass
     constructorDIEvidence: pass
     mavenWrapperExclusion: pass
+    externalGoImportNotPromoted: pass
     windowsCGO0Build: pass
     linuxFullGoRegression: pass
     windowsNativeRegression: pass
@@ -80,7 +84,7 @@ tasks:
   "25": {status: completed, completedSteps: [1, 2, 3, 4, 5], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: efec3c084e43e99b80fcc28f525e583626ccc614, report: docs/task-reports/task-25.md}
   "26": {status: completed, completedSteps: [1, 2, 3, 4, 5], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: a85ef424f463837a6bf72239923940b185069b96, report: docs/task-reports/task-26.md}
   "27": {status: completed, completedSteps: [1, 2, 3, 4, 5], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: 0390d4697cfee3832d0fa3703bbb35a85f4df2f3, report: docs/task-reports/task-27.md}
-  "28": {status: awaiting_acceptance, completedSteps: [1, 2, 3, 4, 5, 6, 7], verificationStatus: pass, taskGateStatus: pass, humanAccepted: false, checkpoint: 7ced3e8e4ab0ef97e53e134e03091d1e391a7d78, report: docs/task-reports/task-28.md}
+  "28": {status: awaiting_acceptance, completedSteps: [1, 2, 3, 4, 5, 6, 7], verificationStatus: pass, taskGateStatus: pass, humanAccepted: false, checkpoint: 2dbdc75e90dcc959b62160b035ac9233d96b6cf9, report: docs/task-reports/task-28.md}
   "29": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false}
   "30": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false}
   "31": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false}
