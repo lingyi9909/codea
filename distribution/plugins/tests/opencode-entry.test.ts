@@ -42,6 +42,10 @@ function planInput() {
 }
 
 async function establishPlan(hooks: Awaited<ReturnType<typeof plugin.server>>, root: string, sessionID: string): Promise<void> {
+  await hooks["chat.message"]!(
+    { sessionID, messageID: "m1", agent: "general" },
+    { message: { id: "m1", sessionID, role: "user" }, parts: [{ type: "text", text: "engineering task" }] } as any,
+  );
   const result = await hooks.tool!.task_plan!.execute(planInput(), makeToolContext(root, sessionID));
   expect(result.metadata?.ok).toBe(true);
 }
@@ -68,7 +72,6 @@ describe("OpenCode entry — native tool hooks", () => {
         before!({ tool: "glob", sessionID: "s", callID: "c" }, { args: { pattern: "*", path: "../../secret" } }),
       ).rejects.toThrow(/native-path:outside-project/);
 
-      // benign relative path passes.
       await expect(
         before!({ tool: "read", sessionID: "s", callID: "c" }, { args: { filePath: "src/main/Foo.java" } }),
       ).resolves.toBeUndefined();
@@ -85,19 +88,16 @@ describe("OpenCode entry — native tool hooks", () => {
       const hooks = await plugin.server(makeInput(root), { auditLog: path.join(tmp, "audit.log") });
       const before = hooks["tool.execute.before"];
 
-      // absolute path inside project -> allow (not misclassified as sensitive)
       const absInside = path.join(root, "src/main/java/Foo.java");
       await expect(
         before!({ tool: "read", sessionID: "s", callID: "c" }, { args: { filePath: absInside } }),
       ).resolves.toBeUndefined();
 
-      // absolute path outside project -> deny
       const absOutside = path.join(tmp, "outside-secret.txt");
       await expect(
         before!({ tool: "read", sessionID: "s", callID: "c" }, { args: { filePath: absOutside } }),
       ).rejects.toThrow(/native-path:outside-project/);
 
-      // windows absolute inside project -> allow; outside -> deny (coverage)
       const winRoot = "C:\\code\\project";
       const hooksWin = await plugin.server(makeInput(winRoot), { auditLog: path.join(tmp, "audit.log") });
       const beforeWin = hooksWin["tool.execute.before"];

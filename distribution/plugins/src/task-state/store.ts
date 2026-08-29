@@ -27,11 +27,13 @@ const stepSchema = z.object({
 const planSchema = z.object({
   id: z.string().uuid(),
   sessionId: z.string().min(1),
+  rootMessageID: z.string().min(1),
+  taskEpoch: z.string().min(1),
   goal: z.string().min(1).max(TASK_PLAN_LIMITS.goalChars),
   steps: z.array(stepSchema).min(TASK_PLAN_LIMITS.minSteps).max(TASK_PLAN_LIMITS.maxSteps),
   createdAt: z.string().datetime({ offset: true }),
   updatedAt: z.string().datetime({ offset: true }),
-  version: z.literal(1),
+  version: z.literal(2),
 }).strict();
 
 export interface TaskStateStoreOptions {
@@ -78,6 +80,9 @@ function validateNewSteps(steps: NewStep[]): void {
 }
 
 function assertPlanInvariants(plan: TaskPlan): void {
+  if (plan.rootMessageID !== plan.taskEpoch) {
+    throw new TaskStateError("TASK_STATE_CORRUPT", "task plan epoch does not match root message identity");
+  }
   const active = plan.steps.filter((step) => step.status === "in_progress");
   if (active.length > 1) throw new TaskStateError("TASK_STATE_CORRUPT", "more than one in_progress step");
   for (const step of plan.steps) {
@@ -128,8 +133,9 @@ export class TaskStateStore {
     }
   }
 
-  async create(sessionId: string, goal: string, steps: NewStep[]): Promise<TaskPlan> {
+  async create(sessionId: string, goal: string, steps: NewStep[], rootMessageID = sessionId): Promise<TaskPlan> {
     validateText(sessionId, "session id", 1000);
+    validateText(rootMessageID, "root message id", 1000);
     validateText(goal, "goal", TASK_PLAN_LIMITS.goalChars);
     validateNewSteps(steps);
 
@@ -137,6 +143,8 @@ export class TaskStateStore {
     const plan: TaskPlan = {
       id: randomUUID(),
       sessionId,
+      rootMessageID,
+      taskEpoch: rootMessageID,
       goal,
       steps: steps.map((step) => ({
         id: step.id,
@@ -146,7 +154,7 @@ export class TaskStateStore {
       })),
       createdAt: now,
       updatedAt: now,
-      version: 1,
+      version: 2,
     };
     await this.persist(plan);
     return plan;
@@ -157,9 +165,13 @@ export class TaskStateStore {
     stepId: string,
     status: StepStatus,
     evidence?: string,
+    rootMessageID?: string,
   ): Promise<TaskPlan> {
     const plan = await this.load(sessionId);
     if (!plan) throw new TaskStateError("TASK_STATE_INVALID", "task plan does not exist for session");
+    if (rootMessageID !== undefined && plan.rootMessageID !== rootMessageID) {
+      throw new TaskStateError("TASK_STATE_INVALID", "task plan root does not match current root turn");
+    }
     const step = plan.steps.find((candidate) => candidate.id === stepId);
     if (!step) throw new TaskStateError("TASK_STATE_INVALID", `unknown step id: ${stepId}`);
     if (evidence !== undefined && evidence.length > TASK_PLAN_LIMITS.evidenceChars) {
@@ -201,8 +213,15 @@ export class TaskStateStore {
     }
   }
 
-  async hasActionablePlan(sessionId: string): Promise<boolean> {
+  async loadForRoot(sessionId: string, rootMessageID: string): Promise<TaskPlan | null> {
+    if (!rootMessageID.trim()) return null;
     const plan = await this.load(sessionId);
+    if (!plan || plan.rootMessageID !== rootMessageID || plan.taskEpoch !== rootMessageID) return null;
+    return plan;
+  }
+
+  async hasActionablePlan(sessionId: string, rootMessageID: string): Promise<boolean> {
+    const plan = await this.loadForRoot(sessionId, rootMessageID);
     if (!plan) return false;
     return plan.steps.some((step) => step.status === "pending" || step.status === "in_progress");
   }

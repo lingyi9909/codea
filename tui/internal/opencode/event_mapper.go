@@ -116,6 +116,9 @@ type sseTime struct {
 type sseSessionInfo struct {
 	ProjectID string `json:"projectID"`
 	ID        string `json:"id"`
+	SessionID string `json:"sessionID"`
+	Role      string `json:"role"`
+	ParentID  string `json:"parentID"`
 }
 
 type ssePermissionProps struct {
@@ -189,8 +192,15 @@ func MapEvent(raw []byte, sequence int64) (runtime.Event, error) {
 			if info.ProjectID != "" {
 				event.ProjectID = info.ProjectID
 			}
-			if event.MessageID == "" && info.ID != "" && payload.Type == "message.updated" {
-				event.MessageID = info.ID
+			if payload.Type == "message.updated" {
+				if event.SessionID == "" && info.SessionID != "" {
+					event.SessionID = info.SessionID
+				}
+				if event.MessageID == "" && info.ID != "" {
+					event.MessageID = info.ID
+				}
+				event.MessageRole = strings.TrimSpace(info.Role)
+				event.ParentMessageID = strings.TrimSpace(info.ParentID)
 			}
 		}
 	}

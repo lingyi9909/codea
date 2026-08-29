@@ -10,11 +10,22 @@ function input(root: string): PluginInput {
   return { client: {}, project: {}, directory: root, worktree: root, experimental_workspace: {}, serverUrl: new URL("http://127.0.0.1:4096"), $: {} } as unknown as PluginInput;
 }
 
+function rootID(sessionID: string): string {
+  return `turn-${sessionID}`;
+}
+
 function context(root: string, sessionID: string): ToolContext {
   return {
-    sessionID, messageID: `turn-${sessionID}`, agent: "general", directory: root, worktree: root,
+    sessionID, messageID: rootID(sessionID), agent: "general", directory: root, worktree: root,
     abort: new AbortController().signal, metadata() {}, async ask() {},
   };
+}
+
+async function establishRoot(hooks: Awaited<ReturnType<typeof plugin.server>>, sessionID: string): Promise<void> {
+  await hooks["chat.message"]!(
+    { sessionID, messageID: rootID(sessionID), agent: "general" },
+    { message: { id: rootID(sessionID), sessionID, role: "user" }, parts: [{ type: "text", text: "engineering task" }] } as any,
+  );
 }
 
 const plan = {
@@ -47,12 +58,15 @@ describe("Task 29 planning isolation and recovery", () => {
     process.env.CODEA_HOME = home;
     try {
       const first = await plugin.server(input(root), { auditLog: path.join(tmp, "audit-1.log") });
+      await establishRoot(first, "session-A");
+      await establishRoot(first, "session-B");
       await first.tool!.task_plan!.execute(plan, context(root, "session-A"));
 
       await expect(first["tool.execute.before"]!({ tool: "write", sessionID: "session-B", callID: "b1" }, { args: { filePath: "safe.txt", content: "x" } })).rejects.toThrow(/PLAN_REQUIRED/);
       await expect(first["tool.execute.before"]!({ tool: "write", sessionID: "session-A", callID: "a1" }, { args: { filePath: "..\/outside.txt", content: "x" } })).rejects.toThrow(/native-path:outside-project/);
 
       const restarted = await plugin.server(input(root), { auditLog: path.join(tmp, "audit-2.log") });
+      await establishRoot(restarted, "session-A");
       const status = await restarted.tool!.task_status!.execute({}, context(root, "session-A"));
       expect(status.metadata?.codeaTaskPlan).toBe("true");
       expect(status.metadata?.codeaPlanTotal).toBe("3");
@@ -75,10 +89,12 @@ describe("Task 29 planning isolation and recovery", () => {
     try {
       let hooks = await plugin.server(input(root), { auditLog: path.join(tmp, "audit.log") });
       const ctx = context(root, "session-corrupt");
+      await establishRoot(hooks, "session-corrupt");
       await hooks.tool!.task_plan!.execute(plan, ctx);
       fs.writeFileSync(stateFile(home, root, "session-corrupt"), "{not-json\n", "utf8");
 
       hooks = await plugin.server(input(root), { auditLog: path.join(tmp, "audit-restart.log") });
+      await establishRoot(hooks, "session-corrupt");
       const corruptStatus = await hooks.tool!.task_status!.execute({}, ctx);
       expect(corruptStatus.metadata?.ok).toBe(false);
       expect(corruptStatus.metadata?.errorCategory).toBe("TASK_STATE_CORRUPT");

@@ -25,7 +25,8 @@ export function createTaskStepTool(store: TaskStateStore) {
         if ((input.status === "completed" || input.status === "blocked") && !input.evidence?.trim()) {
           throw new ToolError("TASK_STATE_INVALID", `${input.status} requires concise evidence`);
         }
-        const plan = await store.updateStep(ctx.sessionId, input.stepId, input.status, input.evidence);
+        if (!ctx.rootTurnId?.trim()) throw new ToolError("PLAN_REQUIRED", "task_step requires a current root turn");
+        const plan = await store.updateStep(ctx.sessionId, input.stepId, input.status, input.evidence, ctx.rootTurnId);
         ctx.guard.after({
           sessionId: ctx.sessionId, agent: ctx.agent, tool: "task_step", action: "plan",
           projectRoot: ctx.projectRoot, durationMs: Date.now() - started, ok: true,

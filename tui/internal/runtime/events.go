@@ -17,6 +17,8 @@ type Event struct {
 	ProjectID       string
 	SessionID       string
 	MessageID       string
+	ParentMessageID string
+	MessageRole     string
 	PartID          string
 	CreatedAt       time.Time
 	Content         string

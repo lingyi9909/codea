@@ -10,7 +10,14 @@ export function createTaskStatusTool(store: TaskStateStore) {
     async execute(_params: unknown, ctx: ToolContext): Promise<ToolResult<{ plan: TaskPlanSummary | null }>> {
       const started = Date.now();
       try {
-        const plan = await store.load(ctx.sessionId);
+        if (!ctx.rootTurnId?.trim()) {
+          ctx.guard.after({
+            sessionId: ctx.sessionId, agent: ctx.agent, tool: "task_status", action: "plan",
+            projectRoot: ctx.projectRoot, durationMs: Date.now() - started, ok: true,
+          });
+          return ok({ plan: null });
+        }
+        const plan = await store.loadForRoot(ctx.sessionId, ctx.rootTurnId);
         ctx.guard.after({
           sessionId: ctx.sessionId, agent: ctx.agent, tool: "task_status", action: "plan",
           projectRoot: ctx.projectRoot, durationMs: Date.now() - started, ok: true,

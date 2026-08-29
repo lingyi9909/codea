@@ -71,7 +71,7 @@ jobs:
         run: |
           $env:GOTOOLCHAIN='local'
           $env:CGO_ENABLED='0'
-          go test ./internal/app ./internal/runtime ./internal/opencode ./internal/agent -run 'TaskExecution|TaskPlan|ToolMetadata|Trace|Session|Professional|Agent|Materialize|TaskStrategy' -count=1
+          go test ./internal/app ./internal/runtime ./internal/opencode ./internal/agent -run 'TaskExecution|TaskPlan|ToolMetadata|Task29MessageUpdated|Trace|Session|Professional|Agent|Materialize|TaskStrategy' -count=1
           go build ./cmd/codea
 
       - name: Native Windows full Go regression
@@ -94,6 +94,6 @@ jobs:
       - name: Native macOS Task 29 focused and full Go regression
         working-directory: tui
         run: |
-          GOTOOLCHAIN=local go test ./internal/app ./internal/runtime ./internal/opencode ./internal/agent -run 'TaskExecution|TaskPlan|ToolMetadata|Trace|Session|Professional|Agent|Materialize|TaskStrategy' -count=1
+          GOTOOLCHAIN=local go test ./internal/app ./internal/runtime ./internal/opencode ./internal/agent -run 'TaskExecution|TaskPlan|ToolMetadata|Task29MessageUpdated|Trace|Session|Professional|Agent|Materialize|TaskStrategy' -count=1
           GOTOOLCHAIN=local go test ./... -count=1
           GOTOOLCHAIN=local go build ./cmd/codea
