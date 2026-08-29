@@ -41,6 +41,7 @@ func (m *Model) rootAgentForVerification() string {
 			if agent := strings.TrimSpace(entry.Title); agent != "" {
 				return agent
 			}
+		}
 	}
 	return m.activeAgent("")
 }
@@ -110,7 +111,9 @@ func (m *Model) handleVerificationStepFinished(ev runtime.Event) tea.Cmd {
 }
 
 func (m *Model) queueVerificationStepFinished(ev runtime.Event) {
-	m.pendingVerificationPrompt = m.nextVerificationContinuation(ev)
+	if req := m.nextVerificationContinuation(ev); req != nil {
+		m.pendingVerificationPrompt = req
+	}
 }
 
 func (m *Model) takeVerificationContinuationCmd() tea.Cmd {
