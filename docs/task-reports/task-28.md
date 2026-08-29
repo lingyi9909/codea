@@ -1,8 +1,8 @@
 # Task 28 Report — Repo Intelligence
 
-Task 28 production implementation and automated verification are complete. Human acceptance remains a separate final step.
+Task 28 production implementation, reviewer-requested remediation, and automated verification are complete. Human acceptance remains a separate final step.
 
-Verified production checkpoint: `27f6c41e18b3ac8e0ea471f3e9cbbcb1802f594e`
+Verified production checkpoint: `7ced3e8e4ab0ef97e53e134e03091d1e391a7d78`
 
 Plan: `docs/superpowers/plans/2026-08-28-codea-v1.2-task28-repo-intelligence-plan.md`
 
@@ -34,26 +34,43 @@ Task 28 adds a Codea-owned, offline-safe repository intelligence layer without c
 - `c901c11bfc6f65bb3ce57418a7621f1a1ab3326f` — bounded deterministic Repo Map
 - `9fbbda97341464a4582bc9af226b59fe128cdf26` — asynchronous Repo Context prompt injection
 - `a84fefd373daf5ac449e2b483d9815949b316325` — Task 28 dedicated acceptance Gates
-- `27f6c41e18b3ac8e0ea471f3e9cbbcb1802f594e` — Gate false-positive scope correction; production boundary remains unchanged
+- `27f6c41e18b3ac8e0ea471f3e9cbbcb1802f594e` — Gate false-positive scope correction; production boundary unchanged
+- `7ced3e8e4ab0ef97e53e134e03091d1e391a7d78` — reviewer remediation: package/import-aware relation resolution, generic type parsing, Spring DI evidence, and `.mvn/wrapper` exclusion
 
 ## TDD evidence
 
 Task 28.6 Application injection was independently re-proven with RED/GREEN branches before the production commit:
 
-- RED run `33218454153`: **expected failure** — `SetRepoContextService` was undefined, proving the new behavior test failed for the intended missing capability.
-- GREEN run `33218514956`: **SUCCESS** — focused `RepoContext|RepoMapComposition` Application/composition tests passed and the architecture boundary test passed.
+- RED run `33218454153`: **expected failure** — `SetRepoContextService` was undefined.
+- GREEN run `33218514956`: **SUCCESS** — focused Repo Context/Application/composition tests and architecture boundary passed.
 
-The RED/GREEN proof covered ordinary prompts, professional prompt commands, synthetic context ordering, unchanged user text, failure degradation, first-session ordering, and non-blocking prompt submission.
+Reviewer remediation was also executed RED → GREEN before the production commit:
 
-## Fresh automated acceptance
+- RED run `33230939358`: **expected failure**. Seven negative tests reproduced all four reported defects: Java/Go cross-package resolution, unimported foreign targets, Java generic outer-type parsing, plain-POJO constructor injection, and `.mvn/wrapper` exclusion.
+- GREEN run `33231261488`: **SUCCESS** under Go 1.26.5. The same seven tests passed after the scoped fixes.
+- The temporary TDD workflow was not copied to `develop`; the regression tests themselves are permanent production tests.
 
-Verified checkpoint `27f6c41e18b3ac8e0ea471f3e9cbbcb1802f594e`, Task 28 Repo Intelligence Gates run `33218786421`: **SUCCESS**.
+## Reviewer remediation
+
+The remediation scope was intentionally limited to the four requested items:
+
+1. Java and Go relation resolution is now package/import-aware. A target is confirmed only when the source package/import context identifies it uniquely; otherwise the relation remains unresolved/ambiguous.
+2. Java generic field/parameter parsing now uses the outer declared type. For example, `List<OrderService> services` records `List` as the receiver declared type rather than incorrectly promoting `OrderService`.
+3. Constructor `RelationInjects` now requires reliable DI evidence: explicit `@Autowired`/`@Inject`, or a single constructor on an annotation-verified Spring component. Ordinary POJO constructors do not generate confirmed injection relations.
+4. `.mvn/wrapper` is now excluded by path-aware matching while other `.mvn` files such as `.mvn/extensions.xml` remain eligible.
+
+The seven `TestTask28Remediation*` negative tests are part of the formal mechanical Gate through `tests/task28-repo-intelligence.sh`, and are also included by the native Windows/macOS Task 28 focused regex.
+
+## Fresh automated acceptance after remediation
+
+Verified checkpoint `7ced3e8e4ab0ef97e53e134e03091d1e391a7d78`, Task 28 Repo Intelligence Gates run `33231296329`: **SUCCESS**.
 
 ### Mechanical acceptance
 
-The Linux Gate emitted every required Task 28 marker after the corresponding real tests/builds passed:
+The Linux Gate emitted the required markers only after the corresponding tests/builds passed:
 
 ```text
+TASK28_REMEDIATION_REGRESSIONS PASS
 JAVA_CHAIN OrderController#createOrder -> OrderService#createOrder -> OrderRepository#save
 AMBIGUOUS_RELATION_NOT_PROMOTED PASS
 REPO_MAP_DETERMINISTIC PASS
@@ -62,15 +79,13 @@ WINDOWS_CGO0_BUILD PASS
 TASK28_REPO_INTELLIGENCE PASS
 ```
 
-It also passed `codea/tui/tests/architecture` before the Task 28 behavior checks.
-
 ### Full regression evidence
 
-Run `33218786421` completed all three platform jobs successfully:
+Run `33231296329` completed all three platform jobs successfully:
 
-- Linux: mechanical Task 28 acceptance **PASS**; `go test ./... -count=1` **PASS**; enterprise plugin regression **247 pass / 0 fail**; plugin build **PASS** (`93 modules` bundled).
-- Windows 2025: native Task 28 focused regression with `CGO_ENABLED=0` **PASS**; native full Go regression **PASS**; `go build ./cmd/codea` **PASS**.
-- macOS 15: native Task 28 focused regression **PASS**; native full Go regression **PASS**; `go build ./cmd/codea` **PASS**.
+- Linux: execution-state validation **PASS**; remediation regressions **PASS**; mechanical Task 28 acceptance **PASS**; `go test ./... -count=1` **PASS**; enterprise plugin regression **247 pass / 0 fail**; plugin build **PASS** (`93 modules` bundled).
+- Windows Server 2025: Go 1.26.5; native Task 28 focused regression with `CGO_ENABLED=0` **PASS**; `go build ./cmd/codea` with `CGO_ENABLED=0` **PASS**; native full Go regression with `CGO_ENABLED=0` **PASS**.
+- macOS 15 arm64: Go 1.26.5; native Task 28 focused regression **PASS**; native full Go regression **PASS**; `go build ./cmd/codea` **PASS**.
 
 The mechanical Gate additionally proves the pure-Go Windows cross-build contract with `CGO_ENABLED=0 GOOS=windows GOARCH=amd64`.
 
@@ -79,26 +94,29 @@ The mechanical Gate additionally proves the pure-Go Windows cross-build contract
 - Repo Intelligence and Application production code do not import OpenCode vendor implementation packages.
 - `repoctx` does not introduce network libraries or CGO.
 - no tree-sitter dependency is added to `tui/go.mod`.
-- ambiguity is represented as unresolved evidence, not silently upgraded to a confirmed call relation.
-- Repo Map output is deterministic and hard-budgeted.
-- sensitive environment files are excluded from Repo Map context.
-- repository indexing executes in an async Bubble Tea command rather than synchronously in `Update`/submit handling.
+- package/import ambiguity is represented as unresolved evidence, not silently upgraded to a confirmed relation.
+- Repo Map output remains deterministic and hard-budgeted.
+- sensitive environment files remain excluded from Repo Map context.
+- repository indexing remains asynchronous and outside Bubble Tea synchronous submit/update handling.
 
 ## Known limitations
 
-These are intentional V1.2 boundaries, not failed acceptance items:
+These remain intentional V1.2 boundaries, not failed acceptance items:
 
-- deep typed structural extraction is implemented for Java/Spring and Go; other languages use the generic fallback and are **not** claimed to have AST-level precision;
+- deep typed structural extraction is implemented for Java/Spring and Go; other languages use the generic fallback and are not claimed to have AST-level precision;
 - relevance ranking is deterministic evidence-based heuristic ranking, not embedding/semantic-search ranking;
 - the hard Repo Map budget can omit lower-ranked repository context by design;
-- ambiguous targets stay unresolved until stronger evidence exists, which favors correctness over recall.
+- ambiguous targets stay unresolved until stronger evidence exists, favoring correctness over recall.
 
 ## Result
 
+- Reviewer remediation: **PASS**
 - Automated verification: **PASS**
 - Task Gate: **PASS**
-- Verified checkpoint: `27f6c41e18b3ac8e0ea471f3e9cbbcb1802f594e`
-- Automated Gate run: `33218786421` — **SUCCESS**
+- Verified checkpoint: `7ced3e8e4ab0ef97e53e134e03091d1e391a7d78`
+- Remediation RED run: `33230939358` — **EXPECTED FAILURE**
+- Remediation GREEN run: `33231261488` — **SUCCESS**
+- Automated Gate run: `33231296329` — **SUCCESS**
 - Human acceptance: **PENDING**
 
 Current state: **AWAITING_ACCEPTANCE**
