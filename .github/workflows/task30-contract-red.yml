@@ -1,0 +1,26 @@
+name: Task 30 Contract RED Proof
+
+on:
+  push:
+    branches: [task30-tdd-contract]
+    paths:
+      - 'distribution/plugins/tests/verify-project-contract.test.ts'
+      - '.github/workflows/task30-contract-red.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  contract-red:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.3.14'
+      - name: Install plugin dependencies
+        working-directory: distribution/plugins
+        run: bun install --frozen-lockfile
+      - name: Run Task 30 contract RED
+        working-directory: distribution/plugins
+        run: bun test tests/verify-project-contract.test.ts
