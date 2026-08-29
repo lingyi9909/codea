@@ -1,0 +1,50 @@
+name: Task 30 Apply Completion Gate
+
+on:
+  push:
+    branches: [task30-tdd-completion]
+    paths: [.github/workflows/task30-apply-completion.yml]
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: task30-tdd-completion
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.5'
+      - name: Apply exact Step 5 patch
+        shell: python
+        run: |
+          from pathlib import Path
+          p = Path('tui/internal/app/execution_trace.go')
+          s = p.read_text()
+          old = '''\tcase eventTypeStepFinished:\n\t\tm.finishActiveTurnTrace(TraceSuccess)'''
+          new = '''\tcase eventTypeStepFinished:\n\t\tm.finishActiveTurnTrace(traceStatusForVerification(verificationDecision(m.taskExecution)))'''
+          assert old in s, 'execution trace StepFinished anchor missing'
+          p.write_text(s.replace(old, new, 1))
+
+          p = Path('tui/internal/app/update.go')
+          s = p.read_text()
+          old = '''\tcase eventTypeStepFinished:\n\t\tdirty = m.applyReasoningEvents(m.proc.Flush()) || dirty\n\t\tm.finishStreaming()\n\t\tdirty = true'''
+          new = '''\tcase eventTypeStepFinished:\n\t\tdirty = m.applyReasoningEvents(m.proc.Flush()) || dirty\n\t\tm.finishStepWithVerification()\n\t\tdirty = true'''
+          assert old in s, 'update StepFinished anchor missing'
+          p.write_text(s.replace(old, new, 1))
+      - name: Run Step 5 GREEN and regressions
+        working-directory: tui
+        env:
+          GOTOOLCHAIN: local
+        run: go test ./internal/app -run 'VerificationGate|Completion|Unverified|AssistantProse|Task25|Trace|Reasoning' -count=1
+      - name: Commit proof implementation
+        run: |
+          git config user.name 'codea-task30-proof'
+          git config user.email 'codea-task30-proof@users.noreply.github.com'
+          git add tui/internal/app
+          git commit -m 'feat: gate mutating completion on verification'
+          git push origin HEAD:task30-tdd-completion
