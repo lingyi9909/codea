@@ -39,6 +39,12 @@ fi
     -run '^TestTask28Remediation' -count=1
   echo 'TASK28_REMEDIATION_REGRESSIONS PASS'
 
+  # An external module whose import path merely ends with a local repository
+  # directory must never be promoted to a confirmed local Go relation.
+  GOTOOLCHAIN=local go test ./internal/repoctx \
+    -run '^TestTask28RemediationExternalGoImportNotPromoted$' -count=1
+  echo 'EXTERNAL_GO_IMPORT_NOT_PROMOTED PASS'
+
   # Real Java business-chain fixture must be confirmed from typed evidence.
   GOTOOLCHAIN=local go test ./internal/repoctx \
     -run '^TestIndexGraphConfirmsJavaBusinessChainAndRejectsPackageSimilarity$' -count=1
