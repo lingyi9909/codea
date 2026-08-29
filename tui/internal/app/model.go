@@ -87,6 +87,11 @@ type Model struct {
 	// effect before any of that session's events arrive.
 	pendingPrompt *runtime.PromptRequest
 
+	// Task 30 synthetic verification continuations are queued from Runtime
+	// event handling and dispatched by Update as tea.Cmd, never synchronously.
+	pendingVerificationPrompt        *runtime.PromptRequest
+	verificationContinuationTriggers map[string]struct{}
+
 	// pendingResumeID is the session whose history is being loaded during a
 	// resume. It guards against a stale load result applying to the wrong session.
 	pendingResumeID runtime.SessionID

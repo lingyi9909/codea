@@ -188,8 +188,6 @@ func (m *Model) traceRuntimeEvent(ev runtime.Event) {
 		m.traceTool(ev, TraceFailed, true)
 	case eventTypeApprovalRequested:
 		m.traceApprovalRequested(ev)
-	case eventTypeStepFinished:
-		m.finishActiveTurnTrace(TraceSuccess)
 	case eventTypeSessionError, eventTypeRuntimeError:
 		m.traceRuntimeFailure(ev)
 		m.finishActiveTurnTrace(TraceFailed)

@@ -72,7 +72,7 @@ func (m *Model) latestTerminalWorking() (ExecutionTraceEntry, bool) {
 			continue
 		}
 		switch entry.Status {
-		case TraceSuccess, TraceFailed, TraceDenied:
+		case TraceSuccess, TraceFailed, TraceDenied, TraceUnverified:
 			return entry, true
 		}
 	}
@@ -93,6 +93,10 @@ func (m *Model) renderCompletionSummary() string {
 		prefix = "✗ Failed"
 	} else if working.Status == TraceDenied {
 		prefix = "✗ Denied"
+	} else if working.Status == TraceUnverified {
+		prefix = "⚠ Unverified"
+	} else if working.Status == TraceSuccess && working.TurnID == m.taskExecution.RootTurnID && m.taskExecution.MutationSeen && m.taskExecution.VerifyPassed && m.taskExecution.LastVerificationResult == "pass" {
+		prefix = "✓ Verified"
 	}
 	if duration > 0 {
 		prefix += " in " + formatDuration(duration)
