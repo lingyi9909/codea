@@ -19,7 +19,6 @@ function controlRoot(parts: unknown[] | undefined): string {
   for (const candidate of parts) {
     if (!candidate || typeof candidate !== "object") continue;
     const part = candidate as Record<string, unknown>;
-    if (part.synthetic !== true) continue;
     const metadata = part.metadata;
     if (!metadata || typeof metadata !== "object") continue;
     const values = metadata as Record<string, unknown>;
