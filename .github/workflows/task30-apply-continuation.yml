@@ -72,3 +72,4 @@ jobs:
           git add tui/internal/app
           git commit -m 'feat: add bounded agent verification repair loop'
           git push origin HEAD:task30-tdd-completion
+# rerun-after-control-prompt-syntax-fix
