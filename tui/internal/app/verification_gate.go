@@ -1,5 +1,9 @@
 package app
 
+// TraceUnverified is a terminal state distinct from success/failure: Runtime
+// finished, but a mutating task lacks fresh machine verification evidence.
+const TraceUnverified TraceStatus = "unverified"
+
 // VerificationDecision is derived only from machine-observed execution state.
 // Assistant prose is intentionally absent from this contract.
 type VerificationDecision string
