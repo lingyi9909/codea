@@ -5,6 +5,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	pathpkg "path"
 	"sort"
 	"strconv"
 	"strings"
@@ -15,7 +16,7 @@ func ExtractGo(path string, source []byte) SourceFile {
 	if !ok {
 		norm = normalizeSlash(path)
 	}
-	out := SourceFile{Path: norm, Extension: ".go"}
+	out := SourceFile{Path: norm, Extension: ".go", ImportAliases: map[string]string{}}
 	fset := token.NewFileSet()
 	file, err := parser.ParseFile(fset, norm, source, parser.AllErrors)
 	if err != nil {
@@ -28,6 +29,13 @@ func ExtractGo(path string, source []byte) SourceFile {
 	for _, imp := range file.Imports {
 		if p, e := strconv.Unquote(imp.Path.Value); e == nil {
 			out.Imports = append(out.Imports, p)
+			alias := pathpkg.Base(p)
+			if imp.Name != nil {
+				alias = imp.Name.Name
+			}
+			if alias != "" && alias != "_" && alias != "." {
+				out.ImportAliases[alias] = p
+			}
 		}
 	}
 	sort.Strings(out.Imports)
@@ -187,6 +195,7 @@ func goExprName(e ast.Expr) string {
 	}
 	return ""
 }
+
 func goFuncSignature(fd *ast.FuncDecl) string {
 	parts := []string{}
 	if fd.Type.Params != nil {
