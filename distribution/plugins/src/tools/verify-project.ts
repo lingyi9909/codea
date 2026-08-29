@@ -1,6 +1,10 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { scanDlp } from "../security/dlp";
+import { execCommand, type ExecResult } from "./exec";
+import { invalidInput } from "./errors";
 import { validateSchema, type JsonSchema, type ValidationIssue } from "./schemas";
+import { err, ok, type ToolContext, type ToolResult } from "./types";
 
 export type VerificationCategory = "PASS" | "FAIL" | "TIMEOUT" | "NOT_CONFIGURED" | "ERROR";
 export type VerificationProfileKind = "maven" | "gradle" | "go" | "unknown";
@@ -14,12 +18,19 @@ export interface VerificationStage {
   outputSummary: string;
 }
 
+export interface SkippedVerificationStage {
+  name: string;
+  reason: "PRIOR_STAGE_NOT_PASS";
+}
+
 export interface VerificationEvidence {
   profile: VerificationProfileKind;
   startedAt: string;
   finishedAt: string;
   stages: VerificationStage[];
+  skippedStages: SkippedVerificationStage[];
   result: VerificationCategory;
+  reason?: string;
 }
 
 export interface VerifyProjectInput {
@@ -38,8 +49,14 @@ export interface VerificationProfile {
   reason?: "AMBIGUOUS_BUILD_SYSTEM";
 }
 
+export type CommandRunner = (
+  argv: readonly string[],
+  opts: { cwd: string; timeoutMs?: number },
+) => Promise<ExecResult>;
+
 export const DEFAULT_STAGE_TIMEOUT_SECONDS = 180;
 export const MAX_STAGE_TIMEOUT_SECONDS = 600;
+export const MAX_OUTPUT_SUMMARY_CHARS = 2048;
 
 const MAX_BUILD_FILE_BYTES = 256 * 1024;
 const MAVEN_STATIC_MARKERS = ["maven-checkstyle-plugin", "maven-pmd-plugin", "spotbugs-maven-plugin"];
@@ -88,7 +105,7 @@ function readBoundedRootFile(root: string, names: readonly string[]): string {
       if (stat.size > MAX_BUILD_FILE_BYTES) return "";
       return fs.readFileSync(candidate, "utf8");
     } catch {
-      // A missing/unreadable optional build file simply provides no local marker evidence.
+      // Missing/unreadable optional build evidence contributes no marker evidence.
     }
   }
   return "";
@@ -161,3 +178,107 @@ export function detectVerificationProfile(root: string, platform: string = proce
 
   return { kind: "unknown", executable: null, stages: [] };
 }
+
+function summarizeOutput(value: string): string {
+  const normalized = value.replace(/\r\n/g, "\n").replace(/\r/g, "\n").trim();
+  const redacted = scanDlp(normalized, "tool-output").redacted;
+  if (redacted.length <= MAX_OUTPUT_SUMMARY_CHARS) return redacted;
+  return redacted.slice(0, MAX_OUTPUT_SUMMARY_CHARS);
+}
+
+function categoryForResult(result: ExecResult): VerificationCategory {
+  if (result.timedOut) return "TIMEOUT";
+  if (result.exitCode === 0) return "PASS";
+  if (typeof result.exitCode === "number") return "FAIL";
+  return "ERROR";
+}
+
+function evidenceOutput(result: ExecResult): string {
+  const combined = [result.stdout, result.stderr].filter((part) => part !== "").join("\n");
+  return summarizeOutput(combined);
+}
+
+export function createVerifyProjectTool(runner: CommandRunner = execCommand) {
+  return {
+    name: "verify_project",
+    description: "Run deterministic local verification for the detected Maven, Gradle, or Go project profile.",
+    async execute(params: unknown, ctx: ToolContext): Promise<ToolResult<VerificationEvidence>> {
+      const input = params && typeof params === "object" ? params : {};
+      const issues = validateVerifyProjectInput(input);
+      if (issues.length > 0) {
+        return err(invalidInput(issues.map((issue) => `${issue.path}: ${issue.message}`).join("; ")));
+      }
+
+      const startedAt = new Date().toISOString();
+      const profile = detectVerificationProfile(ctx.projectRoot);
+      if (profile.kind === "unknown") {
+        const evidence: VerificationEvidence = {
+          profile: "unknown",
+          startedAt,
+          finishedAt: new Date().toISOString(),
+          stages: [],
+          skippedStages: [],
+          result: "NOT_CONFIGURED",
+          ...(profile.reason ? { reason: profile.reason } : {}),
+        };
+        ctx.guard.after({
+          sessionId: ctx.sessionId, agent: ctx.agent, tool: "verify_project", action: "execute",
+          projectRoot: ctx.projectRoot, durationMs: 0, ok: true, errorCategory: evidence.result, output: evidence,
+        });
+        return ok(evidence);
+      }
+
+      const timeoutSeconds = (input as VerifyProjectInput).timeoutSeconds ?? DEFAULT_STAGE_TIMEOUT_SECONDS;
+      const stages: VerificationStage[] = [];
+      const skippedStages: SkippedVerificationStage[] = [];
+      const overallStart = Date.now();
+
+      for (let index = 0; index < profile.stages.length; index += 1) {
+        const planned = profile.stages[index]!;
+        if (stages.some((stage) => stage.category !== "PASS")) {
+          skippedStages.push({ name: planned.name, reason: "PRIOR_STAGE_NOT_PASS" });
+          continue;
+        }
+
+        const stageStart = Date.now();
+        try {
+          const execution = await runner(planned.argv, { cwd: ctx.projectRoot, timeoutMs: timeoutSeconds * 1000 });
+          stages.push({
+            name: planned.name,
+            category: categoryForResult(execution),
+            exitCode: execution.exitCode,
+            durationMs: Math.max(0, Date.now() - stageStart),
+            commandSummary: planned.argv.join(" "),
+            outputSummary: evidenceOutput(execution),
+          });
+        } catch (error) {
+          stages.push({
+            name: planned.name,
+            category: "ERROR",
+            exitCode: null,
+            durationMs: Math.max(0, Date.now() - stageStart),
+            commandSummary: planned.argv.join(" "),
+            outputSummary: summarizeOutput(error instanceof Error ? error.message : String(error)),
+          });
+        }
+      }
+
+      const evidence: VerificationEvidence = {
+        profile: profile.kind,
+        startedAt,
+        finishedAt: new Date().toISOString(),
+        stages,
+        skippedStages,
+        result: aggregateVerificationResult(profile.kind, stages),
+      };
+      ctx.guard.after({
+        sessionId: ctx.sessionId, agent: ctx.agent, tool: "verify_project", action: "execute",
+        projectRoot: ctx.projectRoot, durationMs: Math.max(0, Date.now() - overallStart),
+        ok: true, errorCategory: evidence.result, output: evidence,
+      });
+      return ok(evidence);
+    },
+  };
+}
+
+export const verifyProjectTool = createVerifyProjectTool();
