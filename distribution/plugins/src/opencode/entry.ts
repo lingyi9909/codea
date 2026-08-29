@@ -18,6 +18,7 @@ import { writeDocumentTool } from "../tools/write-document";
 import { createTaskPlanTool } from "../tools/task-plan";
 import { createTaskStepTool } from "../tools/task-step";
 import { createTaskStatusTool } from "../tools/task-status";
+import { verifyProjectTool } from "../tools/verify-project";
 import type { ToolContext as CodeaToolContext, ToolResult as CodeaToolResult, WriteOwnership } from "../tools/types";
 import type { Hooks, PluginModule, ToolContext, ToolDefinition, ToolResult } from "./types";
 
@@ -28,6 +29,7 @@ const TOOL_ACTIONS: Record<string, string> = {
   analyze_test_project: "read",
   write_test_file: "write",
   run_project_test: "execute",
+  verify_project: "execute",
   extract_api_spec: "read",
   validate_api_example: "read",
   write_document: "write",
@@ -65,6 +67,7 @@ const TOOL_ARGS: Record<string, z.ZodRawShape> = {
     buildSystem: z.enum(["maven", "gradle"]), module: z.string().optional(), testClass: z.string().optional(),
     testMethod: z.string().optional(), profiles: z.array(z.string()).optional(), timeoutSeconds: z.number().int().min(1).optional(),
   },
+  verify_project: { timeoutSeconds: z.number().int().min(1).max(600).optional() },
   extract_api_spec: { controllerFile: z.string().min(1) },
   validate_api_example: {
     example: z.record(z.string(), z.unknown()), spec: z.record(z.string(), z.unknown()), endpointIndex: z.number().int().min(0),
@@ -123,6 +126,21 @@ function planningMetadata(name: string, result: CodeaToolResult<unknown>): Recor
     codeaPlanTotal: String(steps.length),
     codeaPlanCompleted: String(completed),
     codeaPlanActive: typeof active?.id === "string" ? active.id : "",
+  };
+}
+
+function verificationMetadata(name: string, result: CodeaToolResult<unknown>): Record<string, string> {
+  if (name !== "verify_project" || !result.ok) return {};
+  const data = result.data as any;
+  const resultValue = typeof data?.result === "string" ? data.result.toLowerCase() : "";
+  const profileValue = typeof data?.profile === "string" ? data.profile.toLowerCase() : "";
+  const allowedResults = new Set(["pass", "fail", "timeout", "not_configured", "error"]);
+  const allowedProfiles = new Set(["maven", "gradle", "go", "unknown"]);
+  if (!allowedResults.has(resultValue) || !allowedProfiles.has(profileValue)) return {};
+  return {
+    codeaVerification: "true",
+    codeaVerificationResult: resultValue,
+    codeaVerificationProfile: profileValue,
   };
 }
 
@@ -201,6 +219,7 @@ function adaptTool(
           ...(dlp.rule ? { dlpRule: dlp.rule } : {}),
           codeaPlugin: CODEA_PLUGIN_ID,
           ...planningMetadata(name, result),
+          ...verificationMetadata(name, result),
         },
       };
     },
@@ -254,6 +273,7 @@ export const plugin: PluginModule = {
       analyze_test_project: adaptTool("analyze_test_project", analyzeTestProjectTool, audit, guard, taskState, rootTurns),
       write_test_file: adaptTool("write_test_file", writeTestFileTool, audit, guard, taskState, rootTurns, ownershipFactory),
       run_project_test: adaptTool("run_project_test", runProjectTestTool, audit, guard, taskState, rootTurns),
+      verify_project: adaptTool("verify_project", verifyProjectTool, audit, guard, taskState, rootTurns),
       extract_api_spec: adaptTool("extract_api_spec", extractApiSpecTool, audit, guard, taskState, rootTurns),
       validate_api_example: adaptTool("validate_api_example", validateApiExampleTool, audit, guard, taskState, rootTurns),
       write_document: adaptTool("write_document", writeDocumentTool, audit, guard, taskState, rootTurns),
