@@ -55,10 +55,34 @@ export type PluginInput = {
   $: unknown;
 };
 
+export type ChatUserMessage = {
+  id?: string;
+  sessionID?: string;
+  role?: string;
+  [key: string]: unknown;
+};
+
+export type ChatPart = {
+  type?: string;
+  synthetic?: boolean;
+  metadata?: { [key: string]: unknown };
+  [key: string]: unknown;
+};
+
 export type PluginOptions = Record<string, unknown>;
 
 export type Hooks = {
   tool?: { [key: string]: ToolDefinition };
+  "chat.message"?: (
+    input: {
+      sessionID: string;
+      agent?: string;
+      model?: { providerID: string; modelID: string };
+      messageID?: string;
+      variant?: string;
+    },
+    output: { message: ChatUserMessage; parts: ChatPart[] },
+  ) => Promise<void>;
   "tool.execute.before"?: (
     input: { tool: string; sessionID: string; callID: string },
     output: { args: any },
