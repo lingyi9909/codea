@@ -16,6 +16,6 @@ jobs:
           cache-dependency-path: tui/go.sum
       - name: Agent and skill planning contract RED/GREEN
         run: bash tests/task29-agent-planning-contract.sh
-      - name: General task strategy RED/GREEN
+      - name: Professional agent and task strategy regression
         working-directory: tui
-        run: GOTOOLCHAIN=local go test ./internal/app -run 'TaskStrategy' -count=1
+        run: GOTOOLCHAIN=local go test ./internal/agent ./internal/app -run 'Professional|Agent|Materialize|TaskStrategy' -count=1
