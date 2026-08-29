@@ -5,6 +5,7 @@ import { AuditLogger } from "../audit-log";
 import { RuntimeSecurityGuard } from "../runtime-security-guard";
 import { validateNativeReadPath } from "../security/path-policy";
 import { DifyClient, difyConfigFromEnv } from "../dify-query";
+import { TaskStateStore } from "../task-state/store";
 import { collectReviewContextTool } from "../tools/collect-review-context";
 import { analyzeTestProjectTool } from "../tools/analyze-test-project";
 import { writeTestFileTool } from "../tools/write-test-file";
@@ -12,14 +13,11 @@ import { runProjectTestTool } from "../tools/run-project-test";
 import { extractApiSpecTool } from "../tools/extract-api-spec";
 import { validateApiExampleTool } from "../tools/validate-api-example";
 import { writeDocumentTool } from "../tools/write-document";
+import { createTaskPlanTool } from "../tools/task-plan";
+import { createTaskStepTool } from "../tools/task-step";
+import { createTaskStatusTool } from "../tools/task-status";
 import type { ToolContext as CodeaToolContext, ToolResult as CodeaToolResult, WriteOwnership } from "../tools/types";
 import type { Hooks, PluginModule, ToolContext, ToolDefinition, ToolResult } from "./types";
-
-// OpenCode v1.18.11 plugin adapter. This is the real integration point: it
-// default-exports a plugin module that OpenCode loads, registers the 7 enterprise
-// custom tools plus dify-query, and wires RuntimeSecurityGuard into the before
-// path (deny aborts, write/execute enters permission) and the output path
-// (DLP redact/block before the result reaches the model).
 
 const CODEA_PLUGIN_ID = "codea-enterprise";
 
@@ -31,18 +29,14 @@ const TOOL_ACTIONS: Record<string, string> = {
   extract_api_spec: "read",
   validate_api_example: "read",
   write_document: "write",
+  task_plan: "plan",
+  task_step: "plan",
+  task_status: "plan",
   "dify-query": "read",
 };
 
 const APPROVAL_ACTIONS = new Set(["write", "execute"]);
-
-// Native OpenCode tools whose output must pass output DLP before reaching the
-// model. Enterprise agents are allowed read/grep/glob/bash, so their raw output
-// (file contents, grep matches, command output) must be scanned for secrets.
 const NATIVE_OUTPUT_DLP_TOOLS = new Set(["read", "grep", "glob", "bash"]);
-
-// Native tools that carry a file/directory path in their args. Read-style tools
-// and mutation tools share the same containment/sensitive-target validator.
 const NATIVE_PATH_TOOLS = new Set(["read", "grep", "glob", "write", "edit"]);
 const NATIVE_MUTATION_TOOLS = new Set(["write", "edit"]);
 
@@ -63,33 +57,32 @@ const TOOL_ARGS: Record<string, z.ZodRawShape> = {
   },
   analyze_test_project: {},
   write_test_file: {
-    path: z.string().min(1),
-    content: z.string(),
-    overwrite: z.boolean().optional(),
+    path: z.string().min(1), content: z.string(), overwrite: z.boolean().optional(),
   },
   run_project_test: {
-    buildSystem: z.enum(["maven", "gradle"]),
-    module: z.string().optional(),
-    testClass: z.string().optional(),
-    testMethod: z.string().optional(),
-    profiles: z.array(z.string()).optional(),
-    timeoutSeconds: z.number().int().min(1).optional(),
+    buildSystem: z.enum(["maven", "gradle"]), module: z.string().optional(), testClass: z.string().optional(),
+    testMethod: z.string().optional(), profiles: z.array(z.string()).optional(), timeoutSeconds: z.number().int().min(1).optional(),
   },
-  extract_api_spec: {
-    controllerFile: z.string().min(1),
-  },
+  extract_api_spec: { controllerFile: z.string().min(1) },
   validate_api_example: {
-    example: z.record(z.string(), z.unknown()),
-    spec: z.record(z.string(), z.unknown()),
-    endpointIndex: z.number().int().min(0),
+    example: z.record(z.string(), z.unknown()), spec: z.record(z.string(), z.unknown()), endpointIndex: z.number().int().min(0),
   },
-  write_document: {
-    path: z.string().min(1),
-    content: z.string(),
+  write_document: { path: z.string().min(1), content: z.string() },
+  task_plan: {
+    goal: z.string().min(1).max(1000),
+    steps: z.array(z.object({
+      id: z.string().min(1).max(100),
+      title: z.string().min(1).max(300),
+      verification: z.string().max(500).optional(),
+    }).strict()).min(3).max(7),
   },
-  "dify-query": {
-    question: z.string().min(1),
+  task_step: {
+    stepId: z.string().min(1).max(100),
+    status: z.enum(["in_progress", "completed", "blocked"]),
+    evidence: z.string().max(1000).optional(),
   },
+  task_status: {},
+  "dify-query": { question: z.string().min(1) },
 };
 
 function targetPathFor(tool: string, args: any): string | undefined {
@@ -101,20 +94,8 @@ function targetPathFor(tool: string, args: any): string | undefined {
 
 type OwnershipFactory = (sessionId: string, agent: string) => WriteOwnership;
 
-function toCodeaContext(
-  octx: ToolContext,
-  audit: AuditLogger,
-  guard: RuntimeSecurityGuard,
-  ownership?: WriteOwnership,
-): CodeaToolContext {
-  return {
-    sessionId: octx.sessionID,
-    agent: octx.agent,
-    projectRoot: octx.directory,
-    audit,
-    guard,
-    ownership,
-  };
+function toCodeaContext(octx: ToolContext, audit: AuditLogger, guard: RuntimeSecurityGuard, ownership?: WriteOwnership): CodeaToolContext {
+  return { sessionId: octx.sessionID, agent: octx.agent, projectRoot: octx.directory, audit, guard, ownership };
 }
 
 type CodeaTool = {
@@ -137,45 +118,23 @@ function adaptTool(
       const action = TOOL_ACTIONS[name] ?? "read";
       const ownership = ownershipFactory ? ownershipFactory(octx.sessionID, octx.agent) : undefined;
       const codeaCtx = toCodeaContext(octx, audit, guard, ownership);
-
-      // Emit execution evidence from the actual enterprise tool lifecycle. This
-      // is metadata-only: it does not infer plugin use from installation or
-      // Agent configuration, and OpenCode will attach it to this live ToolPart.
       octx.metadata({ metadata: { codeaPlugin: CODEA_PLUGIN_ID } });
 
-      // 1. guard before: path policy + DLP input. Deny aborts the call.
       const before = guard.before({
-        sessionId: octx.sessionID,
-        agent: octx.agent,
-        tool: name,
-        action,
-        projectRoot: octx.directory,
-        targetPath: targetPathFor(name, args),
-        input: args,
+        sessionId: octx.sessionID, agent: octx.agent, tool: name, action,
+        projectRoot: octx.directory, targetPath: targetPathFor(name, args), input: args,
       });
-      if (before.decision === "deny") {
-        throw new Error(before.reason ?? `${name} denied by security policy`);
-      }
+      if (before.decision === "deny") throw new Error(before.reason ?? `${name} denied by security policy`);
 
-      // 2. write/execute requires runtime approval (enters the permission flow).
       if (APPROVAL_ACTIONS.has(action)) {
-        await octx.ask({
-          permission: name,
-          patterns: ["*"],
-          always: ["*"],
-          metadata: { tool: name, action },
-        });
+        await octx.ask({ permission: name, patterns: ["*"], always: ["*"], metadata: { tool: name, action } });
       }
 
-      // 3. run the enterprise tool.
       const result = await codeaTool.execute(args, codeaCtx);
-
-      // 4. output DLP: redact/block before returning to the model.
       const raw = result.ok
         ? JSON.stringify(result.data)
         : JSON.stringify({ error: { category: result.error.category, message: result.error.message } });
       const dlp = guard.guardOutput(raw);
-
       return {
         title: name,
         output: dlp.output,
@@ -197,40 +156,14 @@ function buildDifyTool(dify: DifyClient | null, audit: AuditLogger, guard: Runti
     args: TOOL_ARGS["dify-query"] ?? {},
     async execute(args: any, octx: ToolContext): Promise<ToolResult> {
       const action = TOOL_ACTIONS["dify-query"] ?? "read";
-      const codeaCtx = toCodeaContext(octx, audit, guard);
-      const before = guard.before({
-        sessionId: octx.sessionID,
-        agent: octx.agent,
-        tool: "dify-query",
-        action,
-        projectRoot: octx.directory,
-        input: args,
-      });
-      if (before.decision === "deny") {
-        throw new Error(before.reason ?? "dify-query denied by security policy");
-      }
-
+      const before = guard.before({ sessionId: octx.sessionID, agent: octx.agent, tool: "dify-query", action, projectRoot: octx.directory, input: args });
+      if (before.decision === "deny") throw new Error(before.reason ?? "dify-query denied by security policy");
       octx.metadata({ metadata: { codeaPlugin: CODEA_PLUGIN_ID } });
       const question = typeof args?.question === "string" ? args.question : "";
-      const result = dify
-        ? await dify.query(question)
-        : { degraded: true, error: "dify-not-configured" };
-      guard.after({
-        sessionId: octx.sessionID,
-        agent: octx.agent,
-        tool: "dify-query",
-        action,
-        projectRoot: octx.directory,
-        durationMs: 0,
-        ok: !result.degraded,
-      });
-
+      const result = dify ? await dify.query(question) : { degraded: true, error: "dify-not-configured" };
+      guard.after({ sessionId: octx.sessionID, agent: octx.agent, tool: "dify-query", action, projectRoot: octx.directory, durationMs: 0, ok: !result.degraded });
       const dlp = guard.guardOutput(JSON.stringify(result));
-      return {
-        title: "dify-query",
-        output: dlp.output,
-        metadata: { degraded: result.degraded, dlpBlocked: dlp.blocked, codeaPlugin: CODEA_PLUGIN_ID },
-      };
+      return { title: "dify-query", output: dlp.output, metadata: { degraded: result.degraded, dlpBlocked: dlp.blocked, codeaPlugin: CODEA_PLUGIN_ID } };
     },
   };
 }
@@ -239,36 +172,23 @@ export const plugin: PluginModule = {
   id: CODEA_PLUGIN_ID,
   server: async (input, options) => {
     const opts = options ?? {};
-    const auditLog =
-      (typeof opts.auditLog === "string" && opts.auditLog) ||
-      process.env.CODEA_AUDIT_LOG ||
-      path.join(os.tmpdir(), "codea-audit.log");
+    const auditLog = (typeof opts.auditLog === "string" && opts.auditLog) || process.env.CODEA_AUDIT_LOG || path.join(os.tmpdir(), "codea-audit.log");
     const audit = new AuditLogger(auditLog, input.directory);
     const guard = new RuntimeSecurityGuard(audit);
+    const taskState = new TaskStateStore({
+      workspaceRoot: input.directory,
+      codeaHome: process.env.CODEA_HOME || path.join(os.homedir(), ".codea"),
+    });
 
     const difyEnv = difyConfigFromEnv(process.env);
-    const dify = difyEnv
-      ? new DifyClient({ baseUrl: difyEnv.baseUrl, apiKey: difyEnv.apiKey })
-      : null;
+    const dify = difyEnv ? new DifyClient({ baseUrl: difyEnv.baseUrl, apiKey: difyEnv.apiKey }) : null;
 
-    // Server-side write ownership: files created by one (session, agent) run.
-    // write_test_file may only overwrite a path this exact run created, so
-    // "never overwrite an existing test" holds even if the model lies about
-    // overwrite=true.
     const ownershipStore = new Map<string, Set<string>>();
     const ownershipFactory: OwnershipFactory = (sessionId, agent) => {
       const key = `${sessionId}\u0000${agent}`;
       let set = ownershipStore.get(key);
-      if (!set) {
-        set = new Set<string>();
-        ownershipStore.set(key, set);
-      }
-      return {
-        record: (absPath) => {
-          set.add(absPath);
-        },
-        owns: (absPath) => set.has(absPath),
-      };
+      if (!set) { set = new Set<string>(); ownershipStore.set(key, set); }
+      return { record: (absPath) => { set!.add(absPath); }, owns: (absPath) => set!.has(absPath) };
     };
 
     const tools: Record<string, ToolDefinition> = {
@@ -279,6 +199,9 @@ export const plugin: PluginModule = {
       extract_api_spec: adaptTool("extract_api_spec", extractApiSpecTool, audit, guard),
       validate_api_example: adaptTool("validate_api_example", validateApiExampleTool, audit, guard),
       write_document: adaptTool("write_document", writeDocumentTool, audit, guard),
+      task_plan: adaptTool("task_plan", createTaskPlanTool(taskState), audit, guard),
+      task_step: adaptTool("task_step", createTaskStepTool(taskState), audit, guard),
+      task_status: adaptTool("task_status", createTaskStatusTool(taskState), audit, guard),
       "dify-query": buildDifyTool(dify, audit, guard),
     };
 
@@ -286,78 +209,35 @@ export const plugin: PluginModule = {
       tool: tools,
       "tool.execute.before": async (hookInput, output) => {
         const tool = hookInput.tool;
-        // Intercept the native bash tool: deny dangerous commands. "ask" decisions
-        // are handled natively by the bash tool's own permission flow.
         if (tool === "bash") {
           const command = (output.args as any)?.command;
           if (typeof command !== "string") return;
-          const decision = guard.before({
-            sessionId: hookInput.sessionID,
-            agent: "",
-            tool: "bash",
-            action: "execute",
-            projectRoot: input.directory,
-            command,
-          });
-          if (decision.decision === "deny") {
-            throw new Error(decision.reason ?? "command denied");
-          }
+          const decision = guard.before({ sessionId: hookInput.sessionID, agent: "", tool: "bash", action: "execute", projectRoot: input.directory, command });
+          if (decision.decision === "deny") throw new Error(decision.reason ?? "command denied");
           return;
         }
 
-        // Every native path-bearing tool stays inside the project and may not
-        // target credential/sensitive paths. OpenCode commonly sends absolute
-        // filePath values, so use the native validator before the generic guard.
         if (NATIVE_PATH_TOOLS.has(tool)) {
           const targetPath = nativePathFor(tool, output.args);
           if (typeof targetPath === "string" && targetPath !== "") {
             const reason = validateNativeReadPath(input.directory, targetPath);
-            if (reason) {
-              throw new Error(`native-path:${reason}`);
-            }
+            if (reason) throw new Error(`native-path:${reason}`);
           }
         }
 
-        // Debug can request native write/edit through OpenCode's normal `ask`
-        // permission flow. Before that approval/execution occurs, Codea still
-        // scans the complete mutation payload for DLP violations. The path was
-        // validated above; targetPath is intentionally omitted here so absolute
-        // in-root OpenCode paths work consistently on Windows and POSIX.
         if (NATIVE_MUTATION_TOOLS.has(tool)) {
-          const decision = guard.before({
-            sessionId: hookInput.sessionID,
-            agent: "",
-            tool,
-            action: "write",
-            projectRoot: input.directory,
-            input: output.args,
-          });
-          if (decision.decision === "deny") {
-            throw new Error(decision.reason ?? `${tool} denied by security policy`);
-          }
+          const decision = guard.before({ sessionId: hookInput.sessionID, agent: "", tool, action: "write", projectRoot: input.directory, input: output.args });
+          if (decision.decision === "deny") throw new Error(decision.reason ?? `${tool} denied by security policy`);
         }
       },
       "tool.execute.after": async (hookInput, output) => {
-        // Only a tool that actually passed through the Codea enterprise plugin
-        // receives this execution evidence. The Mapper consumes this explicit
-        // marker; it never guesses plugin use from a tool name or Agent config.
         if (Object.prototype.hasOwnProperty.call(TOOL_ACTIONS, hookInput.tool)) {
-          output.metadata = {
-            ...(output.metadata ?? {}),
-            codeaPlugin: CODEA_PLUGIN_ID,
-            codeaPluginInvocationID: hookInput.callID,
-          };
+          output.metadata = { ...(output.metadata ?? {}), codeaPlugin: CODEA_PLUGIN_ID, codeaPluginInvocationID: hookInput.callID };
         }
-
-        // Native tool output (file contents / grep matches / command output) must
-        // pass output DLP before it reaches the model. Layer-1 secrets block the
-        // whole output; ordinary sensitive values are redacted in place.
         if (!NATIVE_OUTPUT_DLP_TOOLS.has(hookInput.tool)) return;
         const dlp = guard.guardOutput(output.output);
         output.output = dlp.output;
-        if (dlp.blocked) {
-          output.metadata = { ...(output.metadata ?? {}), dlpBlocked: true, dlpRule: dlp.rule };
-        }
+        if (dlp.blocked) output.metadata = { ...(output.metadata ?? {}), dlpBlocked: true, dlpRule: dlp.rule };
       },
     };
 
