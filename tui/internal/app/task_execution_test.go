@@ -69,6 +69,7 @@ func TestTaskExecutionResetsPerRootTurnAndIgnoresStaleEvents(t *testing.T) {
 
 func TestTaskExecutionProgressRenderingIsMinimal(t *testing.T) {
 	m := NewModel(fakeruntime.New())
+	m.activeTurnID = "turn-1"
 	m.taskExecution = TaskExecutionState{RootTurnID: "turn-1", PlanSeen: true, ActiveStep: "step-3", CompletedSteps: 2, TotalSteps: 5}
 	m.viewMode = ViewNormal
 	if got := m.renderTaskProgress(); got != "Plan · 2/5 steps · step-3" {
