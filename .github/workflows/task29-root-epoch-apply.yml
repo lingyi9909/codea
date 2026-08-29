@@ -1,0 +1,30 @@
+name: Apply Task 29 Root Epoch Proof Patch
+
+on:
+  push:
+    branches: [task29-root-epoch-proof]
+    paths:
+      - 'scripts/task29-root-epoch-proof-patch.py'
+      - '.github/workflows/task29-root-epoch-apply.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.event.head_commit.message == 'chore: stage Task 29 root epoch patch'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: task29-root-epoch-proof
+          fetch-depth: 0
+      - name: Apply exact proof patch
+        run: python3 scripts/task29-root-epoch-proof-patch.py
+      - name: Commit proof implementation
+        run: |
+          git config user.name lingyi9909
+          git config user.email zhanhui9909@gmail.com
+          git add distribution/plugins tui tests .github/workflows/task29-gates.yml
+          git commit -m 'fix: bind Task 29 plans to root epochs'
+          git push origin HEAD:task29-root-epoch-proof
