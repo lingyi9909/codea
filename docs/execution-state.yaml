@@ -6,10 +6,10 @@ current:
   task: "29"
   step: 7
   status: awaiting_acceptance
-  nextAction: Task 29 implementation、mechanical acceptance、full regression 与 Linux/Windows/macOS Gate 已通过；等待人工验收，Task 30 尚未开始。
+  nextAction: Task 29 root epoch、plan root binding、assistant parent identity、mechanical acceptance、full regression 与 Linux/Windows/macOS Gate 已通过；等待人工验收，Task 30 尚未开始。
 checkpoint:
-  commit: 1228e75a7b12f5843b50682ae5da17648a87aae0
-  updatedAt: "2026-08-29T08:53:19Z"
+  commit: 38db538ba932d8ebddd388bab6471325f8577ad4
+  updatedAt: "2026-08-29T13:05:06Z"
 verification:
   status: pass
   commands:
@@ -19,7 +19,7 @@ verification:
     - "Windows Server 2025: CGO_ENABLED=0 focused Task 29 tests + go build ./cmd/codea + go test ./... -count=1"
     - "macOS 15 arm64: focused Task 29 tests + go test ./... -count=1 + go build ./cmd/codea"
   errorSummary: ""
-  recoveryAdvice: "Task 29 自动验证与 Task Gate 已通过；保持 humanAcceptance.accepted=false，等待人工验收后再进入 Task 30。"
+  recoveryAdvice: "Task 29 root-epoch 修复与 fresh Task Gate 已通过；保持 humanAcceptance.accepted=false，等待人工验收后再进入 Task 30。"
 taskGate:
   status: pass
   gateItems:
@@ -70,7 +70,7 @@ tasks:
   "26": {status: completed, completedSteps: [1, 2, 3, 4, 5], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: a85ef424f463837a6bf72239923940b185069b96, report: docs/task-reports/task-26.md}
   "27": {status: completed, completedSteps: [1, 2, 3, 4, 5], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: 0390d4697cfee3832d0fa3703bbb35a85f4df2f3, report: docs/task-reports/task-27.md}
   "28": {status: completed, completedSteps: [1, 2, 3, 4, 5, 6, 7], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: 2dbdc75e90dcc959b62160b035ac9233d96b6cf9, report: docs/task-reports/task-28.md}
-  "29": {status: awaiting_acceptance, completedSteps: [1, 2, 3, 4, 5, 6, 7], verificationStatus: pass, taskGateStatus: pass, humanAccepted: false, checkpoint: 1228e75a7b12f5843b50682ae5da17648a87aae0, report: docs/task-reports/task-29.md}
+  "29": {status: awaiting_acceptance, completedSteps: [1, 2, 3, 4, 5, 6, 7], verificationStatus: pass, taskGateStatus: pass, humanAccepted: false, checkpoint: 38db538ba932d8ebddd388bab6471325f8577ad4, report: docs/task-reports/task-29.md}
   "30": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false}
   "31": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false}
   "32": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false}
