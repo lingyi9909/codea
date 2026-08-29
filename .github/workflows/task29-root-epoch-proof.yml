@@ -8,7 +8,7 @@ permissions:
   contents: read
 
 jobs:
-  plugin-red:
+  plugin-proof:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -18,11 +18,17 @@ jobs:
       - name: Install dependencies
         working-directory: distribution/plugins
         run: bun install --frozen-lockfile
-      - name: Root epoch regression
+      - name: Root epoch and isolation regressions
         working-directory: distribution/plugins
-        run: bun test tests/task-root-epoch.test.ts
+        run: |
+          bun test tests/task-root-epoch.test.ts tests/task-planning-isolation.test.ts tests/task-state-store.test.ts tests/task-planning-tools.test.ts tests/task29-acceptance.test.ts tests/task-plan-gate.test.ts
+      - name: Full plugin regression and build
+        working-directory: distribution/plugins
+        run: |
+          bun test
+          bun run build
 
-  app-red:
+  app-proof:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -30,6 +36,9 @@ jobs:
         with:
           go-version: '1.26.5'
           cache-dependency-path: tui/go.sum
-      - name: Vendor parent identity and Application root regression
+      - name: Root identity focused regression
         working-directory: tui
-        run: GOTOOLCHAIN=local go test ./internal/opencode ./internal/app -run 'Task29MessageUpdated|TaskExecutionUsesAssistantParentIdentity' -count=1
+        run: GOTOOLCHAIN=local go test ./internal/opencode ./internal/app -run 'Task29MessageUpdated|TaskExecution|TaskPlan|ToolMetadata|Trace|Session' -count=1
+      - name: Full Go regression
+        working-directory: tui
+        run: GOTOOLCHAIN=local go test ./... -count=1
