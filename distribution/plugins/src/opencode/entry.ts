@@ -105,6 +105,20 @@ type CodeaTool = {
   execute(params: unknown, ctx: CodeaToolContext): Promise<CodeaToolResult<unknown>>;
 };
 
+function planningMetadata(name: string, result: CodeaToolResult<unknown>): Record<string, string> {
+  if (!result.ok || !["task_plan", "task_step", "task_status"].includes(name)) return {};
+  const steps = (result.data as any)?.plan?.steps;
+  if (!Array.isArray(steps)) return {};
+  const completed = steps.filter((step: any) => step?.status === "completed").length;
+  const active = steps.find((step: any) => step?.status === "in_progress");
+  return {
+    codeaTaskPlan: "true",
+    codeaPlanTotal: String(steps.length),
+    codeaPlanCompleted: String(completed),
+    codeaPlanActive: typeof active?.id === "string" ? active.id : "",
+  };
+}
+
 async function requirePlanForOperation(
   taskState: TaskStateStore,
   guard: RuntimeSecurityGuard,
@@ -176,6 +190,7 @@ function adaptTool(
           dlpBlocked: dlp.blocked,
           ...(dlp.rule ? { dlpRule: dlp.rule } : {}),
           codeaPlugin: CODEA_PLUGIN_ID,
+          ...planningMetadata(name, result),
         },
       };
     },

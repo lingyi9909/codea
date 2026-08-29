@@ -99,9 +99,10 @@ type Model struct {
 
 	tools []ToolActivity
 
-	// Task 25 semantic trace is Codea-owned application state. Runtime events and
-	// prompt state update this truth; viewMode only changes its derived rendering.
+	// Task 25 semantic trace and Task 29 execution plan state are Codea-owned
+	// application truth. Presentation modes only derive from these structures.
 	executionTrace          executionTrace
+	taskExecution           TaskExecutionState
 	viewMode                ViewMode
 	activeTurnID            string
 	activeApprovalTraceKey  string

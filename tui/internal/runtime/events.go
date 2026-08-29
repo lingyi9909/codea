@@ -31,10 +31,13 @@ type Event struct {
 	RawOriginalSize int
 }
 
-// ToolEvent carries tool lifecycle data within an Event.
+// ToolEvent carries tool lifecycle data within an Event. Metadata is restricted
+// to Codea-owned, explicitly allowlisted execution evidence at the Runtime
+// adapter boundary; vendor args/output never cross through this field.
 type ToolEvent struct {
-	Name   string
-	CallID string
+	Name     string
+	CallID   string
+	Metadata map[string]string
 }
 
 // ApprovalRequest carries a permission request within an Event.
