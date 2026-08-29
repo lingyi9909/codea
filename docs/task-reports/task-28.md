@@ -1,6 +1,6 @@
 # Task 28 Report — Repo Intelligence
 
-Task 28 production implementation, reviewer-requested remediation, and automated verification are complete. Human acceptance remains a separate final step.
+Task 28 production implementation, reviewer-requested remediation, automated verification, and human acceptance are complete.
 
 Verified production checkpoint: `2dbdc75e90dcc959b62160b035ac9233d96b6cf9`
 
@@ -128,6 +128,6 @@ These remain intentional V1.2 boundaries, not failed acceptance items:
 - Final blocker RED run: `33232024503` — **EXPECTED FAILURE**
 - Final blocker GREEN run: `33232101753` — **SUCCESS**
 - Automated Gate run: `33232361094` — **SUCCESS**
-- Human acceptance: **PENDING**
+- Human acceptance: **ACCEPTED** — recorded from the reviewer approval that authorized Task 29 development.
 
-Current state: **AWAITING_ACCEPTANCE**
+Current state: **COMPLETED**
