@@ -1,11 +1,15 @@
 package repoctx
 
 import (
+	"bufio"
 	"context"
 	"fmt"
+	"io"
 	"os"
 	pathpkg "path"
+	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -24,6 +28,7 @@ func (i *Indexer) Build(ctx context.Context) (RepositoryIndex, error) {
 	if err != nil {
 		return RepositoryIndex{}, err
 	}
+	goModulePath := singleRootGoModulePath(i.root, walked)
 	idx := RepositoryIndex{}
 	for _, wf := range walked {
 		data, err := os.ReadFile(wf.AbsPath)
@@ -46,7 +51,7 @@ func (i *Indexer) Build(ctx context.Context) (RepositoryIndex, error) {
 		idx.Unresolved = append(idx.Unresolved, f.Unresolved...)
 		idx.candidates = append(idx.candidates, f.candidates...)
 	}
-	idx.resolveCandidates()
+	idx.resolveCandidates(goModulePath)
 	sort.Slice(idx.Files, func(a, b int) bool { return idx.Files[a].Path < idx.Files[b].Path })
 	sort.Slice(idx.Symbols, func(a, b int) bool { return idx.Symbols[a].ID < idx.Symbols[b].ID })
 	sort.Slice(idx.Relations, func(a, b int) bool {
@@ -63,7 +68,7 @@ func (i *Indexer) Build(ctx context.Context) (RepositoryIndex, error) {
 	return idx, nil
 }
 
-func (idx *RepositoryIndex) resolveCandidates() {
+func (idx *RepositoryIndex) resolveCandidates(goModulePath string) {
 	types := map[string][]Symbol{}
 	methods := map[string][]Symbol{}
 	symbolsByID := map[string]Symbol{}
@@ -94,14 +99,14 @@ func (idx *RepositoryIndex) resolveCandidates() {
 		targetType := simpleTypeName(c.targetType)
 		switch c.kind {
 		case RelationInjects:
-			matches := contextualMatches(source, c.targetType, types[targetType])
+			matches := contextualMatches(source, c.targetType, types[targetType], goModulePath)
 			if len(matches) == 1 {
 				idx.Relations = append(idx.Relations, Relation{From: c.from, To: matches[0].ID, Kind: c.kind, Confidence: c.confidence, Evidence: c.evidence})
 			} else {
 				idx.Unresolved = append(idx.Unresolved, resolutionMessage(c, len(matches)))
 			}
 		case RelationCalls:
-			matches := contextualMatches(source, c.targetType, methods[targetType+"\x00"+c.targetMethod])
+			matches := contextualMatches(source, c.targetType, methods[targetType+"\x00"+c.targetMethod], goModulePath)
 			if len(matches) == 1 {
 				idx.Relations = append(idx.Relations, Relation{From: c.from, To: matches[0].ID, Kind: c.kind, Confidence: c.confidence, Evidence: c.evidence})
 			} else {
@@ -111,7 +116,7 @@ func (idx *RepositoryIndex) resolveCandidates() {
 	}
 }
 
-func contextualMatches(source SourceFile, targetType string, matches []Symbol) []Symbol {
+func contextualMatches(source SourceFile, targetType string, matches []Symbol, goModulePath string) []Symbol {
 	if len(matches) == 0 {
 		return nil
 	}
@@ -119,7 +124,7 @@ func contextualMatches(source SourceFile, targetType string, matches []Symbol) [
 	case ".java":
 		return javaContextualMatches(source, targetType, matches)
 	case ".go":
-		return goContextualMatches(source, targetType, matches)
+		return goContextualMatches(source, targetType, matches, goModulePath)
 	default:
 		return nil
 	}
@@ -155,17 +160,17 @@ func javaContextualMatches(source SourceFile, targetType string, matches []Symbo
 	return symbolsInPackages(matches, wildcardPackages)
 }
 
-func goContextualMatches(source SourceFile, targetType string, matches []Symbol) []Symbol {
+func goContextualMatches(source SourceFile, targetType string, matches []Symbol, goModulePath string) []Symbol {
 	clean := cleanTypeReference(targetType)
 	if i := strings.LastIndex(clean, "."); i > 0 {
 		qualifier := clean[:i]
 		importPath, ok := source.ImportAliases[qualifier]
-		if !ok {
+		if !ok || goModulePath == "" {
 			return nil
 		}
 		out := make([]Symbol, 0, len(matches))
 		for _, s := range matches {
-			if goImportMatchesSymbol(importPath, s) {
+			if goImportMatchesSymbol(importPath, goModulePath, s) {
 				out = append(out, s)
 			}
 		}
@@ -182,12 +187,76 @@ func goContextualMatches(source SourceFile, targetType string, matches []Symbol)
 	return out
 }
 
-func goImportMatchesSymbol(importPath string, s Symbol) bool {
-	dir := pathpkg.Clean(pathpkg.Dir(s.Path))
-	if dir == "." {
-		return pathpkg.Base(importPath) == s.Package
+func goImportMatchesSymbol(importPath, modulePath string, s Symbol) bool {
+	if modulePath == "" {
+		return false
 	}
-	return importPath == dir || strings.HasSuffix(importPath, "/"+dir)
+	dir := pathpkg.Clean(pathpkg.Dir(s.Path))
+	canonical := strings.TrimSuffix(modulePath, "/")
+	if dir != "." {
+		canonical += "/" + dir
+	}
+	return importPath == canonical
+}
+
+func singleRootGoModulePath(root string, walked []SourceFile) string {
+	foundRoot := false
+	for _, f := range walked {
+		if pathpkg.Base(f.Path) != "go.mod" {
+			continue
+		}
+		if f.Path != "go.mod" || foundRoot {
+			return ""
+		}
+		foundRoot = true
+	}
+	if !foundRoot {
+		return ""
+	}
+	return readGoModuleDirective(filepath.Join(root, "go.mod"))
+}
+
+func readGoModuleDirective(filename string) string {
+	f, err := os.Open(filename)
+	if err != nil {
+		return ""
+	}
+	defer f.Close()
+
+	scanner := bufio.NewScanner(io.LimitReader(f, 64<<10))
+	modulePath := ""
+	moduleCount := 0
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" || strings.HasPrefix(line, "//") {
+			continue
+		}
+		fields := strings.Fields(line)
+		if len(fields) < 2 || fields[0] != "module" {
+			continue
+		}
+		moduleCount++
+		if moduleCount > 1 {
+			return ""
+		}
+		candidate := fields[1]
+		if strings.HasPrefix(candidate, "\"") {
+			unquoted, err := strconv.Unquote(candidate)
+			if err != nil {
+				return ""
+			}
+			candidate = unquoted
+		}
+		candidate = strings.TrimSuffix(candidate, "/")
+		if candidate == "" || strings.Contains(candidate, "\\") || strings.ContainsAny(candidate, " \t\r\n") || strings.HasPrefix(candidate, ".") {
+			return ""
+		}
+		modulePath = candidate
+	}
+	if scanner.Err() != nil || moduleCount != 1 {
+		return ""
+	}
+	return modulePath
 }
 
 func symbolsInPackage(matches []Symbol, pkg string) []Symbol {
