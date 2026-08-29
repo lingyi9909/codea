@@ -325,20 +325,15 @@ func javaDeclaredTypeAndName(t []javaToken, start, end int) (string, string, boo
 	if nameIdx < 0 {
 		return "", "", false
 	}
-
 	typeStart := javaSkipLeadingDeclarationDecorators(t, start, nameIdx)
 	if typeStart >= nameIdx {
 		return "", "", false
 	}
 	typeEnd := nameIdx
-	depth := 0
 	for i := typeStart; i < nameIdx; i++ {
 		if t[i].text == "<" {
-			if depth == 0 {
-				typeEnd = i
-				break
-			}
-			depth++
+			typeEnd = i
+			break
 		}
 	}
 	var b strings.Builder
@@ -468,6 +463,7 @@ func matchJava(t []javaToken, open int, left, right string) int {
 				return i
 			}
 		}
+	}
 	return -1
 }
 
