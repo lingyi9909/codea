@@ -23,6 +23,8 @@ jobs:
       - name: Task 29 plugin isolation proof
         working-directory: distribution/plugins
         run: bun test tests/task-planning-isolation.test.ts
+      - name: Task 29 mechanical acceptance proof
+        run: bash tests/task29-agent-planning.sh
       - name: Full plugin regression and build
         working-directory: distribution/plugins
         run: |
