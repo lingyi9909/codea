@@ -1,0 +1,28 @@
+name: Task 29 Execution State TDD
+
+on:
+  push:
+    branches:
+      - task29-execution-tdd
+
+jobs:
+  task29-execution:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - uses: actions/setup-go@v5
+        with:
+          go-version: 1.26.5
+          cache-dependency-path: tui/go.sum
+      - name: Install plugin dependencies
+        working-directory: distribution/plugins
+        run: bun install --frozen-lockfile
+      - name: Planning metadata RED/GREEN
+        working-directory: distribution/plugins
+        run: bun test tests/task-planning-metadata.test.ts
+      - name: Application and mapper RED/GREEN
+        working-directory: tui
+        run: GOTOOLCHAIN=local go test ./internal/app ./internal/runtime ./internal/opencode -run 'TaskExecution|TaskPlanToolMetadata' -count=1
