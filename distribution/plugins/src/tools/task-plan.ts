@@ -50,7 +50,8 @@ export function createTaskPlanTool(store: TaskStateStore) {
         if (!input || typeof input.goal !== "string" || !Array.isArray(input.steps)) {
           throw new ToolError("INVALID_INPUT", "task_plan requires goal and steps");
         }
-        const plan = await store.create(ctx.sessionId, input.goal, input.steps);
+        if (!ctx.rootTurnId?.trim()) throw new ToolError("PLAN_REQUIRED", "task_plan requires a current root turn");
+        const plan = await store.create(ctx.sessionId, input.goal, input.steps, ctx.rootTurnId);
         ctx.guard.after({
           sessionId: ctx.sessionId, agent: ctx.agent, tool: "task_plan", action: "plan",
           projectRoot: ctx.projectRoot, durationMs: Date.now() - started, ok: true,
