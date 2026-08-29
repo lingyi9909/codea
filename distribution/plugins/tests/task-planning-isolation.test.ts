@@ -79,7 +79,11 @@ describe("Task 29 planning isolation and recovery", () => {
       fs.writeFileSync(stateFile(home, root, "session-corrupt"), "{not-json\n", "utf8");
 
       hooks = await plugin.server(input(root), { auditLog: path.join(tmp, "audit-restart.log") });
-      await expect(hooks.tool!.task_status!.execute({}, ctx)).rejects.toThrow(/TASK_STATE_CORRUPT/);
+      const corruptStatus = await hooks.tool!.task_status!.execute({}, ctx);
+      expect(corruptStatus.metadata?.ok).toBe(false);
+      expect(corruptStatus.metadata?.errorCategory).toBe("TASK_STATE_CORRUPT");
+      expect(corruptStatus.metadata?.codeaTaskPlan).toBeUndefined();
+      expect(corruptStatus.output).toContain("TASK_STATE_CORRUPT");
       await expect(hooks["tool.execute.before"]!({ tool: "write", sessionID: "session-corrupt", callID: "c1" }, { args: { filePath: "safe.txt", content: "x" } })).rejects.toThrow(/PLAN_REQUIRED/);
 
       const replaced = await hooks.tool!.task_plan!.execute(plan, ctx);
