@@ -44,7 +44,7 @@ func completionModel(state TaskExecutionState) *Model {
 }
 
 func TestMutationWithoutFreshVerificationCannotFinalizeSuccess(t *testing.T) {
-	m := completionModel(TaskExecutionState{MutationSeen: true})
+	m := completionModel(TaskExecutionState{MutationSeen: true, AutoContinuation: maxVerificationContinuations})
 	m.processRuntimeEvent(runtime.Event{Type: eventTypeStepFinished, SessionID: "s1", MessageID: "turn-1"})
 	working, ok := m.executionTrace.Entry("turn:turn-1:working")
 	if !ok {
@@ -86,7 +86,7 @@ func TestReadOnlyCompletionRemainsCompleted(t *testing.T) {
 }
 
 func TestAssistantProseCannotOverrideVerificationGate(t *testing.T) {
-	m := completionModel(TaskExecutionState{MutationSeen: true, LastVerificationResult: "fail"})
+	m := completionModel(TaskExecutionState{MutationSeen: true, LastVerificationResult: "fail", AutoContinuation: maxVerificationContinuations})
 	m.messages[len(m.messages)-1].Content = "All tests passed and the task is complete."
 	m.processRuntimeEvent(runtime.Event{Type: eventTypeStepFinished, SessionID: "s1", MessageID: "turn-1"})
 	working, _ := m.executionTrace.Entry("turn:turn-1:working")

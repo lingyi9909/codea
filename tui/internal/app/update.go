@@ -41,8 +41,15 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.processRuntimeEvent(msg.ev) {
 			m.markDirty()
 		}
+		controlCmd := m.takeVerificationContinuationCmd()
+		if m.eventCh != nil && controlCmd != nil {
+			return m, tea.Batch(waitForEvent(m.eventCh), controlCmd)
+		}
 		if m.eventCh != nil {
 			return m, waitForEvent(m.eventCh)
+		}
+		if controlCmd != nil {
+			return m, controlCmd
 		}
 		return m, nil
 
@@ -435,7 +442,7 @@ func (m *Model) processRuntimeEvent(ev runtime.Event) bool {
 	switch ev.Type {
 	case eventTypeStepFinished:
 		dirty = m.applyReasoningEvents(m.proc.Flush()) || dirty
-		m.finishStepWithVerification()
+		m.queueVerificationStepFinished(ev)
 		dirty = true
 	case eventTypeSessionError:
 		dirty = m.applyReasoningEvents(m.proc.Process(ev)) || dirty

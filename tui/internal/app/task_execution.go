@@ -39,6 +39,8 @@ func (m *Model) resetTaskExecution(turnID string) {
 	if root != "" {
 		m.taskExecution.messageRoots[root] = root
 	}
+	m.pendingVerificationPrompt = nil
+	m.verificationContinuationTriggers = make(map[string]struct{})
 }
 
 func (m *Model) recordMessageRoot(messageID, rootTurnID string) {
