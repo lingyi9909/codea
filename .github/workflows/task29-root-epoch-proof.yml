@@ -1,0 +1,35 @@
+name: Task 29 Root Epoch Proof
+
+on:
+  push:
+    branches: [task29-root-epoch-proof]
+
+permissions:
+  contents: read
+
+jobs:
+  plugin-red:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.3.14'
+      - name: Install dependencies
+        working-directory: distribution/plugins
+        run: bun install --frozen-lockfile
+      - name: Root epoch regression
+        working-directory: distribution/plugins
+        run: bun test tests/task-root-epoch.test.ts
+
+  app-red:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.5'
+          cache-dependency-path: tui/go.sum
+      - name: Vendor parent identity and Application root regression
+        working-directory: tui
+        run: GOTOOLCHAIN=local go test ./internal/opencode ./internal/app -run 'Task29MessageUpdated|TaskExecutionUsesAssistantParentIdentity' -count=1
