@@ -13,6 +13,9 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.3.14
+      - name: Install plugin dependencies
+        working-directory: distribution/plugins
+        run: bun install --frozen-lockfile
       - name: Task 29 state-store RED/GREEN
         working-directory: distribution/plugins
         run: bun test tests/task-state-store.test.ts
