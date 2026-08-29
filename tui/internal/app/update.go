@@ -435,7 +435,7 @@ func (m *Model) processRuntimeEvent(ev runtime.Event) bool {
 	switch ev.Type {
 	case eventTypeStepFinished:
 		dirty = m.applyReasoningEvents(m.proc.Flush()) || dirty
-		m.finishStreaming()
+		m.finishStepWithVerification()
 		dirty = true
 	case eventTypeSessionError:
 		dirty = m.applyReasoningEvents(m.proc.Process(ev)) || dirty
