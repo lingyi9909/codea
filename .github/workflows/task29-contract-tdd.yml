@@ -1,0 +1,21 @@
+name: Task 29 Agent Contract TDD
+
+on:
+  push:
+    branches:
+      - task29-contract-tdd
+
+jobs:
+  task29-contract:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: 1.26.5
+          cache-dependency-path: tui/go.sum
+      - name: Agent and skill planning contract RED/GREEN
+        run: bash tests/task29-agent-planning-contract.sh
+      - name: General task strategy RED/GREEN
+        working-directory: tui
+        run: GOTOOLCHAIN=local go test ./internal/app -run 'TaskStrategy' -count=1
