@@ -16,6 +16,12 @@ jobs:
       - name: Install plugin dependencies
         working-directory: distribution/plugins
         run: bun install --frozen-lockfile
-      - name: Task 29 plan gate RED/GREEN
+      - name: Task 29 plan gate focused regression
         working-directory: distribution/plugins
         run: bun test tests/task-plan-gate.test.ts
+      - name: Full plugin regression
+        working-directory: distribution/plugins
+        run: bun test
+      - name: Plugin build
+        working-directory: distribution/plugins
+        run: bun run build
