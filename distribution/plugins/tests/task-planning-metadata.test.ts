@@ -37,6 +37,10 @@ describe("Task 29 safe planning metadata", () => {
     try {
       const hooks = await plugin.server(input(root), { auditLog: path.join(tmp, "audit.log") });
       const octx = context(root);
+      await hooks["chat.message"]!(
+        { sessionID: octx.sessionID, messageID: octx.messageID, agent: octx.agent },
+        { message: { id: octx.messageID, sessionID: octx.sessionID, role: "user" }, parts: [{ type: "text", text: "engineering task" }] } as any,
+      );
 
       const created = await hooks.tool!.task_plan!.execute(plan, octx);
       expect(created.metadata?.codeaTaskPlan).toBe("true");
