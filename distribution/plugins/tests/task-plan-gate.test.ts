@@ -12,10 +12,14 @@ function makeInput(root: string): PluginInput {
   } as unknown as PluginInput;
 }
 
+function rootID(sessionID: string): string {
+  return `turn-${sessionID}`;
+}
+
 function makeContext(root: string, sessionID: string, askEvents: any[] = []): OpenCodeToolContext {
   return {
     sessionID,
-    messageID: "m1",
+    messageID: rootID(sessionID),
     agent: "general",
     directory: root,
     worktree: root,
@@ -23,6 +27,13 @@ function makeContext(root: string, sessionID: string, askEvents: any[] = []): Op
     metadata() {},
     async ask(input) { askEvents.push(input); },
   };
+}
+
+async function establishRoot(hooks: Awaited<ReturnType<typeof plugin.server>>, sessionID: string): Promise<void> {
+  await hooks["chat.message"]!(
+    { sessionID, messageID: rootID(sessionID), agent: "general" },
+    { message: { id: rootID(sessionID), sessionID, role: "user" }, parts: [{ type: "text", text: "engineering task" }] } as any,
+  );
 }
 
 function planInput() {
@@ -68,6 +79,7 @@ async function expectPlanRequired(promise: Promise<unknown>) {
 describe("Task 29 plan-before-mutation gate", () => {
   test("read/grep/glob remain available without a plan", async () => {
     await withPlugin(async ({ hooks }) => {
+      await establishRoot(hooks, "s");
       const before = hooks["tool.execute.before"]!;
       await expect(before({ tool: "read", sessionID: "s", callID: "r" }, { args: { filePath: "src/Foo.java" } })).resolves.toBeUndefined();
       await expect(before({ tool: "grep", sessionID: "s", callID: "g" }, { args: { pattern: "Foo", path: "src" } })).resolves.toBeUndefined();
@@ -77,6 +89,7 @@ describe("Task 29 plan-before-mutation gate", () => {
 
   test("native write/edit/bash fail with machine PLAN_REQUIRED before existing policies", async () => {
     await withPlugin(async ({ hooks }) => {
+      await establishRoot(hooks, "s");
       const before = hooks["tool.execute.before"]!;
       await expectPlanRequired(before({ tool: "write", sessionID: "s", callID: "w" }, { args: { filePath: "../../outside.txt", content: "safe" } }));
       await expectPlanRequired(before({ tool: "edit", sessionID: "s", callID: "e" }, { args: { filePath: ".env", oldString: "a", newString: "b" } }));
@@ -87,6 +100,7 @@ describe("Task 29 plan-before-mutation gate", () => {
   test("task_plan stays available and a valid plan lets native tools reach existing path/command/DLP checks", async () => {
     await withPlugin(async ({ hooks, root }) => {
       const sessionID = "session-native";
+      await establishRoot(hooks, sessionID);
       const octx = makeContext(root, sessionID);
       const planResult = await hooks.tool!.task_plan!.execute(planInput(), octx);
       expect(planResult.metadata?.ok).toBe(true);
@@ -109,8 +123,10 @@ describe("Task 29 plan-before-mutation gate", () => {
 
   test("enterprise write/execute require plan before approval while read-only tools remain available", async () => {
     await withPlugin(async ({ hooks, root }) => {
+      const sessionID = "session-enterprise";
+      await establishRoot(hooks, sessionID);
       const askEvents: any[] = [];
-      const octx = makeContext(root, "session-enterprise", askEvents);
+      const octx = makeContext(root, sessionID, askEvents);
       const read = await hooks.tool!.analyze_test_project!.execute({}, octx);
       expect(read.metadata?.errorCategory).not.toBe("PLAN_REQUIRED");
 
@@ -123,8 +139,10 @@ describe("Task 29 plan-before-mutation gate", () => {
 
   test("after plan enterprise write reaches existing approval and execution", async () => {
     await withPlugin(async ({ hooks, root }) => {
+      const sessionID = "session-enterprise-ok";
+      await establishRoot(hooks, sessionID);
       const askEvents: any[] = [];
-      const octx = makeContext(root, "session-enterprise-ok", askEvents);
+      const octx = makeContext(root, sessionID, askEvents);
       await hooks.tool!.task_plan!.execute(planInput(), octx);
       const result = await hooks.tool!.write_document!.execute({ path: "docs/plan.md", content: "safe" }, octx);
       expect(result.metadata?.ok).toBe(true);
