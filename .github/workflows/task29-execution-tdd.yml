@@ -20,9 +20,18 @@ jobs:
       - name: Install plugin dependencies
         working-directory: distribution/plugins
         run: bun install --frozen-lockfile
-      - name: Planning metadata RED/GREEN
+      - name: Planning metadata focused regression
         working-directory: distribution/plugins
         run: bun test tests/task-planning-metadata.test.ts
-      - name: Application and mapper RED/GREEN
+      - name: Full plugin regression
+        working-directory: distribution/plugins
+        run: bun test
+      - name: Plugin build
+        working-directory: distribution/plugins
+        run: bun run build
+      - name: Application and mapper focused regression
         working-directory: tui
-        run: GOTOOLCHAIN=local go test ./internal/app ./internal/runtime ./internal/opencode -run 'TaskExecution|TaskPlanToolMetadata' -count=1
+        run: GOTOOLCHAIN=local go test ./internal/app ./internal/runtime ./internal/opencode -run 'TaskExecution|TaskPlanToolMetadata|Task25' -count=1
+      - name: Full Application Runtime Mapper regression
+        working-directory: tui
+        run: GOTOOLCHAIN=local go test ./internal/app ./internal/runtime ./internal/opencode -count=1
