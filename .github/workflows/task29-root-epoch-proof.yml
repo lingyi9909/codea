@@ -12,6 +12,10 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.5'
+          cache-dependency-path: tui/go.sum
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: '1.3.14'
@@ -22,6 +26,8 @@ jobs:
         working-directory: distribution/plugins
         run: |
           bun test tests/task-root-epoch.test.ts tests/task-planning-isolation.test.ts tests/task-state-store.test.ts tests/task-planning-tools.test.ts tests/task29-acceptance.test.ts tests/task-plan-gate.test.ts
+      - name: Task 29 mechanical acceptance
+        run: bash tests/task29-agent-planning.sh
       - name: Full plugin regression and build
         working-directory: distribution/plugins
         run: |
