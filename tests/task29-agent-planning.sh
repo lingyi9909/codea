@@ -16,7 +16,7 @@ LOG="$(mktemp)"
 trap 'rm -f "$LOG"' EXIT
 (
   cd "$PLUGIN"
-  bun test tests/task29-acceptance.test.ts 2>&1 | tee "$LOG"
+  bun test tests/task29-acceptance.test.ts tests/task-root-epoch.test.ts 2>&1 | tee "$LOG"
 )
 
 for marker in \
@@ -28,7 +28,9 @@ for marker in \
   'PLAN_3_TO_7_STEPS PASS' \
   'SINGLE_ACTIVE_STEP PASS' \
   'CROSS_SESSION_PLAN_ISOLATION PASS' \
-  'PLAN_PERSISTENCE PASS'
+  'PLAN_PERSISTENCE PASS' \
+  'NEW_USER_TURN_INVALIDATES_PRIOR_PLAN PASS' \
+  'CONTROL_CONTINUATION_PRESERVES_ROOT_EPOCH PASS'
 do
   grep -Fq "$marker" "$LOG" || fail "missing protocol marker: $marker"
 done
@@ -36,7 +38,7 @@ done
 (
   cd "$TUI"
   GOTOOLCHAIN=local go test ./internal/app ./internal/runtime ./internal/opencode \
-    -run 'TaskExecution|TaskPlan|ToolMetadata|Trace|Session' -count=1
+    -run 'TaskExecution|TaskPlan|ToolMetadata|Task29MessageUpdated|Trace|Session' -count=1
   echo 'LIVE_TRACE_PLAN_STATE PASS'
 
   GOTOOLCHAIN=local go test ./internal/agent ./internal/app \
