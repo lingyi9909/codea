@@ -32,7 +32,7 @@ func NewWalker(root string, options WalkerOptions) *Walker {
 
 var excludedDirs = map[string]struct{}{
 	".git": {}, "target": {}, "build": {}, "dist": {}, "node_modules": {}, "vendor": {},
-	"out": {}, ".idea": {}, ".gradle": {}, ".mvn/wrapper": {},
+	"out": {}, ".idea": {}, ".gradle": {},
 }
 
 func (w *Walker) Walk() ([]SourceFile, error) {
@@ -127,6 +127,9 @@ func normalizeRelativePath(rel string) (string, bool) {
 
 func isExcludedDir(rel string) bool {
 	rel = normalizeSlash(rel)
+	if rel == ".mvn/wrapper" || strings.HasSuffix(rel, "/.mvn/wrapper") {
+		return true
+	}
 	parts := strings.Split(rel, "/")
 	for _, part := range parts {
 		if _, ok := excludedDirs[part]; ok {

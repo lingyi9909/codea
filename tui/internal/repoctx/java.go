@@ -93,13 +93,12 @@ func javaTypeDecls(t []javaToken) []javaTypeDecl {
 		}
 		out = append(out, javaTypeDecl{t[i].text, t[i+1].text, i, open, close})
 	}
-	// only declarations are independently returned; nested declarations are fine.
 	return out
 }
 
 func javaExtractMembers(f *SourceFile, t []javaToken, d javaTypeDecl, owner Symbol) {
 	fieldTypes := map[string]string{}
-	baseDepth := 1
+	constructorCount := javaConstructorCount(t, d)
 	depth := 0
 	memberStart := d.openIndex + 1
 	for i := d.openIndex + 1; i < d.closeIndex; i++ {
@@ -160,9 +159,11 @@ func javaExtractMembers(f *SourceFile, t []javaToken, d javaTypeDecl, owner Symb
 		sym := Symbol{ID: stableSymbolID(f.Path, identity), Name: name, Kind: kind, Path: f.Path, StartLine: t[nameIdx].line, EndLine: endLine, Package: f.Package, Owner: d.name, Type: typ, Signature: signature, Annotations: anns}
 		f.Symbols = append(f.Symbols, sym)
 		if kind == SymbolConstructor {
-			for _, ptype := range params {
-				if ptype != "" && !javaPrimitive(ptype) {
-					f.candidates = append(f.candidates, relationCandidate{from: owner.ID, kind: RelationInjects, targetType: ptype, confidence: 1, evidence: "constructor parameter"})
+			if evidence, confirmed := javaConstructorDIEvidence(owner, anns, constructorCount); confirmed {
+				for _, ptype := range params {
+					if ptype != "" && !javaPrimitive(ptype) {
+						f.candidates = append(f.candidates, relationCandidate{from: owner.ID, kind: RelationInjects, targetType: ptype, confidence: 1, evidence: evidence})
+					}
 				}
 			}
 		}
@@ -181,31 +182,70 @@ func javaExtractMembers(f *SourceFile, t []javaToken, d javaTypeDecl, owner Symb
 			i = closeParen
 			memberStart = i + 1
 		}
-		_ = baseDepth
 	}
+}
+
+func javaConstructorCount(t []javaToken, d javaTypeDecl) int {
+	count := 0
+	depth := 0
+	for i := d.openIndex + 1; i < d.closeIndex; i++ {
+		switch t[i].text {
+		case "{":
+			depth++
+			continue
+		case "}":
+			depth--
+			continue
+		}
+		if depth != 0 || t[i].text != "(" || i <= d.openIndex+1 {
+			continue
+		}
+		nameIdx := i - 1
+		if t[nameIdx].text != d.name || (nameIdx > d.openIndex && t[nameIdx-1].text == "@") {
+			continue
+		}
+		closeParen := matchJava(t, i, "(", ")")
+		if closeParen < 0 || closeParen >= d.closeIndex {
+			continue
+		}
+		next := closeParen + 1
+		for next < d.closeIndex && (t[next].text == "throws" || isJavaIdent(t[next].text) || t[next].text == "," || t[next].text == ".") {
+			next++
+		}
+		if next < d.closeIndex && (t[next].text == "{" || t[next].text == ";") {
+			count++
+		}
+	}
+	return count
+}
+
+func javaConstructorDIEvidence(owner Symbol, anns []string, constructorCount int) (string, bool) {
+	if containsString(anns, "Autowired") {
+		return "@Autowired constructor", true
+	}
+	if containsString(anns, "Inject") {
+		return "@Inject constructor", true
+	}
+	if owner.Role != "" && constructorCount == 1 {
+		return "single constructor on Spring component", true
+	}
+	return "", false
 }
 
 func javaParseField(f *SourceFile, t []javaToken, start, end int, owner Symbol, fieldTypes map[string]string) {
 	if start >= end {
 		return
 	}
-	// Ignore statements containing parentheses: likely method fragments/initializers.
 	for i := start; i < end; i++ {
 		if t[i].text == "(" {
 			return
 		}
 	}
 	anns := javaAnnotationsInRange(t, start, end)
-	ids := []string{}
-	for i := start; i < end; i++ {
-		if isJavaIdent(t[i].text) && !javaModifier(t[i].text) && !javaAnnotationNameAt(t, i) {
-			ids = append(ids, t[i].text)
-		}
-	}
-	if len(ids) < 2 {
+	typ, name, ok := javaDeclaredTypeAndName(t, start, end)
+	if !ok {
 		return
 	}
-	typ, name := ids[len(ids)-2], ids[len(ids)-1]
 	fieldTypes[name] = typ
 	if containsString(anns, "Autowired") {
 		f.candidates = append(f.candidates, relationCandidate{from: owner.ID, kind: RelationInjects, targetType: typ, confidence: 1, evidence: "@Autowired field"})
@@ -232,25 +272,13 @@ func javaParams(t []javaToken, start, end int) ([]string, map[string]string) {
 	seg := start
 	depth := 0
 	parse := func(a, b int) {
-		ids := []string{}
-		for i := a; i < b; i++ {
-			if t[i].text == "<" {
-				depth++
-			}
-			if t[i].text == ">" && depth > 0 {
-				depth--
-			}
-			if isJavaIdent(t[i].text) && !javaModifier(t[i].text) && !javaAnnotationNameAt(t, i) {
-				ids = append(ids, t[i].text)
-			}
+		typ, name, ok := javaDeclaredTypeAndName(t, a, b)
+		if !ok {
+			return
 		}
-		if len(ids) >= 2 {
-			typ, name := ids[len(ids)-2], ids[len(ids)-1]
-			types = append(types, typ)
-			vars[name] = typ
-		}
+		types = append(types, typ)
+		vars[name] = typ
 	}
-	depth = 0
 	for i := start; i < end; i++ {
 		switch t[i].text {
 		case "<", "(", "[":
@@ -270,6 +298,89 @@ func javaParams(t []javaToken, start, end int) ([]string, map[string]string) {
 		parse(seg, end)
 	}
 	return types, vars
+}
+
+func javaDeclaredTypeAndName(t []javaToken, start, end int) (string, string, bool) {
+	if start >= end {
+		return "", "", false
+	}
+	nameIdx := -1
+	angleDepth := 0
+	for i := end - 1; i >= start; i-- {
+		switch t[i].text {
+		case ">":
+			angleDepth++
+			continue
+		case "<":
+			if angleDepth > 0 {
+				angleDepth--
+			}
+			continue
+		}
+		if angleDepth == 0 && isJavaIdent(t[i].text) && !javaModifier(t[i].text) && !javaAnnotationNameAt(t, i) {
+			nameIdx = i
+			break
+		}
+	}
+	if nameIdx < 0 {
+		return "", "", false
+	}
+
+	typeStart := javaSkipLeadingDeclarationDecorators(t, start, nameIdx)
+	if typeStart >= nameIdx {
+		return "", "", false
+	}
+	typeEnd := nameIdx
+	depth := 0
+	for i := typeStart; i < nameIdx; i++ {
+		if t[i].text == "<" {
+			if depth == 0 {
+				typeEnd = i
+				break
+			}
+			depth++
+		}
+	}
+	var b strings.Builder
+	for i := typeStart; i < typeEnd; i++ {
+		if javaModifier(t[i].text) {
+			continue
+		}
+		if isJavaIdent(t[i].text) || t[i].text == "." {
+			b.WriteString(t[i].text)
+		}
+	}
+	typ := strings.Trim(b.String(), ".")
+	if typ == "" {
+		return "", "", false
+	}
+	return typ, t[nameIdx].text, true
+}
+
+func javaSkipLeadingDeclarationDecorators(t []javaToken, start, end int) int {
+	i := start
+	for i < end {
+		if javaModifier(t[i].text) {
+			i++
+			continue
+		}
+		if t[i].text != "@" {
+			break
+		}
+		i++
+		if i < end && isJavaIdent(t[i].text) {
+			i++
+			for i+1 < end && t[i].text == "." && isJavaIdent(t[i+1].text) {
+				i += 2
+			}
+		}
+		if i < end && t[i].text == "(" {
+			if close := matchJava(t, i, "(", ")"); close >= 0 && close < end {
+				i = close + 1
+			}
+		}
+	}
+	return i
 }
 
 func javaReturnType(t []javaToken, start, nameIdx int) string {
@@ -296,6 +407,7 @@ func javaQualifiedAfter(t []javaToken, keyword string) string {
 	}
 	return ""
 }
+
 func javaAllQualifiedAfter(t []javaToken, keyword string) []string {
 	out := []string{}
 	for i := 0; i < len(t); i++ {
@@ -322,6 +434,7 @@ func javaAnnotationsBefore(t []javaToken, idx int) []string {
 	}
 	return javaAnnotationsInRange(t, start+1, idx)
 }
+
 func javaAnnotationsInRange(t []javaToken, start, end int) []string {
 	out := []string{}
 	for i := start; i+1 < end; i++ {
@@ -331,7 +444,9 @@ func javaAnnotationsInRange(t []javaToken, start, end int) []string {
 	}
 	return uniqueStrings(out)
 }
+
 func javaAnnotationNameAt(t []javaToken, i int) bool { return i > 0 && t[i-1].text == "@" }
+
 func javaRole(anns []string) string {
 	for _, p := range []struct{ a, r string }{{"RestController", "rest-controller"}, {"Controller", "controller"}, {"Service", "service"}, {"Repository", "repository"}, {"Component", "component"}} {
 		if containsString(anns, p.a) {
@@ -353,9 +468,9 @@ func matchJava(t []javaToken, open int, left, right string) int {
 				return i
 			}
 		}
-	}
 	return -1
 }
+
 func containsString(xs []string, s string) bool {
 	for _, x := range xs {
 		if x == s {
@@ -364,6 +479,7 @@ func containsString(xs []string, s string) bool {
 	}
 	return false
 }
+
 func uniqueStrings(xs []string) []string {
 	seen := map[string]bool{}
 	out := []string{}
@@ -375,6 +491,7 @@ func uniqueStrings(xs []string) []string {
 	}
 	return out
 }
+
 func javaControlWord(s string) bool {
 	switch s {
 	case "if", "for", "while", "switch", "catch", "new", "return", "throw", "synchronized":
@@ -382,6 +499,7 @@ func javaControlWord(s string) bool {
 	}
 	return false
 }
+
 func javaModifier(s string) bool {
 	switch s {
 	case "public", "protected", "private", "static", "final", "abstract", "native", "synchronized", "default", "transient", "volatile", "strictfp", "sealed", "non-sealed", "var":
@@ -389,6 +507,7 @@ func javaModifier(s string) bool {
 	}
 	return false
 }
+
 func javaPrimitive(s string) bool {
 	switch s {
 	case "byte", "short", "int", "long", "float", "double", "boolean", "char", "void", "String":
@@ -396,6 +515,7 @@ func javaPrimitive(s string) bool {
 	}
 	return false
 }
+
 func isJavaIdent(s string) bool {
 	if s == "" {
 		return false

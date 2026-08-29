@@ -33,6 +33,12 @@ fi
   cd "$TUI"
   GOTOOLCHAIN=local go test ./tests/architecture -count=1
 
+  # Reviewer-requested Task 28 remediation regressions are part of the formal
+  # mechanical Gate, not local-only tests.
+  GOTOOLCHAIN=local go test ./internal/repoctx \
+    -run '^TestTask28Remediation' -count=1
+  echo 'TASK28_REMEDIATION_REGRESSIONS PASS'
+
   # Real Java business-chain fixture must be confirmed from typed evidence.
   GOTOOLCHAIN=local go test ./internal/repoctx \
     -run '^TestIndexGraphConfirmsJavaBusinessChainAndRejectsPackageSimilarity$' -count=1

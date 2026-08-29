@@ -5,6 +5,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	pathpkg "path"
 	"sort"
 	"strconv"
 	"strings"
@@ -15,7 +16,7 @@ func ExtractGo(path string, source []byte) SourceFile {
 	if !ok {
 		norm = normalizeSlash(path)
 	}
-	out := SourceFile{Path: norm, Extension: ".go"}
+	out := SourceFile{Path: norm, Extension: ".go", ImportAliases: map[string]string{}}
 	fset := token.NewFileSet()
 	file, err := parser.ParseFile(fset, norm, source, parser.AllErrors)
 	if err != nil {
@@ -26,8 +27,17 @@ func ExtractGo(path string, source []byte) SourceFile {
 	}
 	out.Package = file.Name.Name
 	for _, imp := range file.Imports {
-		if p, e := strconv.Unquote(imp.Path.Value); e == nil {
-			out.Imports = append(out.Imports, p)
+		p, e := strconv.Unquote(imp.Path.Value)
+		if e != nil {
+			continue
+		}
+		out.Imports = append(out.Imports, p)
+		alias := pathpkg.Base(p)
+		if imp.Name != nil {
+			alias = imp.Name.Name
+		}
+		if alias != "" && alias != "_" && alias != "." {
+			out.ImportAliases[alias] = p
 		}
 	}
 	sort.Strings(out.Imports)
@@ -58,7 +68,6 @@ func ExtractGo(path string, source []byte) SourceFile {
 						if typ != "" {
 							fields[n.Name] = typ
 						}
-					}
 				}
 				structFields[ts.Name.Name] = fields
 			}
@@ -160,7 +169,6 @@ func goExtractCalls(out *SourceFile, fd *ast.FuncDecl, from Symbol, structFields
 							targetType = fields[recv.Sel.Name]
 						}
 					}
-				}
 			}
 			if targetType != "" {
 				out.candidates = append(out.candidates, relationCandidate{from: from.ID, kind: RelationCalls, targetType: targetType, targetMethod: sel.Sel.Name, confidence: 1, evidence: "Go AST typed selector"})

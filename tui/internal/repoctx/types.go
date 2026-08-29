@@ -50,16 +50,17 @@ type Relation struct {
 }
 
 type SourceFile struct {
-	Path       string
-	AbsPath    string
-	Extension  string
-	Package    string
-	Imports    []string
-	Terms      []string
-	Symbols    []Symbol
-	Relations  []Relation
-	Unresolved []string
-	candidates []relationCandidate
+	Path          string
+	AbsPath       string
+	Extension     string
+	Package       string
+	Imports       []string
+	ImportAliases map[string]string
+	Terms         []string
+	Symbols       []Symbol
+	Relations     []Relation
+	Unresolved    []string
+	candidates    []relationCandidate
 }
 
 type RepositoryIndex struct {
