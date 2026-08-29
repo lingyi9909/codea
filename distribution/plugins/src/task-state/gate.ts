@@ -12,9 +12,9 @@ export class PlanRequiredError extends Error {
   }
 }
 
-export async function requirePlan(store: TaskStateStore, sessionId: string, operation: string): Promise<void> {
+export async function requirePlan(store: TaskStateStore, sessionId: string, rootMessageID: string, operation: string): Promise<void> {
   try {
-    if (await store.hasActionablePlan(sessionId)) return;
+    if (rootMessageID.trim() && await store.hasActionablePlan(sessionId, rootMessageID)) return;
   } catch (error) {
     throw new PlanRequiredError(operation, error);
   }
