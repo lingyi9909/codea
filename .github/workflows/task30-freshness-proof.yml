@@ -1,0 +1,26 @@
+name: Task 30 Verification Freshness Proof
+
+on:
+  push:
+    branches: [task30-tdd-freshness]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: task30-freshness-proof
+  cancel-in-progress: true
+
+jobs:
+  freshness-proof:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.5'
+      - name: Run Task 30 focused Go proof
+        working-directory: tui
+        env:
+          GOTOOLCHAIN: local
+        run: go test ./internal/runtime ./internal/opencode ./internal/app -run 'Verification|ToolMetadata|TaskExecution' -count=1
