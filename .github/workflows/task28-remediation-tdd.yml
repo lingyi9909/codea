@@ -1,0 +1,24 @@
+name: Task 28 Remediation TDD
+
+on:
+  push:
+    branches: [task28-remediation-tdd]
+    paths:
+      - 'tui/internal/repoctx/**'
+      - '.github/workflows/task28-remediation-tdd.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  repoctx-tdd:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.5'
+          cache-dependency-path: tui/go.sum
+      - name: Task 28 remediation focused tests
+        working-directory: tui
+        run: GOTOOLCHAIN=local go test ./internal/repoctx -run 'Task28Remediation' -count=1
