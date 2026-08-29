@@ -10,8 +10,6 @@ import (
 
 const maxRawSize = 16 * 1024
 
-// Codea semantic event types mapped from OpenCode vendor events.
-// Unknown vendor events map to "raw" with RawType preserved.
 const (
 	CodeaEventRuntimeConnected  runtime.EventType = "runtime.connected"
 	CodeaEventSessionStatus     runtime.EventType = "session.status"
@@ -39,7 +37,6 @@ const (
 	CodeaEventRaw               runtime.EventType = "raw"
 )
 
-// vendorToCodea maps OpenCode vendor event types to Codea semantic types.
 var vendorToCodea = map[string]runtime.EventType{
 	"server.connected":         CodeaEventRuntimeConnected,
 	"server.instance.disposed": CodeaEventRuntimeConnected,
@@ -58,19 +55,16 @@ var vendorToCodea = map[string]runtime.EventType{
 	"runtime_error":            CodeaEventRuntimeError,
 }
 
-// sseEnvelope is the top-level SSE event envelope from OpenCode.
 type sseEnvelope struct {
 	Directory string          `json:"directory"`
 	Payload   json.RawMessage `json:"payload"`
 }
 
-// ssePayload is the payload within the envelope.
 type ssePayload struct {
 	Type       string          `json:"type"`
 	Properties json.RawMessage `json:"properties"`
 }
 
-// sseCommonProps captures fields found across many event properties.
 type sseCommonProps struct {
 	SessionID    string          `json:"sessionID"`
 	MessageID    string          `json:"messageID"`
@@ -108,9 +102,6 @@ type ssePart struct {
 	Time        *sseTime      `json:"time"`
 }
 
-// ssePartState captures the structured ToolState evidence carried by the real
-// OpenCode /global/event stream. Input and metadata are intentionally kept at
-// the Runtime adapter boundary and translated into Codea-owned string metadata.
 type ssePartState struct {
 	Status   string         `json:"status"`
 	Input    map[string]any `json:"input"`
@@ -122,13 +113,11 @@ type sseTime struct {
 	End   float64 `json:"end"`
 }
 
-// sseSessionInfo extracts projectID from session-level events.
 type sseSessionInfo struct {
 	ProjectID string `json:"projectID"`
 	ID        string `json:"id"`
 }
 
-// ssePermissionProps extracts permission request data from permission.asked events.
 type ssePermissionProps struct {
 	ID         string         `json:"id"`
 	Permission string         `json:"permission"`
@@ -138,8 +127,6 @@ type ssePermissionProps struct {
 	Metadata   map[string]any `json:"metadata"`
 }
 
-// MapEvent maps a raw OpenCode SSE event to a Codea runtime.Event.
-// Sequence is the monotonically increasing connection-level sequence number.
 func MapEvent(raw []byte, sequence int64) (runtime.Event, error) {
 	rawSize := len(raw)
 
@@ -157,13 +144,8 @@ func MapEvent(raw []byte, sequence int64) (runtime.Event, error) {
 	_ = json.Unmarshal(payload.Properties, &props)
 
 	codeaType := mapVendorType(payload.Type, &props)
-	event := runtime.Event{
-		Type:     codeaType,
-		Sequence: sequence,
-		RawType:  payload.Type,
-	}
+	event := runtime.Event{Type: codeaType, Sequence: sequence, RawType: payload.Type}
 
-	// Raw payload with truncation
 	rawPayload := trimRaw(raw)
 	event.Raw = rawPayload
 	if len(rawPayload) < rawSize {
@@ -171,7 +153,6 @@ func MapEvent(raw []byte, sequence int64) (runtime.Event, error) {
 		event.RawOriginalSize = rawSize
 	}
 
-	// Common fields
 	if props.SessionID != "" {
 		event.SessionID = props.SessionID
 	}
@@ -181,8 +162,10 @@ func MapEvent(raw []byte, sequence int64) (runtime.Event, error) {
 	if props.PartID != "" {
 		event.PartID = props.PartID
 	}
-	// message.part.updated nests the ids under `part`, not at the top level.
 	if props.Part != nil {
+		if event.SessionID == "" && props.Part.SessionID != "" {
+			event.SessionID = props.Part.SessionID
+		}
 		if event.MessageID == "" && props.Part.MessageID != "" {
 			event.MessageID = props.Part.MessageID
 		}
@@ -194,15 +177,12 @@ func MapEvent(raw []byte, sequence int64) (runtime.Event, error) {
 		event.CreatedAt = time.UnixMilli(int64(props.Time))
 	}
 
-	// Content from delta or part text
 	if props.Delta != "" {
 		event.Content = props.Delta
 	} else if props.Part != nil && props.Part.Text != "" {
 		event.Content = props.Part.Text
 	}
 
-	// ProjectID from session-level info; message id for message.updated
-	// (which nests the message id under `info`, not a top-level `messageID`).
 	if props.Info != nil {
 		var info sseSessionInfo
 		if err := json.Unmarshal(props.Info, &info); err == nil {
@@ -215,7 +195,6 @@ func MapEvent(raw []byte, sequence int64) (runtime.Event, error) {
 		}
 	}
 
-	// Domain data extraction
 	extractApproval(&event, &payload, &props)
 	extractTool(&event, &props)
 	extractExecutionEvidence(&event, &props)
@@ -230,9 +209,7 @@ func extractApproval(event *runtime.Event, payload *ssePayload, props *sseCommon
 	}
 	var perm ssePermissionProps
 	_ = json.Unmarshal(payload.Properties, &perm)
-	approval := &runtime.ApprovalRequest{
-		ID: perm.ID,
-	}
+	approval := &runtime.ApprovalRequest{ID: perm.ID}
 	if perm.Permission != "" {
 		approval.Permission = perm.Permission
 	} else if perm.Action != "" {
@@ -247,8 +224,6 @@ func extractApproval(event *runtime.Event, payload *ssePayload, props *sseCommon
 	}
 }
 
-// permissionCommand returns the command text for an approval, preferring the
-// explicit metadata.command and falling back to the joined patterns.
 func permissionCommand(perm ssePermissionProps) string {
 	if cmd, ok := perm.Metadata["command"].(string); ok && cmd != "" {
 		return cmd
@@ -259,33 +234,34 @@ func permissionCommand(perm ssePermissionProps) string {
 	return ""
 }
 
+var taskToolMetadataAllowlist = []string{
+	"codeaTaskPlan",
+	"codeaPlanTotal",
+	"codeaPlanCompleted",
+	"codeaPlanActive",
+}
+
+func safeTaskToolMetadata(props *sseCommonProps) map[string]string {
+	if props.Part == nil || props.Part.State == nil || len(props.Part.State.Metadata) == 0 {
+		return nil
+	}
+	metadata := make(map[string]string)
+	for _, key := range taskToolMetadataAllowlist {
+		if value := mapString(props.Part.State.Metadata, key); value != "" || key == "codeaPlanActive" {
+			if _, exists := props.Part.State.Metadata[key]; exists {
+				metadata[key] = value
+			}
+		}
+	}
+	if len(metadata) == 0 {
+		return nil
+	}
+	return metadata
+}
+
 func extractTool(event *runtime.Event, props *sseCommonProps) {
 	switch event.Type {
-	case CodeaEventToolCalled:
-		name := props.Tool
-		callID := props.CallID
-		// message.part.updated nests the tool name and callID under `part`;
-		// session.next.tool.called carries them at the top level.
-		if props.Part != nil {
-			if name == "" {
-				name = props.Part.Tool
-			}
-			if callID == "" {
-				callID = props.Part.CallID
-			}
-			if callID == "" {
-				callID = props.Part.ID
-			}
-		}
-		if name != "" || callID != "" {
-			event.Tool = &runtime.ToolEvent{Name: name, CallID: callID}
-		}
-	case CodeaEventToolSuccess, CodeaEventToolFailed:
-		// Success/failure carry the callID (and, when present, the tool name)
-		// used by the Application to correlate the lifecycle with the preceding
-		// tool.called event. The session.next.tool.* path carries callID at the
-		// top level of properties; the real /global/event message.part.updated
-		// path nests it under `part`.
+	case CodeaEventToolCalled, CodeaEventToolSuccess, CodeaEventToolFailed:
 		name := props.Tool
 		callID := props.CallID
 		if props.Part != nil {
@@ -300,15 +276,15 @@ func extractTool(event *runtime.Event, props *sseCommonProps) {
 			}
 		}
 		if name != "" || callID != "" {
-			event.Tool = &runtime.ToolEvent{Name: name, CallID: callID}
+			event.Tool = &runtime.ToolEvent{
+				Name:     name,
+				CallID:   callID,
+				Metadata: safeTaskToolMetadata(props),
+			}
 		}
 	}
 }
 
-// extractExecutionEvidence translates only evidence present on the actual
-// Runtime event into Codea-owned semantic metadata. It deliberately does not
-// infer Skill/Plugin/Subagent use from installed configuration, Agent names, or
-// ordinary tool names.
 func extractExecutionEvidence(event *runtime.Event, props *sseCommonProps) {
 	part := props.Part
 	if part == nil {
@@ -372,7 +348,6 @@ func firstNonEmpty(values ...string) string {
 	return ""
 }
 
-// sseErrorData extracts the message from a structured error object.
 type sseErrorData struct {
 	Name string          `json:"name"`
 	Data json.RawMessage `json:"data"`
@@ -400,7 +375,6 @@ func extractError(event *runtime.Event, props *sseCommonProps) {
 			Message:       msg,
 			VendorDetails: props.Error,
 		}
-		// Preserve partial content from truncated events as Raw.
 		if props.Partial != "" {
 			raw := []byte(props.Partial)
 			event.Raw = trimRaw(raw)
@@ -467,7 +441,6 @@ func extractError(event *runtime.Event, props *sseCommonProps) {
 }
 
 func mapVendorType(vendorType string, props *sseCommonProps) runtime.EventType {
-	// message.part.delta → answer.delta or reasoning.delta based on field
 	if vendorType == "message.part.delta" {
 		if props.Field == "reasoning" {
 			return CodeaEventReasoningDelta
@@ -475,7 +448,6 @@ func mapVendorType(vendorType string, props *sseCommonProps) runtime.EventType {
 		return CodeaEventAnswerDelta
 	}
 
-	// message.part.updated → classify by part type
 	if vendorType == "message.part.updated" && props.Part != nil {
 		switch props.Part.Type {
 		case "step-start":
@@ -483,12 +455,6 @@ func mapVendorType(vendorType string, props *sseCommonProps) runtime.EventType {
 		case "step-finish":
 			return CodeaEventStepFinished
 		case "tool":
-			// The real /global/event tool lifecycle is a sequence of
-			// message.part.updated events sharing one callID whose state.status
-			// transitions pending → running → completed | error. The terminal
-			// statuses map to tool.success / tool.failed so the Application can
-			// close the lifecycle; pending/running (and any statusless legacy
-			// sample) map to tool.called.
 			if props.Part.State != nil {
 				switch props.Part.State.Status {
 				case "completed":
@@ -504,7 +470,6 @@ func mapVendorType(vendorType string, props *sseCommonProps) runtime.EventType {
 		return CodeaEventPartUpdated
 	}
 
-	// permission events map to approval domain
 	if vendorType == "permission.v2.asked" {
 		return CodeaEventApprovalRequested
 	}
@@ -512,9 +477,6 @@ func mapVendorType(vendorType string, props *sseCommonProps) runtime.EventType {
 		return CodeaEventApprovalResolved
 	}
 
-	// session.next.tool.* events carry the modern tool lifecycle. callID/tool
-	// live at the top level of properties (not under `part`) — see the generated
-	// OpenCodeEventSessionNextTool* DTOs.
 	if vendorType == "session.next.tool.called" {
 		return CodeaEventToolCalled
 	}
@@ -543,9 +505,6 @@ func unparseableEvent(raw []byte, rawSize int, sequence int64) runtime.Event {
 	}
 }
 
-// runtimeErrorKindFromCode maps a runtime_error code string to the appropriate
-// RuntimeErrorKind. Known transport-level codes (disconnects, scanner errors)
-// map to Transport; auth-related codes map to Auth; everything else is Protocol.
 func runtimeErrorKindFromCode(code string) runtime.RuntimeErrorKind {
 	switch code {
 	case "AUTH_ERROR", "UNAUTHORIZED", "FORBIDDEN":
