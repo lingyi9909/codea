@@ -5,10 +5,11 @@
 - Task: **29 — Agent Planning & Execution State**
 - Production checkpoint: `38db538ba932d8ebddd388bab6471325f8577ad4`
 - Production Gate: **GitHub Actions `33254031796` — PASS**
+- Final fresh-head Gate: **GitHub Actions `33254259577` on `88139cd9d98680388e4b66401da1a20810f62c53` — PASS**
 - Automated verification: **PASS**
 - Task Gate: **PASS**
-- Human acceptance: **PENDING**
-- Task 30: **not started**
+- Human acceptance: **ACCEPTED — 2026-08-29**
+- Task 30: **started after human acceptance**
 
 ## Delivered behavior
 
@@ -125,8 +126,12 @@ Exact checkout: `38db538ba932d8ebddd388bab6471325f8577ad4`; Go `1.26.5`, native 
 - full `go test ./... -count=1`: PASS
 - `go build ./cmd/codea`: PASS
 
+## Final fresh-head verification
+
+After the Task 29 report/state documentation commit moved `develop` to `88139cd9d98680388e4b66401da1a20810f62c53`, Task 29 Gate run `33254259577` re-ran on that exact final HEAD and completed `success` on Linux, Windows, and macOS.
+
 ## Gate conclusion
 
-All requested Task 29 root-epoch remediation, identity regressions, mechanical acceptance, full plugin/build, full Go, Windows `CGO_ENABLED=0`, and native Linux/Windows/macOS gates are green at production checkpoint `38db538ba932d8ebddd388bab6471325f8577ad4`.
+All requested Task 29 root-epoch remediation, identity regressions, mechanical acceptance, full plugin/build, full Go, Windows `CGO_ENABLED=0`, and native Linux/Windows/macOS gates are green at production checkpoint `38db538ba932d8ebddd388bab6471325f8577ad4`, with final fresh-head verification also green at `88139cd9d98680388e4b66401da1a20810f62c53`.
 
-Task 29 is therefore ready for **human acceptance**. `humanAcceptance.accepted` remains `false` until explicit human acceptance is given. Task 30 remains pending and must not start before that acceptance.
+Human acceptance was explicitly given on 2026-08-29. Task 29 is closed and Task 30 is authorized to start.
