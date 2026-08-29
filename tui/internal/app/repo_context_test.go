@@ -50,10 +50,14 @@ func repoMapFixture() repoctx.RepoMap {
 	}
 }
 
-func assertRepoPromptParts(t *testing.T, req runtime.PromptRequest, userText string) {
+func assertRepoPromptParts(t *testing.T, req runtime.PromptRequest, userText string, wantStrategy bool) {
 	t.Helper()
-	if len(req.Parts) != 2 {
-		t.Fatalf("parts=%#v, want synthetic repo map + original text", req.Parts)
+	wantParts := 2
+	if wantStrategy {
+		wantParts = 3
+	}
+	if len(req.Parts) != wantParts {
+		t.Fatalf("parts=%#v, want %d prompt parts", req.Parts, wantParts)
 	}
 	repoPart, ok := req.Parts[0].(runtime.TextPart)
 	if !ok {
@@ -68,9 +72,18 @@ func assertRepoPromptParts(t *testing.T, req runtime.PromptRequest, userText str
 	if !strings.Contains(repoPart.Text, "REPO CONTEXT") || !strings.Contains(repoPart.Text, "src/OrderService.java") {
 		t.Fatalf("unexpected repo map text: %q", repoPart.Text)
 	}
-	userPart, ok := req.Parts[1].(runtime.TextPart)
+
+	userIndex := 1
+	if wantStrategy {
+		strategy, ok := req.Parts[1].(runtime.TextPart)
+		if !ok || !strategy.Synthetic || strategy.Metadata["codea.kind"] != "task-strategy" {
+			t.Fatalf("task strategy part=%#v", req.Parts[1])
+		}
+		userIndex = 2
+	}
+	userPart, ok := req.Parts[userIndex].(runtime.TextPart)
 	if !ok {
-		t.Fatalf("parts[1] type=%T, want runtime.TextPart", req.Parts[1])
+		t.Fatalf("user part type=%T, want runtime.TextPart", req.Parts[userIndex])
 	}
 	if userPart.Synthetic {
 		t.Fatal("original prompt must remain non-synthetic")
@@ -101,7 +114,7 @@ func TestRepoContextNormalPromptPrependsSyntheticMap(t *testing.T) {
 	if len(prompts) != 1 {
 		t.Fatalf("Runtime prompts=%d, want 1", len(prompts))
 	}
-	assertRepoPromptParts(t, prompts[0].Request, "Fix OrderService")
+	assertRepoPromptParts(t, prompts[0].Request, "Fix OrderService", true)
 }
 
 func TestRepoContextProfessionalPromptPreservesExpandedPrompt(t *testing.T) {
@@ -126,7 +139,7 @@ func TestRepoContextProfessionalPromptPreservesExpandedPrompt(t *testing.T) {
 	if prompts[0].Request.Agent != "code-reviewer" {
 		t.Fatalf("agent=%q", prompts[0].Request.Agent)
 	}
-	assertRepoPromptParts(t, prompts[0].Request, promptText)
+	assertRepoPromptParts(t, prompts[0].Request, promptText, false)
 }
 
 func TestRepoContextSubmitDoesNotSynchronouslyIndex(t *testing.T) {
@@ -162,12 +175,16 @@ func TestRepoContextFailureDegradesToOriginalPrompt(t *testing.T) {
 	}
 	_ = next()
 	prompts := fakeRuntime.Prompts()
-	if len(prompts) != 1 || len(prompts[0].Request.Parts) != 1 {
+	if len(prompts) != 1 || len(prompts[0].Request.Parts) != 2 {
 		t.Fatalf("degraded prompt=%#v", prompts)
 	}
-	part, ok := prompts[0].Request.Parts[0].(runtime.TextPart)
+	strategy, ok := prompts[0].Request.Parts[0].(runtime.TextPart)
+	if !ok || !strategy.Synthetic || strategy.Metadata["codea.kind"] != "task-strategy" {
+		t.Fatalf("degraded strategy part=%#v", prompts[0].Request.Parts[0])
+	}
+	part, ok := prompts[0].Request.Parts[1].(runtime.TextPart)
 	if !ok || part.Text != "Fix OrderService" || part.Synthetic {
-		t.Fatalf("degraded user part=%#v", prompts[0].Request.Parts[0])
+		t.Fatalf("degraded user part=%#v", prompts[0].Request.Parts[1])
 	}
 	foundNotice := false
 	for _, message := range m.messages {
@@ -205,5 +222,5 @@ func TestRepoContextFirstPromptPreservesCreateSessionOrdering(t *testing.T) {
 	if prompts[0].SessionID == "" {
 		t.Fatal("prompt sent before session identity was established")
 	}
-	assertRepoPromptParts(t, prompts[0].Request, "Fix OrderService")
+	assertRepoPromptParts(t, prompts[0].Request, "Fix OrderService", true)
 }
