@@ -19,3 +19,9 @@ jobs:
       - name: External module collision regression
         working-directory: tui
         run: GOTOOLCHAIN=local go test ./internal/repoctx -run '^TestTask28RemediationExternalGoImportNotPromoted$' -count=1
+      - name: All Task 28 remediation regressions
+        working-directory: tui
+        run: GOTOOLCHAIN=local go test ./internal/repoctx -run '^TestTask28Remediation' -count=1
+      - name: Repoctx package regression
+        working-directory: tui
+        run: GOTOOLCHAIN=local go test ./internal/repoctx -count=1
