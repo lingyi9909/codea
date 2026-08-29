@@ -1,4 +1,4 @@
-name: Task 30 Execution RED Proof
+name: Task 30 Execution Proof
 
 on:
   push:
@@ -25,3 +25,8 @@ jobs:
       - name: Run Task 30 focused plugin proof
         working-directory: distribution/plugins
         run: bun test tests/verify-project-contract.test.ts tests/verify-project-detect.test.ts tests/verify-project-execute.test.ts tests/verify-project-plugin.test.ts
+      - name: Run full plugin regression and build
+        working-directory: distribution/plugins
+        run: |
+          bun test
+          bun run build
