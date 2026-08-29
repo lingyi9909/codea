@@ -57,6 +57,7 @@ func TestTask28RemediationJavaUnimportedForeignTypeStaysUnresolved(t *testing.T)
 
 func TestTask28RemediationGoRelationResolutionUsesImportAliasAndPackage(t *testing.T) {
 	root := t.TempDir()
+	writeRepoFile(t, root, "go.mod", "module example.com/project\n\ngo 1.26\n")
 	writeRepoFile(t, root, "cmd/runner.go", `package cmd
 import svc "example.com/project/internal/good"
 type Runner struct { service *svc.Service }
