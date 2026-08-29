@@ -27,7 +27,7 @@ jobs:
           p = Path('tui/internal/app/model.go')
           s = p.read_text()
           old = '''\tpendingPrompt *runtime.PromptRequest\n'''
-          new = '''\tpendingPrompt *runtime.PromptRequest\n\n\t// Task 30 synthetic verification continuations are queued from Runtime\n\t// event handling and dispatched by Update as tea.Cmd, never synchronously.\n\tpendingVerificationPrompt       *runtime.PromptRequest\n\tverificationContinuationTriggers map[string]struct{}\n'''
+          new = '''\tpendingPrompt *runtime.PromptRequest\n\n\t// Task 30 synthetic verification continuations are queued from Runtime\n\t// event handling and dispatched by Update as tea.Cmd, never synchronously.\n\tpendingVerificationPrompt        *runtime.PromptRequest\n\tverificationContinuationTriggers map[string]struct{}\n'''
           assert old in s, 'model pendingPrompt anchor missing'
           p.write_text(s.replace(old, new, 1))
 
@@ -57,8 +57,8 @@ jobs:
 
           p = Path('tui/internal/app/verification_gate_test.go')
           s = p.read_text()
-          s = s.replace('TaskExecutionState{MutationSeen: true})', 'TaskExecutionState{MutationSeen: true, AutoContinuation: maxVerificationContinuations}', 1)
-          s = s.replace('TaskExecutionState{MutationSeen: true, LastVerificationResult: "fail"})', 'TaskExecutionState{MutationSeen: true, LastVerificationResult: "fail", AutoContinuation: maxVerificationContinuations}', 1)
+          s = s.replace('TaskExecutionState{MutationSeen: true})', 'TaskExecutionState{MutationSeen: true, AutoContinuation: maxVerificationContinuations})', 1)
+          s = s.replace('TaskExecutionState{MutationSeen: true, LastVerificationResult: "fail"})', 'TaskExecutionState{MutationSeen: true, LastVerificationResult: "fail", AutoContinuation: maxVerificationContinuations})', 1)
           p.write_text(s)
       - name: Run Step 5-6 GREEN and regressions
         working-directory: tui
