@@ -19,8 +19,8 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: '1.26.5'
-      - name: Run Step 5 focused Go proof
+      - name: Run Step 5-6 focused Go proof
         working-directory: tui
         env:
           GOTOOLCHAIN: local
-        run: go test ./internal/app -run 'VerificationGate|Completion|Unverified|AssistantProse' -count=1
+        run: go test ./internal/app -run 'VerificationGate|Completion|Unverified|AssistantProse|ControlPrompt|RepairLoop|VerificationContinuation|ReadOnlyTaskNeverAutoContinues' -count=1
