@@ -1,0 +1,74 @@
+name: Task 30 Apply Continuation
+
+on:
+  push:
+    branches: [task30-tdd-completion]
+    paths: [.github/workflows/task30-apply-continuation.yml]
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: task30-tdd-completion
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.5'
+      - name: Apply exact Step 6 integration patch
+        shell: python
+        run: |
+          from pathlib import Path
+
+          p = Path('tui/internal/app/model.go')
+          s = p.read_text()
+          old = '''\tpendingPrompt *runtime.PromptRequest\n'''
+          new = '''\tpendingPrompt *runtime.PromptRequest\n\n\t// Task 30 synthetic verification continuations are queued from Runtime\n\t// event handling and dispatched by Update as tea.Cmd, never synchronously.\n\tpendingVerificationPrompt       *runtime.PromptRequest\n\tverificationContinuationTriggers map[string]struct{}\n'''
+          assert old in s, 'model pendingPrompt anchor missing'
+          p.write_text(s.replace(old, new, 1))
+
+          p = Path('tui/internal/app/task_execution.go')
+          s = p.read_text()
+          old = '''\tif root != "" {\n\t\tm.taskExecution.messageRoots[root] = root\n\t}\n}'''
+          new = '''\tif root != "" {\n\t\tm.taskExecution.messageRoots[root] = root\n\t}\n\tm.pendingVerificationPrompt = nil\n\tm.verificationContinuationTriggers = make(map[string]struct{})\n}'''
+          assert old in s, 'task reset anchor missing'
+          p.write_text(s.replace(old, new, 1))
+
+          p = Path('tui/internal/app/execution_trace.go')
+          s = p.read_text()
+          old = '''\tcase eventTypeStepFinished:\n\t\tm.finishActiveTurnTrace(traceStatusForVerification(verificationDecision(m.taskExecution)))\n'''
+          assert old in s, 'execution trace StepFinished anchor missing'
+          p.write_text(s.replace(old, '', 1))
+
+          p = Path('tui/internal/app/update.go')
+          s = p.read_text()
+          old = '''\tcase runtimeEventMsg:\n\t\tif m.processRuntimeEvent(msg.ev) {\n\t\t\tm.markDirty()\n\t\t}\n\t\tif m.eventCh != nil {\n\t\t\treturn m, waitForEvent(m.eventCh)\n\t\t}\n\t\treturn m, nil'''
+          new = '''\tcase runtimeEventMsg:\n\t\tif m.processRuntimeEvent(msg.ev) {\n\t\t\tm.markDirty()\n\t\t}\n\t\tcontrolCmd := m.takeVerificationContinuationCmd()\n\t\tif m.eventCh != nil && controlCmd != nil {\n\t\t\treturn m, tea.Batch(waitForEvent(m.eventCh), controlCmd)\n\t\t}\n\t\tif m.eventCh != nil {\n\t\t\treturn m, waitForEvent(m.eventCh)\n\t\t}\n\t\tif controlCmd != nil {\n\t\t\treturn m, controlCmd\n\t\t}\n\t\treturn m, nil'''
+          assert old in s, 'runtimeEventMsg anchor missing'
+          s = s.replace(old, new, 1)
+          old = '''\tcase eventTypeStepFinished:\n\t\tdirty = m.applyReasoningEvents(m.proc.Flush()) || dirty\n\t\tm.finishStepWithVerification()\n\t\tdirty = true'''
+          new = '''\tcase eventTypeStepFinished:\n\t\tdirty = m.applyReasoningEvents(m.proc.Flush()) || dirty\n\t\tm.queueVerificationStepFinished(ev)\n\t\tdirty = true'''
+          assert old in s, 'StepFinished completion anchor missing'
+          p.write_text(s.replace(old, new, 1))
+
+          p = Path('tui/internal/app/verification_gate_test.go')
+          s = p.read_text()
+          s = s.replace('TaskExecutionState{MutationSeen: true})', 'TaskExecutionState{MutationSeen: true, AutoContinuation: maxVerificationContinuations}', 1)
+          s = s.replace('TaskExecutionState{MutationSeen: true, LastVerificationResult: "fail"})', 'TaskExecutionState{MutationSeen: true, LastVerificationResult: "fail", AutoContinuation: maxVerificationContinuations}', 1)
+          p.write_text(s)
+      - name: Run Step 5-6 GREEN and regressions
+        working-directory: tui
+        env:
+          GOTOOLCHAIN: local
+        run: go test ./internal/app -run 'VerificationGate|Completion|Unverified|AssistantProse|ControlPrompt|RepairLoop|VerificationContinuation|ReadOnlyTaskNeverAutoContinues|Task25|Trace|Reasoning|Session' -count=1
+      - name: Commit proof implementation
+        run: |
+          git config user.name 'codea-task30-proof'
+          git config user.email 'codea-task30-proof@users.noreply.github.com'
+          git add tui/internal/app
+          git commit -m 'feat: add bounded agent verification repair loop'
+          git push origin HEAD:task30-tdd-completion
