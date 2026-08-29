@@ -17,11 +17,13 @@ export interface TaskPlanStep {
 export interface TaskPlan {
   id: string;
   sessionId: string;
+  rootMessageID: string;
+  taskEpoch: string;
   goal: string;
   steps: TaskPlanStep[];
   createdAt: string;
   updatedAt: string;
-  version: 1;
+  version: 2;
 }
 
 export const TASK_PLAN_LIMITS = {
