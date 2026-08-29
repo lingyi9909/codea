@@ -1,10 +1,12 @@
-name: Task 30 Contract RED Proof
+name: Task 30 Contract and Detection Proof
 
 on:
   push:
     branches: [task30-tdd-contract]
     paths:
       - 'distribution/plugins/tests/verify-project-contract.test.ts'
+      - 'distribution/plugins/tests/verify-project-detect.test.ts'
+      - 'distribution/plugins/tests/fixtures/verify/**'
       - 'distribution/plugins/src/tools/verify-project.ts'
       - '.github/workflows/task30-contract-red.yml'
 
@@ -12,7 +14,7 @@ permissions:
   contents: read
 
 jobs:
-  contract-red:
+  contract-detect:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -22,6 +24,6 @@ jobs:
       - name: Install plugin dependencies
         working-directory: distribution/plugins
         run: bun install --frozen-lockfile
-      - name: Run Task 30 contract focused test
+      - name: Run Task 30 contract and detection proof
         working-directory: distribution/plugins
-        run: bun test tests/verify-project-contract.test.ts
+        run: bun test tests/verify-project-contract.test.ts tests/verify-project-detect.test.ts
