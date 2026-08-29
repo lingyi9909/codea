@@ -12,11 +12,22 @@ function input(root: string): PluginInput {
   } as unknown as PluginInput;
 }
 
+function rootID(sessionID: string): string {
+  return `turn-${sessionID}`;
+}
+
 function context(root: string, sessionID: string): ToolContext {
   return {
-    sessionID, messageID: `turn-${sessionID}`, agent: "general", directory: root, worktree: root,
+    sessionID, messageID: rootID(sessionID), agent: "general", directory: root, worktree: root,
     abort: new AbortController().signal, metadata() {}, async ask() {},
   };
+}
+
+async function establishRoot(hooks: Awaited<ReturnType<typeof plugin.server>>, sessionID: string): Promise<void> {
+  await hooks["chat.message"]!(
+    { sessionID, messageID: rootID(sessionID), agent: "general" },
+    { message: { id: rootID(sessionID), sessionID, role: "user" }, parts: [{ type: "text", text: "engineering task" }] } as any,
+  );
 }
 
 const plan = {
@@ -51,6 +62,8 @@ describe("Task 29 mechanical acceptance", () => {
       const sessionA = "session-A";
       const sessionB = "session-B";
       const first = await plugin.server(input(root), { auditLog: path.join(tmp, "audit-1.log") });
+      await establishRoot(first, sessionA);
+      await establishRoot(first, sessionB);
       const before = first["tool.execute.before"]!;
 
       await expect(before({ tool: "read", sessionID: sessionA, callID: "read-1" }, { args: { filePath: "docs/input.md" } })).resolves.toBeUndefined();
@@ -86,6 +99,7 @@ describe("Task 29 mechanical acceptance", () => {
       console.log("CROSS_SESSION_PLAN_ISOLATION PASS");
 
       const restarted = await plugin.server(input(root), { auditLog: path.join(tmp, "audit-2.log") });
+      await establishRoot(restarted, sessionA);
       const restored = await restarted.tool!.task_status!.execute({}, context(root, sessionA));
       expect(restored.metadata?.ok).toBe(true);
       expect(restored.metadata?.codeaTaskPlan).toBe("true");
