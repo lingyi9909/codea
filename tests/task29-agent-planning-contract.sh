@@ -24,7 +24,7 @@ do
   require_literal "$file" 'task_plan'
   require_literal "$file" 'task_step'
   require_literal "$file" '3–7'
-  require_literal "$file" 'before the first mutation or command execution'
+  require_literal "$file" 'Before the first mutation or command execution'
   require_literal "$file" 'in_progress'
   require_literal "$file" 'completed'
   require_literal "$file" 'evidence'
