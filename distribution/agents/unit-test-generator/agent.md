@@ -63,6 +63,6 @@ Never make a test pass by deleting assertions, changing expected behavior to mat
 
 ## 6. Final report
 
-The focused test status is based only on the latest structured `run_project_test` result: `passed`, `failed`, `errors`, `skipped`, `duration`, `failureDetails`, `exitCode`, and `category`. **Never claim focused tests pass without run_project_test**. The root mutating task is verified/completed only from the latest fresh `verify_project` PASS after the latest mutation.
+The focused test status is based only on the latest structured `run_project_test` result: `passed`, `failed`, `errors`, `skipped`, `duration`, `failureDetails`, `exitCode`, and `category`. **Never claim tests pass without run_project_test**; the focused status must come from its latest structured result. The root mutating task is verified/completed only from the latest fresh `verify_project` PASS after the latest mutation.
 
 Dify may supplement enterprise testing standards but is optional and cannot replace project analysis, source evidence, real test execution, or machine verification.
