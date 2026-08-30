@@ -1,0 +1,111 @@
+name: Task 30 Gates Proof
+
+on:
+  push:
+    branches: [task30-gates-proof]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: task30-proof-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux-task30:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.5'
+          cache-dependency-path: tui/go.sum
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.3.14'
+      - name: Validate V1.2 execution state
+        run: bash scripts/check-execution-state.sh
+      - name: Install enterprise plugin dependencies
+        working-directory: distribution/plugins
+        run: bun install --frozen-lockfile
+      - name: Task 30 mechanical acceptance
+        run: bash tests/task30-verification-loop.sh
+      - name: Full plugin regression and build
+        working-directory: distribution/plugins
+        run: |
+          bun test
+          bun run build
+      - name: Full Go regression and build
+        working-directory: tui
+        run: |
+          GOTOOLCHAIN=local go test ./... -count=1
+          GOTOOLCHAIN=local go build ./cmd/codea
+
+  windows-task30:
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.5'
+          cache-dependency-path: tui/go.sum
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.3.14'
+      - name: Install enterprise plugin dependencies
+        working-directory: distribution/plugins
+        run: bun install --frozen-lockfile
+      - name: Native Windows verification and argv regression
+        working-directory: distribution/plugins
+        shell: pwsh
+        run: |
+          bun test tests/verify-project-contract.test.ts tests/verify-project-detect.test.ts tests/verify-project-execute.test.ts tests/verify-project-plugin.test.ts tests/verify-project-local-smoke.test.ts tests/verify-project-windows-argv.test.ts
+          Write-Output 'WINDOWS_VERIFY_ARGV PASS'
+      - name: Native Windows full plugin regression and build
+        working-directory: distribution/plugins
+        shell: pwsh
+        run: |
+          bun test
+          bun run build
+      - name: Native Windows Task 30 focused regression
+        working-directory: tui
+        shell: pwsh
+        run: |
+          $env:GOTOOLCHAIN='local'
+          $env:CGO_ENABLED='0'
+          go test ./internal/app ./internal/runtime ./internal/opencode -run 'Task30|Verification|ControlPrompt|RepairLoop|TaskExecution|Task29MessageUpdated|Trace|Session' -count=1
+          go build ./cmd/codea
+      - name: Native Windows full Go regression
+        working-directory: tui
+        shell: pwsh
+        run: |
+          $env:GOTOOLCHAIN='local'
+          $env:CGO_ENABLED='0'
+          go test ./... -count=1
+
+  macos-task30:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.5'
+          cache-dependency-path: tui/go.sum
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.3.14'
+      - name: Install enterprise plugin dependencies
+        working-directory: distribution/plugins
+        run: bun install --frozen-lockfile
+      - name: Task 30 mechanical acceptance
+        run: bash tests/task30-verification-loop.sh
+      - name: Native macOS full plugin regression and build
+        working-directory: distribution/plugins
+        run: |
+          bun test
+          bun run build
+      - name: Native macOS full Go regression and build
+        working-directory: tui
+        run: |
+          GOTOOLCHAIN=local go test ./... -count=1
+          GOTOOLCHAIN=local go build ./cmd/codea
