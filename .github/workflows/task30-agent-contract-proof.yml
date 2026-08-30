@@ -1,0 +1,21 @@
+name: Task 30 Agent Contract Proof
+
+on:
+  push:
+    branches:
+      - task30-agent-contract-proof
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Task 30 RED/GREEN agent contract
+        run: bash tests/task30-verification-agent-contract.sh
+      - name: Task 29 planning contract regression
+        run: bash tests/task29-agent-planning-contract.sh
+      - name: Existing Debug agent regression
+        run: bash tests/task24-debug-agent.sh
