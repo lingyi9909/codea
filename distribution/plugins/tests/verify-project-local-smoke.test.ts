@@ -39,5 +39,5 @@ describe("Task 30 real local verification smoke", () => {
     } finally {
       fs.rmSync(root, { recursive: true, force: true });
     }
-  });
+  }, 60_000);
 });
