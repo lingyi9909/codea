@@ -21,6 +21,14 @@ describe("buildCommand — wrapper detection", () => {
     expect(argv[0]).toBe("./mvnw.cmd");
   });
 
+  test("prefers mvnw.cmd on Windows when both wrapper variants exist", () => {
+    const root = makeTempRoot("codea-wrapper-");
+    fs.writeFileSync(path.join(root, "mvnw"), "#!/bin/sh\n");
+    fs.writeFileSync(path.join(root, "mvnw.cmd"), "@echo off\n");
+    expect(buildCommand({ buildSystem: "maven" }, root, "win32")[0]).toBe("./mvnw.cmd");
+    expect(buildCommand({ buildSystem: "maven" }, root, "linux")[0]).toBe("./mvnw");
+  });
+
   test("falls back to gradlew.bat on Windows-only gradle projects", () => {
     const root = makeTempRoot("codea-wrapper-");
     fs.writeFileSync(path.join(root, "gradlew.bat"), "@echo off\n");
