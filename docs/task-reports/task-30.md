@@ -3,8 +3,11 @@
 ## Status
 
 - Task: **30 — Deterministic Verification Loop**
-- Production checkpoint: `ba65929a9dc1d7f582fba1629acfe61e75476ea4`
-- Production Gate: **GitHub Actions `33283072841` — PASS**
+- Production baseline: `85ab175f04a6642db73714f42048bfa5c73ce89c`
+- Fresh Task 30 Gate: **GitHub Actions `33774541543` — PASS**
+- Linux: **PASS**
+- Windows: **PASS**
+- macOS: **PASS**
 - Automated verification: **PASS**
 - Task Gate: **PASS**
 - Human acceptance: **PENDING**
@@ -46,6 +49,7 @@ Task 30 makes machine verification, rather than assistant prose, authoritative f
    - Control metadata uses `codea.kind=verification-control` plus the original root turn.
    - The continuation is not appended as a fake visible user message.
    - Automatic continuation is bounded to at most two attempts; exhaustion stops automatically as failed/unverified and never emits a third retry.
+   - Stale `step.finished` events from a previous root are ignored before they can flush current reasoning or control the active verification lifecycle.
 
 6. **Mutation-capable Agent contracts**
    - Debug and Unit Test workflows explicitly use `verify_project` as the final machine gate.
@@ -62,11 +66,11 @@ For Step 7 specifically:
 - `33282508285` — RED: mutation-capable Agent contract check failed because Debug did not yet require `verify_project`.
 - `33282584648` — GREEN: Agent contract and related Task 29 / Debug regressions passed after the minimal contract update.
 
-A three-platform proof run was used before formal merge to expose compatibility issues. Two proof-only issues were fixed without weakening the production contract: the existing Unit Test E2E wording was preserved, and the Windows real-Go smoke was given a test-harness timeout large enough for native Windows execution. Proof-only workflow files were excluded from `develop`.
+A three-platform proof run was used before formal merge to expose compatibility issues. Follow-up production fixes closed stale-root lifecycle handling, native Windows wrapper routing/selection, Windows path fixtures, Windows workflow fail-fast behavior, and the real Java wrapper smoke without weakening the verification contract.
 
 ## Formal mechanical acceptance
 
-Production Gate run: **GitHub Actions `33283072841`** on exact production checkpoint `ba65929a9dc1d7f582fba1629acfe61e75476ea4`.
+Fresh Task 30 Gate run: **GitHub Actions `33774541543`** on exact production baseline `85ab175f04a6642db73714f42048bfa5c73ce89c`.
 
 The permanent mechanical acceptance produced these factual scenario markers:
 
@@ -85,41 +89,55 @@ FRESHNESS_INVALIDATION PASS
 BOUNDED_REPAIR PASS
 NOT_CONFIGURED_NOT_PASS PASS
 WINDOWS_VERIFY_ARGV PASS
+STALE_ROOT_STEP_FINISH_IGNORED PASS
+ACTIVE_ROOT_STEP_FINISH_CONTROLS_VERIFICATION PASS
+REAL_JAVA_WRAPPER_SMOKE PASS
+WINDOWS_WORKFLOW_FAIL_FAST PASS
 ```
 
-Focused plugin verification also passed **25 tests / 0 fail** covering contract aggregation, local profile detection, secure execution, plugin registration/security, Windows argv safety, and a real standard-library-only Go verification smoke.
+Focused verification passed **26 tests / 0 fail**. Full plugin regression passed **303 tests / 0 fail**.
 
 ## Full regression evidence
 
 ### Linux — Ubuntu 24.04
 
-Exact checkout: `ba65929a9dc1d7f582fba1629acfe61e75476ea4`.
+Exact checkout: `85ab175f04a6642db73714f42048bfa5c73ce89c`.
 
 - execution-state validation: PASS
 - Task 30 mechanical acceptance: PASS
-- focused verification tests: **25 pass / 0 fail**
-- plugin regression: **301 pass / 0 fail**, 33 files, 783 assertions
-- plugin build: **101 modules bundled**
+- focused verification tests: **26 pass / 0 fail**
+- plugin regression: **303 pass / 0 fail**, 33 files, 801 assertions
+- plugin build: PASS
 - `GOTOOLCHAIN=local go test ./... -count=1`: PASS
 - `GOTOOLCHAIN=local go build ./cmd/codea`: PASS
+- `STALE_ROOT_STEP_FINISH_IGNORED PASS`
+- `ACTIVE_ROOT_STEP_FINISH_CONTROLS_VERIFICATION PASS`
+- `REAL_JAVA_WRAPPER_SMOKE PASS`
 
 ### Windows — Windows Server 2025
 
-Exact checkout: `ba65929a9dc1d7f582fba1629acfe61e75476ea4`; native `windows/amd64`, Go `1.26.5`.
+Exact checkout: `85ab175f04a6642db73714f42048bfa5c73ce89c`; native `windows/amd64`, Go `1.26.5`.
 
-- real local verification smoke: PASS
-- path-with-spaces plus fixed `.cmd/.bat` argv regression: PASS
-- full plugin regression/build: PASS
+- `WINDOWS_WORKFLOW_FAIL_FAST PASS`
+- real Java wrapper verification smoke: `REAL_JAVA_WRAPPER_SMOKE PASS`
+- native Windows wrapper/argv verification: `WINDOWS_VERIFY_ARGV PASS`
+- focused verification tests: **26 pass / 0 fail**
+- full plugin regression: **303 pass / 0 fail**, 33 files, 804 assertions
+- plugin build: PASS
 - focused Task 30 Go regression with `CGO_ENABLED=0`: PASS
 - full Go regression with `CGO_ENABLED=0`: PASS
+- `GOTOOLCHAIN=local go build ./cmd/codea`: PASS
 
 ### macOS — macOS 15 arm64
 
-Exact checkout: `ba65929a9dc1d7f582fba1629acfe61e75476ea4`; native `darwin/arm64`, Go `1.26.5`.
+Exact checkout: `85ab175f04a6642db73714f42048bfa5c73ce89c`; native `darwin/arm64`, Go `1.26.5`.
 
 - Task 30 mechanical acceptance: PASS
-- full plugin regression/build: PASS
+- focused verification tests: **26 pass / 0 fail**
+- full plugin regression: **303 pass / 0 fail**, 33 files, 801 assertions
+- plugin build: PASS
 - full Go regression/build: PASS
+- `REAL_JAVA_WRAPPER_SMOKE PASS`
 
 ## Supported scope / explicit limits
 
@@ -129,6 +147,6 @@ The feature does not introduce a Verifier LLM Agent, does not fetch public depen
 
 ## Gate conclusion
 
-All Task 30 done criteria are satisfied at production checkpoint `ba65929a9dc1d7f582fba1629acfe61e75476ea4`: fixed local verification profiles execute through existing security controls, safe machine metadata drives Application freshness, mutation cannot render verified completion without a fresh PASS, failed/missing verification is bounded to two automatic continuations, retry exhaustion stops truthfully, unknown configuration never becomes PASS, and Linux/Windows/macOS regressions are green.
+All Task 30 technical done criteria are satisfied at production baseline `85ab175f04a6642db73714f42048bfa5c73ce89c`, with Fresh Task 30 Gate `33774541543` passing on Linux, Windows, and macOS. Fixed local verification profiles execute through existing security controls, safe machine metadata drives Application freshness, stale previous-root completion events cannot control the active task, mutation cannot render verified completion without a fresh PASS, failed/missing verification is bounded to two automatic continuations, retry exhaustion stops truthfully, unknown configuration never becomes PASS, real Java wrappers are exercised through the actual verification tool path, and Windows Gate native-command failures are fail-fast.
 
-Task 30 is therefore ready for human acceptance. Human acceptance remains separate and is intentionally not marked true in execution state. Task 31 remains pending until Task 30 is explicitly accepted.
+Task 30 technical verification is complete and ready for final human acceptance. Human acceptance remains separate and is intentionally not marked true in execution state. Task 31 remains pending until Task 30 is explicitly accepted.

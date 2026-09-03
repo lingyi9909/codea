@@ -6,20 +6,23 @@ current:
   task: "30"
   step: 8
   status: awaiting_acceptance
-  nextAction: Task 30 implementation、mechanical acceptance、full regression 与 Linux/Windows/macOS Gate 已通过；等待人工验收，Task 31 尚未开始。
+  nextAction: Task 30 production baseline 85ab175f04a6642db73714f42048bfa5c73ce89c 的 Fresh Gate 33774541543 已在 Linux/Windows/macOS 全部通过；等待人工验收，Task 31 尚未开始。
 checkpoint:
-  commit: ba65929a9dc1d7f582fba1629acfe61e75476ea4
-  updatedAt: "2026-08-30T05:14:00Z"
+  commit: 85ab175f04a6642db73714f42048bfa5c73ce89c
+  updatedAt: "2026-09-03T15:45:36Z"
 verification:
   status: pass
   commands:
+    - "Fresh Task 30 Gate 33774541543 @ 85ab175f04a6642db73714f42048bfa5c73ce89c: Linux PASS; Windows PASS; macOS PASS"
+    - "Focused verification: 26 pass / 0 fail; full plugin: 303 pass / 0 fail"
+    - "Markers: STALE_ROOT_STEP_FINISH_IGNORED PASS; ACTIVE_ROOT_STEP_FINISH_CONTROLS_VERIFICATION PASS; REAL_JAVA_WRAPPER_SMOKE PASS; WINDOWS_WORKFLOW_FAIL_FAST PASS"
     - "bash tests/task30-verification-loop.sh"
     - "cd distribution/plugins && bun test && bun run build"
     - "cd tui && GOTOOLCHAIN=local go test ./... -count=1 && GOTOOLCHAIN=local go build ./cmd/codea"
     - "Windows Server 2025: real local verification + path/argv regression + CGO_ENABLED=0 focused Task 30 tests + full go test ./... -count=1"
     - "macOS 15 arm64: Task 30 mechanical acceptance + full plugin regression/build + full Go regression/build"
   errorSummary: ""
-  recoveryAdvice: "Task 30 自动验证与 Task Gate 已通过；保持 humanAcceptance.accepted=false，等待人工验收后再进入 Task 31。"
+  recoveryAdvice: "Task 30 technical verification and Fresh Gate 33774541543 have passed; keep humanAcceptance.accepted=false and Task 31 pending until explicit human acceptance."
 taskGate:
   status: pass
   gateItems:
@@ -72,6 +75,6 @@ tasks:
   "27": {status: completed, completedSteps: [1, 2, 3, 4, 5], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: 0390d4697cfee3832d0fa3703bbb35a85f4df2f3, report: docs/task-reports/task-27.md}
   "28": {status: completed, completedSteps: [1, 2, 3, 4, 5, 6, 7], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: 2dbdc75e90dcc959b62160b035ac9233d96b6cf9, report: docs/task-reports/task-28.md}
   "29": {status: completed, completedSteps: [1, 2, 3, 4, 5, 6, 7], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: 38db538ba932d8ebddd388bab6471325f8577ad4, report: docs/task-reports/task-29.md}
-  "30": {status: awaiting_acceptance, completedSteps: [1, 2, 3, 4, 5, 6, 7, 8], verificationStatus: pass, taskGateStatus: pass, humanAccepted: false, checkpoint: ba65929a9dc1d7f582fba1629acfe61e75476ea4, report: docs/task-reports/task-30.md}
+  "30": {status: awaiting_acceptance, completedSteps: [1, 2, 3, 4, 5, 6, 7, 8], verificationStatus: pass, taskGateStatus: pass, humanAccepted: false, checkpoint: 85ab175f04a6642db73714f42048bfa5c73ce89c, report: docs/task-reports/task-30.md}
   "31": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false}
   "32": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false}
