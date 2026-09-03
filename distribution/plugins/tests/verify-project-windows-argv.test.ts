@@ -46,7 +46,7 @@ describe("Task 30 Windows wrapper argv safety", () => {
         "/d",
         "/s",
         "/c",
-        "./mvnw.cmd -DskipTests compile",
+        ".\\mvnw.cmd -DskipTests compile",
       ]);
 
       if (process.platform === "win32") {
@@ -78,7 +78,7 @@ describe("Task 30 Windows wrapper argv safety", () => {
       "/d",
       "/s",
       "/c",
-      "./gradlew.bat test",
+      ".\\gradlew.bat test",
     ]);
   });
 });
