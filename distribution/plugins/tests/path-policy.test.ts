@@ -167,46 +167,45 @@ describe("validateNativeReadPath — symlink escape", () => {
 
 describe("validateNativeReadPath — windows paths", () => {
   const syntheticWinRoot = "C:\\code\\project";
-  const winRoot = process.platform === "win32" ? root : syntheticWinRoot;
-  const winInside = (...segments: string[]) =>
-    process.platform === "win32" ? path.win32.join(winRoot, ...segments) : path.win32.join(syntheticWinRoot, ...segments);
+  const winRoot = () => (process.platform === "win32" ? root : syntheticWinRoot);
+  const winInside = (...segments: string[]) => path.win32.join(winRoot(), ...segments);
 
   test("windows absolute inside project is allowed", () => {
-    expect(validateNativeReadPath(winRoot, winInside("src", "main", "Foo.java"))).toBeNull();
+    expect(validateNativeReadPath(winRoot(), winInside("src", "main", "Foo.java"))).toBeNull();
   });
   test("windows forward-slash absolute inside project is allowed", () => {
-    expect(validateNativeReadPath(winRoot, winInside("src", "Foo.java").replace(/\\/g, "/"))).toBeNull();
+    expect(validateNativeReadPath(winRoot(), winInside("src", "Foo.java").replace(/\\/g, "/"))).toBeNull();
   });
   test("windows absolute outside project is denied", () => {
-    expect(validateNativeReadPath(winRoot, "C:\\Windows\\System32\\config")).toBe("outside-project");
+    expect(validateNativeReadPath(winRoot(), "C:\\Windows\\System32\\config")).toBe("outside-project");
   });
   test("windows different drive is denied", () => {
-    expect(validateNativeReadPath(winRoot, "D:\\secret\\file.txt")).toBe("outside-project");
+    expect(validateNativeReadPath(winRoot(), "D:\\secret\\file.txt")).toBe("outside-project");
   });
   test("windows UNC outside project is denied", () => {
-    expect(validateNativeReadPath(winRoot, "\\\\server\\share\\file.txt")).toBe("outside-project");
+    expect(validateNativeReadPath(winRoot(), "\\\\server\\share\\file.txt")).toBe("outside-project");
   });
   test("windows sensitive file inside project is denied", () => {
-    expect(validateNativeReadPath(winRoot, winInside(".env"))).toBe("sensitive-file:.env");
+    expect(validateNativeReadPath(winRoot(), winInside(".env"))).toBe("sensitive-file:.env");
   });
   test("case-insensitive windows containment allows different-cased drive/segments", () => {
     const target = process.platform === "win32" ? winInside("src", "Foo.java").toUpperCase() : "c:\\CODE\\Project\\src\\Foo.java";
-    expect(validateNativeReadPath(winRoot, target)).toBeNull();
+    expect(validateNativeReadPath(winRoot(), target)).toBeNull();
   });
   test("windows root + relative in-root path is allowed (grep/glob relative path)", () => {
-    expect(validateNativeReadPath(winRoot, "src/main/java")).toBeNull();
+    expect(validateNativeReadPath(winRoot(), "src/main/java")).toBeNull();
   });
   test("windows root + forward-slash relative in-root path is allowed", () => {
-    expect(validateNativeReadPath(winRoot, "src\\main\\java\\Foo.java")).toBeNull();
+    expect(validateNativeReadPath(winRoot(), "src\\main\\java\\Foo.java")).toBeNull();
   });
   test("windows root + relative traversal is denied", () => {
-    expect(validateNativeReadPath(winRoot, "..\\..\\secret.txt")).toBe("outside-project");
+    expect(validateNativeReadPath(winRoot(), "..\\..\\secret.txt")).toBe("outside-project");
   });
   test("windows root + forward-slash relative traversal is denied", () => {
-    expect(validateNativeReadPath(winRoot, "../../secret.txt")).toBe("outside-project");
+    expect(validateNativeReadPath(winRoot(), "../../secret.txt")).toBe("outside-project");
   });
   test("windows case-insensitive sensitive filename is denied", () => {
-    expect(validateNativeReadPath(winRoot, winInside("Credentials"))).toBe("sensitive-file:credentials");
-    expect(validateNativeReadPath(winRoot, winInside("ID_RSA"))).toBe("sensitive-file:ssh-key");
+    expect(validateNativeReadPath(winRoot(), winInside("Credentials"))).toBe("sensitive-file:credentials");
+    expect(validateNativeReadPath(winRoot(), winInside("ID_RSA"))).toBe("sensitive-file:ssh-key");
   });
 });
