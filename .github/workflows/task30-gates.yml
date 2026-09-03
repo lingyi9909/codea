@@ -72,13 +72,24 @@ jobs:
 
       - name: Install enterprise plugin dependencies
         working-directory: distribution/plugins
-        run: bun install --frozen-lockfile
+        shell: pwsh
+        run: |
+          bun install --frozen-lockfile
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Verify PowerShell native fail-fast contract
+        shell: pwsh
+        run: |
+          pwsh -NoProfile -Command 'cmd /c exit 7; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }'
+          if ($LASTEXITCODE -ne 7) { throw "native fail-fast contract did not propagate exit 7" }
+          Write-Output 'WINDOWS_WORKFLOW_FAIL_FAST PASS'
 
       - name: Native Windows verification and argv regression
         working-directory: distribution/plugins
         shell: pwsh
         run: |
           bun test tests/verify-project-contract.test.ts tests/verify-project-detect.test.ts tests/verify-project-execute.test.ts tests/verify-project-plugin.test.ts tests/verify-project-local-smoke.test.ts tests/verify-project-windows-argv.test.ts
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Write-Output 'WINDOWS_VERIFY_ARGV PASS'
 
       - name: Native Windows full plugin regression and build
@@ -86,7 +97,9 @@ jobs:
         shell: pwsh
         run: |
           bun test
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           bun run build
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Native Windows Task 30 focused regression
         working-directory: tui
@@ -95,7 +108,9 @@ jobs:
           $env:GOTOOLCHAIN='local'
           $env:CGO_ENABLED='0'
           go test ./internal/app ./internal/runtime ./internal/opencode -run 'Task30|Verification|ControlPrompt|RepairLoop|TaskExecution|Task29MessageUpdated|Trace|Session' -count=1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           go build ./cmd/codea
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Native Windows full Go regression
         working-directory: tui
@@ -104,6 +119,7 @@ jobs:
           $env:GOTOOLCHAIN='local'
           $env:CGO_ENABLED='0'
           go test ./... -count=1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
   macos-task30:
     runs-on: macos-15
