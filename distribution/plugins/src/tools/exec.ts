@@ -30,17 +30,24 @@ export function displayCommand(argv: readonly string[]): string {
 
 const BATCH_FILE_RE = /\.(cmd|bat)$/i;
 
+function normalizeWindowsBatchPath(file: string): string {
+  return file.startsWith("./") ? `.\\${file.slice(2)}` : file;
+}
+
 // On Windows, .cmd/.bat batch files cannot be spawned directly by execFile — they
 // must run through cmd.exe. Route them via a controlled `cmd.exe /d /s /c`
 // invocation (argv array, never shell:true) so no POSIX shell is introduced. The
 // single command-line argument is joined by displayCommand; callers
 // (run_project_test) reject shell/cmd metacharacters in their args before this
-// point, so the /c command line carries no live metacharacters. On every other
-// platform the argv passes through unchanged.
+// point, so the /c command line carries no live metacharacters. `./wrapper.cmd`
+// is normalized to the native cmd.exe current-directory form `.\\wrapper.cmd`
+// at this boundary only; the higher-level fixed argv contract remains unchanged.
+// On every other platform the argv passes through unchanged.
 export function resolveExecArgv(argv: readonly string[], platform: string = process.platform): string[] {
   const file = argv[0] ?? "";
   if (platform === "win32" && BATCH_FILE_RE.test(file)) {
-    return ["cmd.exe", "/d", "/s", "/c", displayCommand(argv)];
+    const commandArgv = [normalizeWindowsBatchPath(file), ...argv.slice(1)];
+    return ["cmd.exe", "/d", "/s", "/c", displayCommand(commandArgv)];
   }
   return [...argv];
 }
