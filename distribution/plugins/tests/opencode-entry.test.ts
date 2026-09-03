@@ -98,11 +98,12 @@ describe("OpenCode entry — native tool hooks", () => {
         before!({ tool: "read", sessionID: "s", callID: "c" }, { args: { filePath: absOutside } }),
       ).rejects.toThrow(/native-path:outside-project/);
 
-      const winRoot = "C:\\code\\project";
+      const winRoot = process.platform === "win32" ? root : "C:\\code\\project";
+      const winInside = process.platform === "win32" ? path.win32.join(winRoot, "src", "Foo.java") : "C:\\code\\project\\src\\Foo.java";
       const hooksWin = await plugin.server(makeInput(winRoot), { auditLog: path.join(tmp, "audit.log") });
       const beforeWin = hooksWin["tool.execute.before"];
       await expect(
-        beforeWin!({ tool: "read", sessionID: "s", callID: "c" }, { args: { filePath: "C:\\code\\project\\src\\Foo.java" } }),
+        beforeWin!({ tool: "read", sessionID: "s", callID: "c" }, { args: { filePath: winInside } }),
       ).resolves.toBeUndefined();
       await expect(
         beforeWin!({ tool: "read", sessionID: "s", callID: "c" }, { args: { filePath: "C:\\Windows\\System32\\config" } }),
