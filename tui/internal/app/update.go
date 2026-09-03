@@ -524,3 +524,83 @@ func (m *Model) flushStreaming() bool {
 	}
 	return dirty
 }
+
+func (m *Model) appendAnswer(content string) {
+	if content == "" {
+		return
+	}
+	for i := len(m.messages) - 1; i >= 0; i-- {
+		if m.messages[i].Role == RoleAssistant && !m.messages[i].Finished {
+			m.messages[i].Content += content
+			return
+		}
+	}
+	m.messages = append(m.messages, ChatMessage{Role: RoleAssistant, Content: content})
+}
+
+func (m *Model) finishStreaming() {
+	m.finishStreamingWithOutcome(MetricStatusCompleted, "", true)
+}
+
+func (m *Model) finishStreamingWithOutcome(status MetricStatus, errorCategory string, requestFeedback bool) {
+	m.flushStreaming()
+	m.isStreaming = false
+	for i := len(m.messages) - 1; i >= 0; i-- {
+		if m.messages[i].Role == RoleAssistant && !m.messages[i].Finished {
+			m.messages[i].Finished = true
+			break
+		}
+	}
+	m.completeTaskMetric(status, errorCategory, requestFeedback)
+}
+
+func deleteLastRune(s string) string {
+	r := []rune(s)
+	if len(r) == 0 {
+		return s
+	}
+	return string(r[:len(r)-1])
+}
+
+func (m *Model) addTool(ev runtime.Event) {
+	if ev.Tool == nil {
+		return
+	}
+	for i := range m.tools {
+		if m.tools[i].CallID == ev.Tool.CallID {
+			if ev.Tool.Name != "" {
+				m.tools[i].Name = ev.Tool.Name
+			}
+			m.tools[i].Status = ToolRunning
+			return
+		}
+	}
+	m.tools = append(m.tools, ToolActivity{Name: ev.Tool.Name, CallID: ev.Tool.CallID, Status: ToolRunning})
+}
+
+func (m *Model) updateTool(ev runtime.Event, status ToolStatus) {
+	if ev.Tool == nil {
+		return
+	}
+	for i := range m.tools {
+		if m.tools[i].CallID == ev.Tool.CallID {
+			m.tools[i].Status = status
+			return
+		}
+	}
+}
+
+func (m *Model) clearChat() {
+	m.messages = make([]ChatMessage, 0)
+	m.tools = make([]ToolActivity, 0)
+	m.executionTrace.Reset()
+	m.activeTurnID = ""
+	m.activeApprovalTraceKey = ""
+	m.pendingApprovalDecision = ""
+	m.reasoningActive = false
+	m.reasoningContent = ""
+	m.reasoningExpanded = false
+	m.reasoningDuration = 0
+	m.streamBuf.Reset()
+	m.reasoningBuf.Reset()
+}
