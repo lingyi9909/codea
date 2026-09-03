@@ -67,7 +67,7 @@ describe("resolveProjectPath — symlink escape", () => {
     try {
       expect(() => resolveProjectPath(root, "link/secret.txt")).toThrow(PathViolationError);
     } finally {
-      fs.rmSync(link, { force: true });
+      fs.unlinkSync(link);
     }
   });
 });
@@ -136,7 +136,7 @@ describe("validateNativeReadPath — symlink escape", () => {
     try {
       expect(validateNativeReadPath(root, path.join(link, "secret.txt"))).toBe("symlink-escape");
     } finally {
-      fs.rmSync(link, { force: true });
+      fs.unlinkSync(link);
     }
   });
   test("symlink inside root pointing at in-root .env is denied", () => {
@@ -147,7 +147,7 @@ describe("validateNativeReadPath — symlink escape", () => {
     try {
       expect(validateNativeReadPath(root, link)).toBe("sensitive-file:.env");
     } finally {
-      fs.rmSync(link, { force: true });
+      fs.unlinkSync(link);
       fs.rmSync(envFile, { force: true });
     }
   });
@@ -159,19 +159,23 @@ describe("validateNativeReadPath — symlink escape", () => {
     try {
       expect(validateNativeReadPath(root, link)).toBe("sensitive-file:credentials");
     } finally {
-      fs.rmSync(link, { force: true });
+      fs.unlinkSync(link);
       fs.rmSync(credFile, { force: true });
     }
   });
 });
 
 describe("validateNativeReadPath — windows paths", () => {
-  const winRoot = "C:\\code\\project";
+  const syntheticWinRoot = "C:\\code\\project";
+  const winRoot = process.platform === "win32" ? root : syntheticWinRoot;
+  const winInside = (...segments: string[]) =>
+    process.platform === "win32" ? path.win32.join(winRoot, ...segments) : path.win32.join(syntheticWinRoot, ...segments);
+
   test("windows absolute inside project is allowed", () => {
-    expect(validateNativeReadPath(winRoot, "C:\\code\\project\\src\\main\\Foo.java")).toBeNull();
+    expect(validateNativeReadPath(winRoot, winInside("src", "main", "Foo.java"))).toBeNull();
   });
   test("windows forward-slash absolute inside project is allowed", () => {
-    expect(validateNativeReadPath(winRoot, "C:/code/project/src/Foo.java")).toBeNull();
+    expect(validateNativeReadPath(winRoot, winInside("src", "Foo.java").replace(/\\/g, "/"))).toBeNull();
   });
   test("windows absolute outside project is denied", () => {
     expect(validateNativeReadPath(winRoot, "C:\\Windows\\System32\\config")).toBe("outside-project");
@@ -183,10 +187,11 @@ describe("validateNativeReadPath — windows paths", () => {
     expect(validateNativeReadPath(winRoot, "\\\\server\\share\\file.txt")).toBe("outside-project");
   });
   test("windows sensitive file inside project is denied", () => {
-    expect(validateNativeReadPath(winRoot, "C:\\code\\project\\.env")).toBe("sensitive-file:.env");
+    expect(validateNativeReadPath(winRoot, winInside(".env"))).toBe("sensitive-file:.env");
   });
   test("case-insensitive windows containment allows different-cased drive/segments", () => {
-    expect(validateNativeReadPath(winRoot, "c:\\CODE\\Project\\src\\Foo.java")).toBeNull();
+    const target = process.platform === "win32" ? winInside("src", "Foo.java").toUpperCase() : "c:\\CODE\\Project\\src\\Foo.java";
+    expect(validateNativeReadPath(winRoot, target)).toBeNull();
   });
   test("windows root + relative in-root path is allowed (grep/glob relative path)", () => {
     expect(validateNativeReadPath(winRoot, "src/main/java")).toBeNull();
@@ -201,12 +206,7 @@ describe("validateNativeReadPath — windows paths", () => {
     expect(validateNativeReadPath(winRoot, "../../secret.txt")).toBe("outside-project");
   });
   test("windows case-insensitive sensitive filename is denied", () => {
-    expect(validateNativeReadPath(winRoot, "C:\\code\\project\\Credentials")).toBe("sensitive-file:credentials");
-    expect(validateNativeReadPath(winRoot, "C:\\code\\project\\ID_RSA")).toBe("sensitive-file:ssh-key");
+    expect(validateNativeReadPath(winRoot, winInside("Credentials"))).toBe("sensitive-file:credentials");
+    expect(validateNativeReadPath(winRoot, winInside("ID_RSA"))).toBe("sensitive-file:ssh-key");
   });
-  // NOTE: real Windows host junction/symlink escape (fs.realpath of C:\... under
-  // process.platform === "win32") cannot be exercised on a POSIX test host, where
-  // such paths are judged lexically only. The code branch is exercised by the
-  // POSIX symlink-escape test above; a real Windows junction test is deferred to
-  // the Windows release gate (Task 17/18 / Task 21).
 });
