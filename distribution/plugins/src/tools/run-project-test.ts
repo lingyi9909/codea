@@ -5,10 +5,10 @@ import { toToolError } from "./failure-classifier";
 import { validateSchema, type JsonSchema } from "./schemas";
 import { err, ok, type ToolContext, type ToolResult } from "./types";
 
-// Unit Test execution tool. Prefers ./mvnw / ./gradlew, falls back to bare
-// mvn/gradle only when no wrapper exists. Always argv arrays (no shell), no
-// caller-supplied extra args (no Maven/Gradle extension bypass). Output is
-// parsed into structured pass/fail counts.
+// Unit Test execution tool. Prefers the host-native Maven/Gradle wrapper,
+// falls back to the alternate wrapper and then to bare mvn/gradle. Always argv
+// arrays (no arbitrary shell), no caller-supplied extra args (no Maven/Gradle
+// extension bypass). Output is parsed into structured pass/fail counts.
 
 export type TestRunCategory = "PASS" | "FAIL" | "TIMEOUT" | "ERROR";
 
@@ -49,9 +49,9 @@ const SCHEMA: JsonSchema = {
   additionalProperties: false,
 };
 
-const WRAPPERS: Record<"maven" | "gradle", string[]> = {
-  maven: ["mvnw", "mvnw.cmd"],
-  gradle: ["gradlew", "gradlew.bat"],
+const WRAPPERS: Record<"maven" | "gradle", { posix: string; windows: string }> = {
+  maven: { posix: "mvnw", windows: "mvnw.cmd" },
+  gradle: { posix: "gradlew", windows: "gradlew.bat" },
 };
 
 // Shell/cmd metacharacters forbidden in caller-supplied build args. On Unix the
@@ -74,17 +74,19 @@ function assertSafeBuildArgs(input: RunProjectTestInput): void {
   }
 }
 
-function detectWrapper(root: string, buildSystem: "maven" | "gradle"): string | null {
-  for (const name of WRAPPERS[buildSystem]) {
+function detectWrapper(root: string, buildSystem: "maven" | "gradle", platform: string = process.platform): string | null {
+  const pair = WRAPPERS[buildSystem];
+  const candidates = platform === "win32" ? [pair.windows, pair.posix] : [pair.posix, pair.windows];
+  for (const name of candidates) {
     if (fileExists(root, name)) return name;
   }
   return null;
 }
 
-export function buildCommand(input: RunProjectTestInput, root: string): string[] {
+export function buildCommand(input: RunProjectTestInput, root: string, platform: string = process.platform): string[] {
   const isMaven = input.buildSystem === "maven";
   const bare = isMaven ? "mvn" : "gradle";
-  const wrapper = detectWrapper(root, isMaven ? "maven" : "gradle");
+  const wrapper = detectWrapper(root, isMaven ? "maven" : "gradle", platform);
   const base = wrapper ? `./${wrapper}` : bare;
 
   const argv: string[] = [base];
