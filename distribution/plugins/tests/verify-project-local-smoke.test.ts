@@ -69,7 +69,7 @@ describe("Task 30 real local verification smoke", () => {
         const expectedStages = profile === "maven" ? ["compile", "test"] : ["classes", "test"];
         expect(out.data.stages.map((stage: any) => stage.name)).toEqual(expectedStages);
         expect(out.data.stages.map((stage: any) => stage.category)).toEqual(["PASS", "PASS"]);
-        expect(out.data.skipped).toEqual([]);
+        expect(out.data.skippedStages).toEqual([]);
         expect(out.data.stages.every((stage: any) => stage.commandSummary.startsWith(`./${fixture.wrapper}`))).toBe(true);
 
         const invocations = fs.readFileSync(fixture.log, "utf8").replace(/\r/g, "").trim().split("\n");
