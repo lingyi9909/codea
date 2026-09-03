@@ -80,8 +80,8 @@ jobs:
       - name: Verify PowerShell native fail-fast contract
         shell: pwsh
         run: |
-          pwsh -NoProfile -Command 'cmd /c exit 7; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }'
-          if ($LASTEXITCODE -ne 7) { throw "native fail-fast contract did not propagate exit 7" }
+          $probe = Start-Process -FilePath pwsh -ArgumentList @('-NoProfile', '-Command', 'cmd /c exit 7; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }') -Wait -PassThru
+          if ($probe.ExitCode -ne 7) { throw "native fail-fast contract did not propagate exit 7" }
           Write-Output 'WINDOWS_WORKFLOW_FAIL_FAST PASS'
 
       - name: Native Windows verification and argv regression
