@@ -1,9 +1,9 @@
 package command
 
-// BuiltinCommands returns the controlled V1.1 command workspace surface.
+// BuiltinCommands returns the controlled V1.1/V1.2 command workspace surface.
 // Professional commands route directly to their fixed enterprise Agent through
-// the same PromptRequest path as every other Codea prompt; they never delegate
-// to the General Agent for route selection.
+// the same PromptRequest path as every other Codea prompt; checkpoint commands
+// remain local workspace actions and never route through a model.
 func BuiltinCommands() []Definition {
 	return []Definition{
 		{Name: "help", Description: "Show available commands", Category: "workspace", Source: SourceBuiltin, Action: ActionHelp},
@@ -17,6 +17,9 @@ func BuiltinCommands() []Definition {
 		{Name: "cancel", Description: "Cancel the current response", Category: "runtime", Source: SourceBuiltin, Action: ActionCancel},
 		{Name: "doctor", Description: "Run the shared Codea Doctor", Category: "runtime", Source: SourceBuiltin, Action: ActionDoctor},
 		{Name: "view", Description: "Set conversation trace view mode", Category: "workspace", Usage: "/view normal|verbose|focus", Source: SourceBuiltin, Action: ActionView},
+		{Name: "checkpoint", Description: "Create a local source checkpoint", Category: "workspace", Usage: "/checkpoint", Source: SourceBuiltin, Action: ActionCheckpoint},
+		{Name: "checkpoints", Description: "List local source checkpoints", Category: "workspace", Usage: "/checkpoints", Source: SourceBuiltin, Action: ActionCheckpoints},
+		{Name: "restore", Description: "Restore a local source checkpoint", Category: "workspace", Usage: "/restore <checkpoint-id>", Source: SourceBuiltin, Action: ActionRestore},
 		{Name: "review", Description: "Review code with Code Reviewer", Category: "professional", Usage: "/review [target]", Source: SourceBuiltin, Action: ActionPrompt, Agent: "code-reviewer", Template: "$ARGUMENTS"},
 		{Name: "test", Description: "Generate or repair unit tests", Category: "professional", Usage: "/test [target]", Source: SourceBuiltin, Action: ActionPrompt, Agent: "unit-test-generator", Template: "$ARGUMENTS"},
 		{Name: "api-doc", Description: "Generate API documentation", Category: "professional", Usage: "/api-doc [target]", Source: SourceBuiltin, Action: ActionPrompt, Agent: "api-documentation", Template: "$ARGUMENTS"},
