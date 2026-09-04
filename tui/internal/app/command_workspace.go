@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"codea/tui/internal/checkpoint"
 	"codea/tui/internal/command"
 	"codea/tui/internal/runtime"
 
@@ -150,7 +151,7 @@ func (m *Model) submitCommand(raw string) tea.Cmd {
 		if out.Action == command.ActionView {
 			return m.setViewMode(out.Arguments)
 		}
-		return m.executeWorkspaceAction(out.Action)
+		return m.executeWorkspaceAction(out.Action, out.Arguments)
 	default:
 		m.input = ""
 		m.appendInfo("Command error: unsupported command outcome")
@@ -158,7 +159,7 @@ func (m *Model) submitCommand(raw string) tea.Cmd {
 	}
 }
 
-func (m *Model) executeWorkspaceAction(action command.Action) tea.Cmd {
+func (m *Model) executeWorkspaceAction(action command.Action, arguments string) tea.Cmd {
 	switch action {
 	case command.ActionHelp:
 		m.appendInfo(m.commandHelp())
@@ -214,10 +215,72 @@ func (m *Model) executeWorkspaceAction(action command.Action) tea.Cmd {
 			return nil
 		}
 		return DoctorServiceCmd(m.doctorService)
+	case command.ActionCheckpoint:
+		if strings.TrimSpace(arguments) != "" {
+			m.appendInfo("Usage: /checkpoint")
+			return nil
+		}
+		if m.checkpointService == nil {
+			m.appendInfo("Checkpoint unavailable: " + checkpointUnavailableText(m.checkpointUnavailable))
+			return nil
+		}
+		if m.isStreaming || m.checkpointInFlight {
+			m.appendInfo("Finish current checkpoint/response work before creating a checkpoint.")
+			return nil
+		}
+		m.checkpointInFlight = true
+		root := strings.TrimSpace(m.activeTurnID)
+		return CreateCheckpointCmd(m.checkpointService, checkpoint.CreateRequest{TaskID: root, TurnID: root, Label: "manual", Kind: checkpoint.KindManual})
+	case command.ActionCheckpoints:
+		if strings.TrimSpace(arguments) != "" {
+			m.appendInfo("Usage: /checkpoints")
+			return nil
+		}
+		if m.checkpointService == nil {
+			m.appendInfo("Checkpoints unavailable: " + checkpointUnavailableText(m.checkpointUnavailable))
+			return nil
+		}
+		if m.checkpointInFlight {
+			m.appendInfo("Checkpoint operation already in progress.")
+			return nil
+		}
+		m.checkpointInFlight = true
+		return ListCheckpointsCmd(m.checkpointService)
+	case command.ActionRestore:
+		id := strings.TrimSpace(arguments)
+		if id == "" || strings.ContainsAny(id, " \t\r\n") {
+			m.appendInfo("Usage: /restore <checkpoint-id>")
+			return nil
+		}
+		if m.checkpointService == nil {
+			m.appendInfo("Restore unavailable: " + checkpointUnavailableText(m.checkpointUnavailable))
+			return nil
+		}
+		if m.isStreaming {
+			m.appendInfo("Finish or cancel the current response before restoring a checkpoint.")
+			return nil
+		}
+		if m.permission.Visible() || m.approvalPending {
+			m.appendInfo("Resolve the active approval before restoring a checkpoint.")
+			return nil
+		}
+		if m.checkpointInFlight {
+			m.appendInfo("Checkpoint operation already in progress.")
+			return nil
+		}
+		m.checkpointInFlight = true
+		return RestoreCheckpointCmd(m.checkpointService, id)
 	default:
 		m.appendInfo("Command error: unsupported workspace action " + string(action))
 		return nil
 	}
+}
+
+func checkpointUnavailableText(detail string) string {
+	if strings.TrimSpace(detail) == "" {
+		return "local checkpoint service is not configured"
+	}
+	return detail
 }
 
 func (m *Model) setViewMode(raw string) tea.Cmd {
@@ -319,18 +382,11 @@ func (m *Model) startPromptWithAgent(displayText, promptText, agent string) tea.
 	m.input = ""
 	m.startTaskMetric(req.Agent)
 
-	if m.repoContextService != nil {
-		return RepoContextCmd(m.repoContextService, repoPromptIntent{
-			request:     req,
-			displayText: displayText,
-			promptText:  promptText,
-			queryText:   promptText,
-		})
+	intent := repoPromptIntent{
+		request:     req,
+		displayText: displayText,
+		promptText:  promptText,
+		queryText:   promptText,
 	}
-
-	if m.sessionID == "" {
-		m.pendingPrompt = &req
-		return CreateSessionCmd(m.runtimeClient, strings.TrimSpace(displayText))
-	}
-	return PromptCmd(m.runtimeClient, m.sessionID, req)
+	return m.beginBaselineCheckpoint(intent)
 }
