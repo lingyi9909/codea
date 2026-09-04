@@ -24,19 +24,28 @@ class Task26AcceptanceContract(unittest.TestCase):
             self.assertEqual(task["taskGateStatus"], "pass")
             self.assertIs(task["humanAccepted"], True)
 
-        self.assertEqual(str(self.state["current"]["task"]), "26")
+        order = [str(task_id) for task_id in self.state["taskOrder"]]
+        current_task = str(self.state["current"]["task"])
+        self.assertIn("26", order)
+        self.assertIn(current_task, order)
+        self.assertLessEqual(order.index("26"), order.index(current_task))
+
         task26 = self.state["tasks"]["26"]
         self.assertEqual(task26["verificationStatus"], "pass")
         self.assertEqual(task26["taskGateStatus"], "pass")
 
-        if task26["status"] == "completed":
-            self.assertIs(task26["humanAccepted"], True)
-            self.assertEqual(self.state["current"]["status"], "completed")
-            self.assertIs(self.state["humanAcceptance"]["accepted"], True)
+        if current_task == "26":
+            if task26["status"] == "completed":
+                self.assertIs(task26["humanAccepted"], True)
+                self.assertEqual(self.state["current"]["status"], "completed")
+                self.assertIs(self.state["humanAcceptance"]["accepted"], True)
+            else:
+                self.assertIn(task26["status"], {"in_progress", "awaiting_acceptance"})
+                self.assertIs(task26["humanAccepted"], False)
+                self.assertIs(self.state["humanAcceptance"]["accepted"], False)
         else:
-            self.assertIn(task26["status"], {"in_progress", "awaiting_acceptance"})
-            self.assertIs(task26["humanAccepted"], False)
-            self.assertIs(self.state["humanAcceptance"]["accepted"], False)
+            self.assertEqual(task26["status"], "completed")
+            self.assertIs(task26["humanAccepted"], True)
 
     def test_locked_runtime_and_release_targets_match_v11_contract(self):
         self.assertEqual(self.runtime["openCodeVersion"], "1.18.11")
