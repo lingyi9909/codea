@@ -3,39 +3,39 @@ project: codea-v1.2
 plan: docs/superpowers/specs/2026-08-28-codea-v1.2-agent-intelligence-reliability-design.md
 taskOrder: ["0", "1", "2", "2A", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30", "31", "32"]
 current:
-  task: "30"
+  task: "31"
   step: 8
   status: awaiting_acceptance
-  nextAction: Task 30 production baseline 85ab175f04a6642db73714f42048bfa5c73ce89c 的 Fresh Gate 33774541543 已在 Linux/Windows/macOS 全部通过；等待人工验收，Task 31 尚未开始。
+  nextAction: Task 31 production baseline 0057614d0617248efdf40c2420f0303d1417e498 的 Fresh Gate 33842705894 已在 Linux/Windows/macOS 全部通过；等待人工验收，Task 32 尚未开始。
 checkpoint:
-  commit: 85ab175f04a6642db73714f42048bfa5c73ce89c
-  updatedAt: "2026-09-03T15:45:36Z"
+  commit: 0057614d0617248efdf40c2420f0303d1417e498
+  updatedAt: "2026-09-04T06:04:05Z"
 verification:
   status: pass
   commands:
-    - "Fresh Task 30 Gate 33774541543 @ 85ab175f04a6642db73714f42048bfa5c73ce89c: Linux PASS; Windows PASS; macOS PASS"
-    - "Focused verification: 26 pass / 0 fail; full plugin: 303 pass / 0 fail"
-    - "Markers: STALE_ROOT_STEP_FINISH_IGNORED PASS; ACTIVE_ROOT_STEP_FINISH_CONTROLS_VERIFICATION PASS; REAL_JAVA_WRAPPER_SMOKE PASS; WINDOWS_WORKFLOW_FAIL_FAST PASS"
-    - "bash tests/task30-verification-loop.sh"
-    - "cd distribution/plugins && bun test && bun run build"
+    - "Fresh Task 31 Gate 33842705894 @ 0057614d0617248efdf40c2420f0303d1417e498: Linux PASS; Windows PASS; macOS PASS"
+    - "bash tests/task31-checkpoint.sh"
+    - "Windows Server 2025: native tests/task31-checkpoint-windows.ps1 + CGO_ENABLED=0 full Go regression/build PASS"
+    - "macOS 15: Task 31 mechanical acceptance + full Go regression/build PASS"
     - "cd tui && GOTOOLCHAIN=local go test ./... -count=1 && GOTOOLCHAIN=local go build ./cmd/codea"
-    - "Windows Server 2025: real local verification + path/argv regression + CGO_ENABLED=0 focused Task 30 tests + full go test ./... -count=1"
-    - "macOS 15 arm64: Task 30 mechanical acceptance + full plugin regression/build + full Go regression/build"
+    - "CGO_ENABLED=0 GOOS=windows GOARCH=amd64 GOTOOLCHAIN=local go build ./cmd/codea"
+    - "Markers: TASK31_AGENT_CHECKPOINT PASS; SHADOW_GIT_ISOLATION PASS; BASELINE_RESTORE PASS; SAFETY_RESTORE PASS; PROJECT_INDEX_UNCHANGED PASS; WINDOWS_SPACES_UNICODE PASS; GIT_UNAVAILABLE_FAIL_VISIBLE PASS; WINDOWS_WORKFLOW_FAIL_FAST PASS"
   errorSummary: ""
-  recoveryAdvice: "Task 30 technical verification and Fresh Gate 33774541543 have passed; keep humanAcceptance.accepted=false and Task 31 pending until explicit human acceptance."
+  recoveryAdvice: "Task 31 technical verification and Fresh Gate 33842705894 have passed; keep humanAcceptance.accepted=false and Task 32 pending until explicit human acceptance."
 taskGate:
   status: pass
   gateItems:
-    deterministicVerificationContract: pass
-    secureLocalExecution: pass
-    safeMachineMetadata: pass
-    verificationFreshness: pass
-    truthfulCompletionGate: pass
-    boundedRepairContinuation: pass
-    mutationAgentContract: pass
-    offlineLocalSmoke: pass
-    windowsArgvSafety: pass
+    shadowGitIsolation: pass
+    deterministicSnapshot: pass
+    safeRestore: pass
+    mandatorySafetyCheckpoint: pass
+    projectGitMetadataIsolation: pass
+    busyRestoreGuard: pass
+    repoContextInvalidation: pass
+    gitUnavailableDegradation: pass
+    windowsSpacesUnicode: pass
     threePlatformRegression: pass
+    windowsCrossBuild: pass
 humanAcceptance:
   accepted: false
 task17Gate:
@@ -75,6 +75,6 @@ tasks:
   "27": {status: completed, completedSteps: [1, 2, 3, 4, 5], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: 0390d4697cfee3832d0fa3703bbb35a85f4df2f3, report: docs/task-reports/task-27.md}
   "28": {status: completed, completedSteps: [1, 2, 3, 4, 5, 6, 7], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: 2dbdc75e90dcc959b62160b035ac9233d96b6cf9, report: docs/task-reports/task-28.md}
   "29": {status: completed, completedSteps: [1, 2, 3, 4, 5, 6, 7], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: 38db538ba932d8ebddd388bab6471325f8577ad4, report: docs/task-reports/task-29.md}
-  "30": {status: awaiting_acceptance, completedSteps: [1, 2, 3, 4, 5, 6, 7, 8], verificationStatus: pass, taskGateStatus: pass, humanAccepted: false, checkpoint: 85ab175f04a6642db73714f42048bfa5c73ce89c, report: docs/task-reports/task-30.md}
-  "31": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false}
+  "30": {status: completed, completedSteps: [1, 2, 3, 4, 5, 6, 7, 8], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: 85ab175f04a6642db73714f42048bfa5c73ce89c, report: docs/task-reports/task-30.md}
+  "31": {status: awaiting_acceptance, completedSteps: [1, 2, 3, 4, 5, 6, 7, 8], verificationStatus: pass, taskGateStatus: pass, humanAccepted: false, checkpoint: 0057614d0617248efdf40c2420f0303d1417e498, report: docs/task-reports/task-31.md}
   "32": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false}
