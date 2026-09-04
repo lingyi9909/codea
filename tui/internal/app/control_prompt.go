@@ -105,9 +105,13 @@ func (m *Model) nextVerificationContinuation(ev runtime.Event) *runtime.PromptRe
 func (m *Model) handleVerificationStepFinished(ev runtime.Event) tea.Cmd {
 	req := m.nextVerificationContinuation(ev)
 	if req == nil {
-		return nil
+		return m.takePendingCheckpointCmd()
 	}
-	return PromptCmd(m.runtimeClient, m.sessionID, *req)
+	promptCmd := PromptCmd(m.runtimeClient, m.sessionID, *req)
+	if checkpointCmd := m.takePendingCheckpointCmd(); checkpointCmd != nil {
+		return tea.Batch(promptCmd, checkpointCmd)
+	}
+	return promptCmd
 }
 
 func (m *Model) queueVerificationStepFinished(ev runtime.Event) {
@@ -116,11 +120,25 @@ func (m *Model) queueVerificationStepFinished(ev runtime.Event) {
 	}
 }
 
+// takeVerificationContinuationCmd drains both Task 30 control continuation and
+// a Task 31 final-checkpoint request. Both are already queued by event handling;
+// their actual I/O occurs only inside returned tea.Cmd functions.
 func (m *Model) takeVerificationContinuationCmd() tea.Cmd {
-	if m.pendingVerificationPrompt == nil {
-		return nil
+	cmds := make([]tea.Cmd, 0, 2)
+	if m.pendingVerificationPrompt != nil {
+		req := *m.pendingVerificationPrompt
+		m.pendingVerificationPrompt = nil
+		cmds = append(cmds, PromptCmd(m.runtimeClient, m.sessionID, req))
 	}
-	req := *m.pendingVerificationPrompt
-	m.pendingVerificationPrompt = nil
-	return PromptCmd(m.runtimeClient, m.sessionID, req)
+	if checkpointCmd := m.takePendingCheckpointCmd(); checkpointCmd != nil {
+		cmds = append(cmds, checkpointCmd)
+	}
+	switch len(cmds) {
+	case 0:
+		return nil
+	case 1:
+		return cmds[0]
+	default:
+		return tea.Batch(cmds...)
+	}
 }
