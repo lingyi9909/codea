@@ -14,9 +14,11 @@ const repoContextPromptBudget = 8000
 
 // RepoContextService is the narrow Codea-owned Application dependency used to
 // build task-specific repository context. It deliberately exposes no Runtime or
-// vendor-specific types.
+// vendor-specific types. Invalidate is used after a checkpoint restore so any
+// future cached/indexed implementation cannot serve stale source structure.
 type RepoContextService interface {
 	BuildMap(context.Context, repoctx.Query) (repoctx.RepoMap, error)
+	Invalidate()
 }
 
 type repoPromptIntent struct {
