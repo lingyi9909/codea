@@ -21,6 +21,16 @@ func NewService(root string) *Service {
 	return &Service{root: root, indexer: NewIndexer(root)}
 }
 
+// Invalidate drops the current indexer instance after an external source-tree
+// restore. Build currently rescans files on every call, but keeping this explicit
+// boundary prevents future caching from serving pre-restore repository state.
+func (s *Service) Invalidate() {
+	if s == nil {
+		return
+	}
+	s.indexer = NewIndexer(s.root)
+}
+
 func (s *Service) BuildMap(ctx context.Context, q Query) (RepoMap, error) {
 	idx, err := s.indexer.Build(ctx)
 	if err != nil {
