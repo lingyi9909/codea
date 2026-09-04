@@ -52,11 +52,15 @@ func verificationMetricCategory(state TaskExecutionState, decision VerificationD
 }
 
 // finishStepWithVerification owns terminal state for Runtime step.finished.
-// Step 6 will interpose bounded continuations before calling this terminal path.
+// A fresh mutating PASS schedules a Task 31 final checkpoint independently;
+// checkpoint failure can never downgrade or rewrite Task 30 verification truth.
 func (m *Model) finishStepWithVerification() {
 	decision := verificationDecision(m.taskExecution)
 	m.finishActiveTurnTrace(traceStatusForVerification(decision))
 	if decision == VerifyNotRequired || decision == VerifyAccepted {
+		if decision == VerifyAccepted && m.taskExecution.MutationSeen {
+			m.queueFinalCheckpoint()
+		}
 		m.finishStreaming()
 		return
 	}
