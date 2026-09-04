@@ -99,6 +99,7 @@ func run() error {
 	}
 
 	model := app.NewModel(adapter)
+	configureCheckpoint(model, codeaHomeDir(), projectDir)
 	model.SetCommandRegistry(commandRegistry)
 	model.SetSkillManager(skill.NewManager(roots, store, targetDir, projectDir, adapter, policy))
 	model.SetDoctorService(doctorService)
