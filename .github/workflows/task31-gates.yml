@@ -1,0 +1,96 @@
+name: Task 31 Agent Checkpoint Gates
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [develop]
+    paths:
+      - 'tui/**'
+      - 'tests/task31-checkpoint.sh'
+      - 'tests/task31-checkpoint-windows.ps1'
+      - 'scripts/check-execution-state.sh'
+      - 'docs/task-reports/task-31.md'
+      - 'docs/execution-state.yaml'
+      - '.github/workflows/task31-gates.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: task31-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux-task31:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.5'
+          cache-dependency-path: tui/go.sum
+
+      - name: Validate V1.2 execution state
+        run: bash scripts/check-execution-state.sh
+
+      - name: Task 31 mechanical acceptance
+        run: bash tests/task31-checkpoint.sh
+
+      - name: Full Go regression and build
+        working-directory: tui
+        run: |
+          GOTOOLCHAIN=local go test ./... -count=1
+          GOTOOLCHAIN=local go build ./cmd/codea
+
+      - name: Windows amd64 release cross-build
+        working-directory: tui
+        run: CGO_ENABLED=0 GOOS=windows GOARCH=amd64 GOTOOLCHAIN=local go build ./cmd/codea
+
+  windows-task31:
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.5'
+          cache-dependency-path: tui/go.sum
+
+      - name: Verify PowerShell native fail-fast contract
+        shell: pwsh
+        run: |
+          $probe = Start-Process -FilePath pwsh -ArgumentList @('-NoProfile', '-Command', 'cmd /c exit 7; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }') -Wait -PassThru
+          if ($probe.ExitCode -ne 7) { throw "native fail-fast contract did not propagate exit 7" }
+          Write-Output 'WINDOWS_WORKFLOW_FAIL_FAST PASS'
+
+      - name: Native Windows Task 31 checkpoint acceptance
+        shell: pwsh
+        run: ./tests/task31-checkpoint-windows.ps1
+
+      - name: Native Windows full Go regression
+        working-directory: tui
+        shell: pwsh
+        run: |
+          $env:GOTOOLCHAIN='local'
+          $env:CGO_ENABLED='0'
+          go test ./... -count=1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          go build ./cmd/codea
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+  macos-task31:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.5'
+          cache-dependency-path: tui/go.sum
+
+      - name: Task 31 native macOS mechanical acceptance
+        run: bash tests/task31-checkpoint.sh
+
+      - name: Native macOS full Go regression and build
+        working-directory: tui
+        run: |
+          GOTOOLCHAIN=local go test ./... -count=1
+          GOTOOLCHAIN=local go build ./cmd/codea
