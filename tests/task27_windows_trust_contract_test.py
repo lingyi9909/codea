@@ -15,15 +15,26 @@ class Task27WindowsTrustContract(unittest.TestCase):
         cls.workflow = (ROOT / ".github/workflows/task27-windows-trust-gates.yml").read_text()
         cls.lifecycle = (ROOT / "tests/release/task27-windows-installed-lifecycle.ps1").read_text()
 
-    def test_task26_is_accepted_and_task27_is_active(self):
+    def test_task26_is_accepted_and_task27_contract_is_retained_after_progression(self):
         task26 = self.state["tasks"]["26"]
         self.assertEqual(task26["status"], "completed")
         self.assertIs(task26["humanAccepted"], True)
-        self.assertEqual(str(self.state["current"]["task"]), "27")
-        self.assertEqual(str(self.state["taskOrder"][-1]), "27")
+
+        order = [str(task_id) for task_id in self.state["taskOrder"]]
+        current_task = str(self.state["current"]["task"])
+        self.assertIn("27", order)
+        self.assertIn(current_task, order)
+        self.assertLessEqual(order.index("27"), order.index(current_task))
+
         task27 = self.state["tasks"]["27"]
-        self.assertIn(task27["status"], {"in_progress", "awaiting_acceptance"})
-        self.assertIs(task27["humanAccepted"], False)
+        if current_task == "27":
+            self.assertIn(task27["status"], {"in_progress", "awaiting_acceptance"})
+            self.assertIs(task27["humanAccepted"], False)
+        else:
+            self.assertEqual(task27["status"], "completed")
+            self.assertEqual(task27["verificationStatus"], "pass")
+            self.assertEqual(task27["taskGateStatus"], "pass")
+            self.assertIs(task27["humanAccepted"], True)
 
     def test_windows_start_reliability_layers_are_retained(self):
         self.assertIn("func prepareRuntimeBinary", self.process_windows)
