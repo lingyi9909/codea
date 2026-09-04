@@ -110,8 +110,8 @@ func DoctorServiceCmd(service *doctor.Service) tea.Cmd {
 }
 
 // handleRuntimeWorkspaceMessage centralizes Codea-owned asynchronous workspace
-// results, including Task 28 Repo Context preparation, before the main Update
-// switch handles Runtime lifecycle messages.
+// results, including Task 28 Repo Context and Task 31 checkpoint preparation,
+// before the main Update switch handles Runtime lifecycle messages.
 func (m *Model) handleRuntimeWorkspaceMessage(msg tea.Msg) (bool, tea.Cmd) {
 	// A tick still falls through to the main Update switch so streaming buffers
 	// are flushed and the next TickCmd is scheduled. We only advance the visual
@@ -121,6 +121,9 @@ func (m *Model) handleRuntimeWorkspaceMessage(msg tea.Msg) (bool, tea.Cmd) {
 		m.markDirty()
 	}
 
+	if handled, cmd := m.handleCheckpointMessage(msg); handled {
+		return true, cmd
+	}
 	if handled, cmd := m.handleProfessionalWorkspaceMessage(msg); handled {
 		return true, cmd
 	}
