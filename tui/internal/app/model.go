@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"codea/tui/internal/checkpoint"
 	"codea/tui/internal/command"
 	"codea/tui/internal/components"
 	"codea/tui/internal/doctor"
@@ -91,6 +92,14 @@ type Model struct {
 	// event handling and dispatched by Update as tea.Cmd, never synchronously.
 	pendingVerificationPrompt        *runtime.PromptRequest
 	verificationContinuationTriggers map[string]struct{}
+
+	// Task 31 checkpoint work is also dispatched as tea.Cmd. Git work never runs
+	// synchronously inside Update, and its failure never changes Task 30 truth.
+	checkpointService       CheckpointService
+	checkpointUnavailable   string
+	checkpointInFlight      bool
+	pendingFinalCheckpoint  *checkpoint.CreateRequest
+	lastBaselineCheckpoint  string
 
 	// pendingResumeID is the session whose history is being loaded during a
 	// resume. It guards against a stale load result applying to the wrong session.
