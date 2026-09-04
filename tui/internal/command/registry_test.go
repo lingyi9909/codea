@@ -27,8 +27,8 @@ func TestBuiltinsAreRegisteredAndFilterable(t *testing.T) {
 	}
 
 	all := reg.Commands()
-	if len(all) != 15 {
-		t.Fatalf("builtins = %d, want 15 through Task 25", len(all))
+	if len(all) != 18 {
+		t.Fatalf("builtins = %d, want 18 through Task 31", len(all))
 	}
 	seen := map[string]bool{}
 	for _, def := range all {
@@ -37,7 +37,7 @@ func TestBuiltinsAreRegisteredAndFilterable(t *testing.T) {
 			t.Fatalf("/%s availability = %q, want %q", def.Name, def.Availability, AvailabilityAvailable)
 		}
 	}
-	for _, name := range []string{"help", "clear", "status", "sessions", "skills", "agents", "cancel", "doctor", "model", "compact", "view", "review", "test", "api-doc", "debug"} {
+	for _, name := range []string{"help", "clear", "status", "sessions", "skills", "agents", "cancel", "doctor", "model", "compact", "view", "review", "test", "api-doc", "debug", "checkpoint", "checkpoints", "restore"} {
 		if !seen[name] {
 			t.Fatalf("missing builtin /%s", name)
 		}
