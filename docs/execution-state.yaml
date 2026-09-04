@@ -9,7 +9,7 @@ current:
   nextAction: Task 31 production baseline 0057614d0617248efdf40c2420f0303d1417e498 的 Fresh Gate 33842705894 已在 Linux/Windows/macOS 全部通过；等待人工验收，Task 32 尚未开始。
 checkpoint:
   commit: 0057614d0617248efdf40c2420f0303d1417e498
-  updatedAt: "2026-09-04T06:04:05Z"
+  updatedAt: "2026-09-04T06:14:00Z"
 verification:
   status: pass
   commands:
@@ -19,9 +19,11 @@ verification:
     - "macOS 15: Task 31 mechanical acceptance + full Go regression/build PASS"
     - "cd tui && GOTOOLCHAIN=local go test ./... -count=1 && GOTOOLCHAIN=local go build ./cmd/codea"
     - "CGO_ENABLED=0 GOOS=windows GOARCH=amd64 GOTOOLCHAIN=local go build ./cmd/codea"
+    - "Task 26 historical acceptance contract step PASS: run 33843454021 @ 3fc9fc3b8ae60d187273b8a521f1de5029a42d0b"
+    - "Task 27 historical trust/Auth/security contract steps PASS: run 33843474717 @ 74cb0fbab80119e03fda1853152dd968e0cb5833"
     - "Markers: TASK31_AGENT_CHECKPOINT PASS; SHADOW_GIT_ISOLATION PASS; BASELINE_RESTORE PASS; SAFETY_RESTORE PASS; PROJECT_INDEX_UNCHANGED PASS; WINDOWS_SPACES_UNICODE PASS; GIT_UNAVAILABLE_FAIL_VISIBLE PASS; WINDOWS_WORKFLOW_FAIL_FAST PASS"
   errorSummary: ""
-  recoveryAdvice: "Task 31 technical verification and Fresh Gate 33842705894 have passed; keep humanAcceptance.accepted=false and Task 32 pending until explicit human acceptance."
+  recoveryAdvice: "Task 31 technical verification and Fresh Gate 33842705894 have passed. Historical Task 26/27 acceptance contracts were made forward-compatible with later task progression without changing production behavior. Keep humanAcceptance.accepted=false and Task 32 pending until explicit human acceptance."
 taskGate:
   status: pass
   gateItems:
