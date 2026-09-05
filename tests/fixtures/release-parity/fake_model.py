@@ -24,6 +24,74 @@ def last_user(messages):
     return ""
 
 
+def advertised_tool_names(tools):
+    names = set()
+    for tool in tools or []:
+        function = tool.get("function") or {}
+        name = function.get("name")
+        if name:
+            names.add(name)
+    return names
+
+
+def assistant_tool_names(messages):
+    names = []
+    for message in messages or []:
+        if message.get("role") != "assistant":
+            continue
+        for call in message.get("tool_calls") or []:
+            name = (call.get("function") or {}).get("name")
+            if name:
+                names.append(name)
+    return names
+
+
+def approval_plan(prompt):
+    action = "Execute the approval-gated command"
+    if "REJECT" in (prompt or "").upper():
+        action = "Attempt the approval-gated command and preserve rejection"
+    return {
+        "goal": action,
+        "steps": [
+            {"id": "prepare", "title": "Prepare the approval-gated command"},
+            {"id": "execute", "title": action},
+            {
+                "id": "verify",
+                "title": "Verify the runtime approval outcome",
+                "verification": "Use the runtime approval and tool result events",
+            },
+        ],
+    }
+
+
+def decide(prompt, messages, tools):
+    """Choose the next parity action without changing baseline semantics.
+
+    Vanilla OpenCode does not advertise Codea's task_plan tool, so the baseline
+    continues to call bash directly and exercises OpenCode's approval flow.
+    The Codea candidate advertises task_plan and enforces Task 29's plan gate,
+    so it creates a valid plan first and only then calls the same bash tool.
+    """
+    p = (prompt or "").upper()
+    available = advertised_tool_names(tools)
+    names = assistant_tool_names(messages)
+
+    if "APPROVAL TEST" in p or "REJECT TEST" in p:
+        if "task_plan" in available and "task_plan" not in names:
+            call_id = "call_plan_reject" if "REJECT TEST" in p else "call_plan_approval"
+            return "task_plan", approval_plan(p), call_id, None
+        if "bash" not in names:
+            return (
+                "bash",
+                {"command": "echo release-parity", "description": "release parity approval"},
+                "call_bash",
+                None,
+            )
+        return None, None, None, "tool-done"
+
+    return None, None, None, None
+
+
 class Handler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
 
@@ -45,6 +113,7 @@ class Handler(BaseHTTPRequestHandler):
         messages = req.get("messages", [])
         prompt = last_user(messages).upper()
         last_role = messages[-1].get("role") if messages else ""
+        tools = req.get("tools") or []
         print(
             json.dumps(
                 {
@@ -52,7 +121,7 @@ class Handler(BaseHTTPRequestHandler):
                     "prompt": prompt,
                     "lastRole": last_role,
                     "stream": bool(req.get("stream")),
-                    "tools": len(req.get("tools") or []),
+                    "tools": len(tools),
                 },
                 separators=(",", ":"),
             ),
@@ -61,7 +130,14 @@ class Handler(BaseHTTPRequestHandler):
         )
 
         chunks = [self.chunk({"role": "assistant"}, None)]
-        if last_role == "tool":
+        if "APPROVAL TEST" in prompt or "REJECT TEST" in prompt:
+            tool_name, arguments, call_id, final_text = decide(prompt, messages, tools)
+            if tool_name is not None:
+                chunks.extend(self.tool_chunks(tool_name, arguments, call_id))
+            else:
+                chunks.append(self.chunk({"content": final_text or "tool-done"}, None))
+                chunks.append(self.chunk({}, "stop", usage=True))
+        elif last_role == "tool":
             chunks.append(self.chunk({"content": "tool-done"}, None))
             chunks.append(self.chunk({}, "stop", usage=True))
         elif "REASONING TEST" in prompt:
@@ -73,8 +149,6 @@ class Handler(BaseHTTPRequestHandler):
             chunks.append(self.chunk({}, "stop", usage=True))
         elif "TOOL TEST" in prompt:
             chunks.extend(self.tool_chunks("read", {"filePath": os.path.join(SMOKE_DIR, "read-me.txt")}, "call_read"))
-        elif "APPROVAL TEST" in prompt or "REJECT TEST" in prompt:
-            chunks.extend(self.tool_chunks("bash", {"command": "echo release-parity", "description": "release parity approval"}, "call_bash"))
         else:
             chunks.append(self.chunk({"content": "parity-answer"}, None))
             chunks.append(self.chunk({}, "stop", usage=True))
