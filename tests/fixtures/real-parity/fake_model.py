@@ -20,23 +20,27 @@ State machine, keyed on the last user message (all upper-cased):
 
   Enterprise Custom Tool single-shot (whitelist proof):
     COLLECT_REVIEW_CONTEXT -> `collect_review_context` (source=staged)
-    WRITE_TEST_FILE        -> `write_test_file` (a fresh whitelist-only test)
+    WRITE_TEST_FILE        -> `task_plan` -> `write_test_file`
+                              (a fresh whitelist-only test)
     RUN_PROJECT_TEST       -> `run_project_test` (maven)
     WRITE_DOCUMENT         -> `write_document` (docs/smoke.md)
 
   Enterprise workflow (multi-step, tracked via the assistant tool-call history):
     REVIEWFLOW  -> collect_review_context -> final output-schema JSON answer
-    UTFLOW      -> analyze_test_project -> write_test_file -> run_project_test
-                   -> final PASS/FAIL derived from the run_project_test Tool Result
+    UTFLOW      -> analyze_test_project -> task_plan -> write_test_file
+                   -> run_project_test -> final PASS/FAIL derived from the
+                   run_project_test Tool Result
     UTFLOW_FAIL -> same chain with a deterministic failing JUnit -> final FAIL
                    derived from the run_project_test Tool Result
     APIDOCFLOW  -> extract_api_spec -> validate_api_example -> write_document
                    -> final Markdown derived from the real Tool Results
 
-A request whose final message is a `tool` result answers with text unless a
-workflow still has a remaining step. Keyword matching is ordered so the more
-specific custom-tool keywords (which contain WRITE/RUN substrings) win over the
-shorter native WRITE, and workflow keywords win over single-shot tool names.
+The Task 29 plan-before-mutation contract is part of the real Runtime protocol,
+so all unit-test mutations first create an actionable task plan. A request whose
+final message is a `tool` result answers with text unless a workflow still has a
+remaining step. Keyword matching is ordered so the more specific custom-tool
+keywords (which contain WRITE/RUN substrings) win over the shorter native WRITE,
+and workflow keywords win over single-shot tool names.
 """
 import json
 import os
@@ -119,6 +123,22 @@ def assistant_tool_names(messages):
             if name:
                 names.append(name)
     return names
+
+
+def unit_test_plan(goal):
+    """Return the smallest valid Task 29 plan needed by unit-test mutations."""
+    return {
+        "goal": goal,
+        "steps": [
+            {"id": "analyze", "title": "Analyze the test project"},
+            {"id": "write", "title": "Write the generated test"},
+            {
+                "id": "verify",
+                "title": "Run the generated test",
+                "verification": "Use the structured run_project_test result",
+            },
+        ],
+    }
 
 
 def _json_value(value):
@@ -240,6 +260,8 @@ def decide(prompt, messages):
     if "UTFLOW_FAIL" in p:
         if "analyze_test_project" not in names:
             return "analyze_test_project", {}, "call_analyze_fail", None
+        if "task_plan" not in names:
+            return "task_plan", unit_test_plan("Generate and run a deterministic failing unit test"), "call_plan_fail", None
         if "write_test_file" not in names:
             return "write_test_file", {"path": FAIL_FLOW_TEST_PATH, "content": FAIL_FLOW_TEST_CONTENT}, "call_write_fail", None
         if "run_project_test" not in names:
@@ -249,11 +271,22 @@ def decide(prompt, messages):
     if "UTFLOW" in p:
         if "analyze_test_project" not in names:
             return "analyze_test_project", {}, "call_analyze", None
+        if "task_plan" not in names:
+            return "task_plan", unit_test_plan("Generate and run a deterministic unit test"), "call_plan", None
         if "write_test_file" not in names:
             return "write_test_file", {"path": FLOW_TEST_PATH, "content": FLOW_TEST_CONTENT}, "call_write", None
         if "run_project_test" not in names:
             return "run_project_test", {"buildSystem": "maven", "testClass": FLOW_TEST_CLASS}, "call_run", None
         return None, None, None, unit_test_conclusion(messages, "call_run")
+
+    # WRITE_TEST_FILE is a mutating custom-tool scenario. Keep it ahead of the
+    # generic last-tool close so a successful task_plan can advance to the write.
+    if "WRITE_TEST_FILE" in p:
+        if "task_plan" not in names:
+            return "task_plan", unit_test_plan("Write a deterministic whitelist test"), "call_plan_write", None
+        if "write_test_file" not in names:
+            return "write_test_file", {"path": WHITELIST_TEST_PATH, "content": WHITELIST_TEST_CONTENT}, "call_write", None
+        return None, None, None, None
 
     # --- Single-shot tools: after a tool result, close the loop -------------
     if last_is_tool:
@@ -264,8 +297,6 @@ def decide(prompt, messages):
     # contain "WRITE"/"RUN" substrings.
     if "COLLECT_REVIEW_CONTEXT" in p:
         return "collect_review_context", {"source": "staged"}, "call_collect", None
-    if "WRITE_TEST_FILE" in p:
-        return "write_test_file", {"path": WHITELIST_TEST_PATH, "content": WHITELIST_TEST_CONTENT}, "call_write", None
     if "RUN_PROJECT_TEST" in p:
         return "run_project_test", {"buildSystem": "maven"}, "call_run", None
     if "WRITE_DOCUMENT" in p:
