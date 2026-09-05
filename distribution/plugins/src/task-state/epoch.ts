@@ -43,6 +43,12 @@ export class RootTurnEpochs {
       return continuationRoot;
     }
 
+    // A root turn advances only when the user starts a new ordinary turn.
+    // OpenCode also emits chat.message during the assistant/tool loop; treating
+    // those as roots invalidates a plan immediately after task_plan returns.
+    const role = stringField(output.message?.role);
+    if (role !== "user") return this.current(sessionID);
+
     this.currentBySession.set(sessionID, messageID);
     return messageID;
   }
