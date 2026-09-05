@@ -3,8 +3,10 @@
 ## Status
 
 - Task: **31 — Agent Checkpoint & Restore**
-- Production baseline: `0057614d0617248efdf40c2420f0303d1417e498`
-- Fresh Task 31 Gate: **GitHub Actions `33842705894` — PASS**
+- Production baseline: `64f870ab8128402445ed2579844358598fca9a2f`
+- Fresh Task 31 Gate: **GitHub Actions `33972223045` — PASS**
+- Fresh Task 20-21 real dual-runtime parity: **GitHub Actions `33972223097` — PASS**
+- Fresh Task 26 V1.1 integration / G3-G14 parity: **GitHub Actions `33972223096` — PASS**
 - Linux: **PASS**
 - Windows: **PASS**
 - macOS: **PASS**
@@ -77,9 +79,20 @@ Files above the default 5 MiB size limit and configured large/binary thresholds 
 
 The checkpoint subsystem uses the local Git CLI only; its checkpoint control path does not require public network access.
 
+## Final regression repairs discovered during Task 31 certification
+
+Task 31 itself was already functionally complete, but fresh exact-head full-repository certification exposed forward-compatibility regressions introduced by Task 29's plan-before-mutation contract. They were repaired without weakening production safety gates:
+
+1. **Plan-gated enterprise agents** — `unit-test-generator`, `api-documentation`, and `debug` now expose `task_plan`, `task_step`, and `task_status` before their existing mutation/execute capabilities. Production write/bash/edit policies were not relaxed.
+2. **API Documentation parity fixture** — real-runtime document writes now follow `task_plan -> write_document`; Task 16 real API Documentation workflow smoke is green.
+3. **Release parity Approval/Reject fixture** — the candidate creates a valid Task 29 plan before the approval-gated `bash`, while the vanilla baseline preserves its original direct-bash behavior.
+4. **Parity collector continuation** — an intermediate planning `step.finished` can no longer truncate the later `approval.resolved` / final tool result. Replying to an approval opens a fresh continuation and clears only the stale pre-approval terminal wait state.
+
+The final Task 20-21 run `33972223097` proves the real distinct baseline/candidate OpenCode v1.18.11 parity is **12/12 scenarios PASS**. The same run also records enterprise plugin regression **307 PASS / 0 FAIL / 817 expect()** and full Go regression PASS.
+
 ## Formal mechanical acceptance
 
-Fresh Task 31 Gate run: **GitHub Actions `33842705894`** on exact production baseline `0057614d0617248efdf40c2420f0303d1417e498`.
+Fresh Task 31 Gate run: **GitHub Actions `33972223045`** on exact production baseline `64f870ab8128402445ed2579844358598fca9a2f`.
 
 Permanent acceptance scenarios emit these markers:
 
@@ -96,7 +109,9 @@ WINDOWS_WORKFLOW_FAIL_FAST PASS
 
 ### Linux — Ubuntu 24.04
 
+- Execution-state validation: **PASS**
 - Task 31 mechanical checkpoint acceptance: **PASS**
+- Checkpoint package + Application + command + composition focused tests: **PASS**
 - Full `GOTOOLCHAIN=local go test ./... -count=1`: **PASS**
 - `GOTOOLCHAIN=local go build ./cmd/codea`: **PASS**
 - `CGO_ENABLED=0 GOOS=windows GOARCH=amd64` release cross-build: **PASS**
@@ -116,8 +131,16 @@ WINDOWS_WORKFLOW_FAIL_FAST PASS
 - Full Go regression: **PASS**
 - `go build ./cmd/codea`: **PASS**
 
+## Full-repository release confidence
+
+Fresh Task 26 Gate `33972223096` on production baseline `64f870ab8128402445ed2579844358598fca9a2f` is green across Linux, Windows, and macOS. On Linux all pre-release checks, full Go race/vet/build, enterprise plugin regression/build, Debug contract, offline packaging, all supported release targets, Windows cross-build, locked OpenCode v1.18.11 download, and **V1 release parity G3 through G14** passed.
+
+Fresh Task 20-21 Gate `33972223097` is also green and independently proves the distinct vanilla-baseline versus Codea-candidate real-runtime parity after the approval-continuation repair.
+
 ## Gate conclusion
 
-All Task 31 technical done criteria are satisfied at production baseline `0057614d0617248efdf40c2420f0303d1417e498`, with Fresh Task 31 Gate `33842705894` passing on Linux, Windows, and macOS. Shadow Git metadata is isolated from the project repository, eligible source state is reversible through mandatory safety checkpoints, restore invalidates Repo Context, checkpoint unavailability is fail-visible without blocking Codea, and native Windows spaces/non-ASCII behavior is covered by real Git execution.
+All Task 31 technical done criteria are satisfied at production baseline `64f870ab8128402445ed2579844358598fca9a2f`. Task 31 Gate `33972223045` passes on Linux, Windows, and macOS; Task 20-21 real dual-runtime parity `33972223097` passes; and Task 26 full V1.1 integration / G3-G14 parity `33972223096` passes.
 
-Task 31 technical verification is complete and is ready for human acceptance. Human acceptance remains separate and is intentionally not marked true. Task 32 has not started.
+Shadow Git metadata is isolated from the project repository, eligible source state is reversible through mandatory safety checkpoints, restore invalidates Repo Context, checkpoint unavailability is fail-visible without blocking Codea, native Windows spaces/non-ASCII behavior is covered by real Git execution, and the forward Task 29 planning contract no longer causes parity regressions.
+
+Task 31 technical verification is complete and remains **awaiting human acceptance**. Human acceptance is intentionally not marked true. Task 32 has not started.
