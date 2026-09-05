@@ -109,7 +109,7 @@ func newApprovalContinuationRuntime(intermediateStep bool) *approvalContinuation
 			Type:      runtime.EventType("approval.requested"),
 			SessionID: "terminal-session",
 			Approval: &runtime.ApprovalRequest{
-				ID:         runtime.ApprovalID("approval-1"),
+				ID:         "approval-1",
 				Permission: "bash",
 			},
 		}
@@ -126,7 +126,7 @@ func (r *approvalContinuationRuntime) ReplyApproval(_ context.Context, id runtim
 			Type:      runtime.EventType("approval.resolved"),
 			SessionID: "terminal-session",
 			Approval: &runtime.ApprovalRequest{
-				ID:         id,
+				ID:         string(id),
 				Permission: "bash",
 			},
 		}
