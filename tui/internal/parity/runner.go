@@ -367,6 +367,13 @@ func (r *Runner) collectEvents(ctx context.Context, rt runtime.AgentRuntime, req
 				if err := rt.ReplyApproval(ctx, runtime.ApprovalID(ev.Approval.ID), runtime.ApprovalReply{Decision: *approvalDecision}); err != nil {
 					return events, fmt.Errorf("ReplyApproval(%s): %w", ev.Approval.ID, err)
 				}
+				// The approval opens a new runtime continuation. A terminal event
+				// observed before it can belong to a preceding planning/tool round
+				// and must not truncate approval.resolved or the final tool result.
+				terminalSeen = false
+				terminalWait = nil
+				semanticWait = nil
+				inactivity = nil
 			}
 
 			terminal := ev.RawType == "session.idle" || ev.Type == "step.finished" || ev.Type == "step.failed"
