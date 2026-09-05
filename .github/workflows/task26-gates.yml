@@ -12,6 +12,7 @@ on:
       - 'distribution/plugins/**'
       - 'runtime/**'
       - 'packaging/**'
+      - 'tests/fixtures/real-parity/**'
       - 'tests/offline/**'
       - 'tests/release/**'
       - 'tests/upgrade/**'
