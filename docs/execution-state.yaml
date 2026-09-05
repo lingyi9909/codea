@@ -6,24 +6,24 @@ current:
   task: "31"
   step: 8
   status: awaiting_acceptance
-  nextAction: Task 31 production baseline 64f870ab8128402445ed2579844358598fca9a2f 的 Fresh Gate 33972223045 已在 Linux/Windows/macOS 全部通过；Task 20-21 real parity 33972223097 与 Task 26 G3-G14 33972223096 也已通过。等待人工验收，Task 32 尚未开始。
+  nextAction: Task 31 production baseline 75fc1feef9fd5e0363eaec5cb63fc6d2a3d3869d 的 Fresh Gate 33974093998 已在 Linux/Windows/macOS 全部通过；RESTORE_SYMLINK_ESCAPE_BLOCKED、RESTORE_JUNCTION_ESCAPE_BLOCKED、INTERRUPTED_RESTORE_INVALIDATES_REPO_CONTEXT 均 PASS；Task 20-21 real parity 33974093996 与 Task 26 G3-G14 33974093989 也已通过。等待人工验收，Task 32 尚未开始。
 checkpoint:
-  commit: 64f870ab8128402445ed2579844358598fca9a2f
-  updatedAt: "2026-09-05T14:34:36Z"
+  commit: 75fc1feef9fd5e0363eaec5cb63fc6d2a3d3869d
+  updatedAt: "2026-09-05T15:12:35Z"
 verification:
   status: pass
   commands:
-    - "Fresh Task 31 Gate 33972223045 @ 64f870ab8128402445ed2579844358598fca9a2f: Linux PASS; Windows PASS; macOS PASS"
-    - "Fresh Task 20-21 Gate 33972223097 @ 64f870ab8128402445ed2579844358598fca9a2f: real distinct baseline/candidate parity 12/12 PASS; plugin regression 307/0; full Go PASS"
-    - "Fresh Task 26 Gate 33972223096 @ 64f870ab8128402445ed2579844358598fca9a2f: Linux/Windows/macOS PASS; V1 release parity G3-G14 PASS"
+    - "Fresh Task 31 Gate 33974093998 @ 75fc1feef9fd5e0363eaec5cb63fc6d2a3d3869d: Linux PASS; Windows PASS; macOS PASS"
+    - "Fresh Task 20-21 Gate 33974093996 @ 75fc1feef9fd5e0363eaec5cb63fc6d2a3d3869d: real distinct baseline/candidate parity PASS; plugin regression PASS; full Go PASS"
+    - "Fresh Task 26 Gate 33974093989 @ 75fc1feef9fd5e0363eaec5cb63fc6d2a3d3869d: Linux/Windows/macOS PASS; V1 release parity G3-G14 PASS"
     - "bash tests/task31-checkpoint.sh"
     - "Windows Server 2025: native tests/task31-checkpoint-windows.ps1 + CGO_ENABLED=0 full Go regression/build PASS"
     - "macOS 15: Task 31 mechanical acceptance + full Go regression/build PASS"
     - "cd tui && GOTOOLCHAIN=local go test ./... -count=1 && GOTOOLCHAIN=local go build ./cmd/codea"
     - "CGO_ENABLED=0 GOOS=windows GOARCH=amd64 GOTOOLCHAIN=local go build ./cmd/codea"
-    - "Markers: TASK31_AGENT_CHECKPOINT PASS; SHADOW_GIT_ISOLATION PASS; BASELINE_RESTORE PASS; SAFETY_RESTORE PASS; PROJECT_INDEX_UNCHANGED PASS; WINDOWS_SPACES_UNICODE PASS; GIT_UNAVAILABLE_FAIL_VISIBLE PASS; WINDOWS_WORKFLOW_FAIL_FAST PASS"
+    - "Markers: TASK31_AGENT_CHECKPOINT PASS; SHADOW_GIT_ISOLATION PASS; BASELINE_RESTORE PASS; SAFETY_RESTORE PASS; PROJECT_INDEX_UNCHANGED PASS; WINDOWS_SPACES_UNICODE PASS; GIT_UNAVAILABLE_FAIL_VISIBLE PASS; WINDOWS_WORKFLOW_FAIL_FAST PASS; RESTORE_SYMLINK_ESCAPE_BLOCKED PASS; RESTORE_JUNCTION_ESCAPE_BLOCKED PASS; INTERRUPTED_RESTORE_INVALIDATES_REPO_CONTEXT PASS"
   errorSummary: ""
-  recoveryAdvice: "Task 31 technical verification and fresh full-repository parity certification have passed at production baseline 64f870ab8128402445ed2579844358598fca9a2f. Keep humanAcceptance.accepted=false and Task 32 pending until explicit human acceptance."
+  recoveryAdvice: "Task 31 technical verification and the two final P0 restore fail-safe blockers have passed at production baseline 75fc1feef9fd5e0363eaec5cb63fc6d2a3d3869d. Keep humanAcceptance.accepted=false and Task 32 pending until explicit human acceptance."
 taskGate:
   status: pass
   gateItems:
@@ -34,6 +34,9 @@ taskGate:
     projectGitMetadataIsolation: pass
     busyRestoreGuard: pass
     repoContextInvalidation: pass
+    restoreSymlinkAncestorProtection: pass
+    restoreJunctionReparseProtection: pass
+    interruptedRestoreRepoContextInvalidation: pass
     gitUnavailableDegradation: pass
     windowsSpacesUnicode: pass
     threePlatformRegression: pass
@@ -53,7 +56,7 @@ tasks:
   "3": {status: completed, completedSteps: [1, 2, 3, 4, 5, 6], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: 7ad89af4978faa5e49f8fac24f42b6c1115df460, report: docs/task-reports/task-03.md}
   "4": {status: completed, completedSteps: [1, 2, 3, 4, 5, 6], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: 3a737da675eb1f3f4752aaf150de75fbbda8bba1, report: docs/task-reports/task-04.md}
   "5": {status: completed, completedSteps: [1, 2, 3, 4, 5, 6], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: cbe692aaff6700c257d3e0806801dcf8d3396870, report: docs/task-reports/task-05.md}
-  "6": {status: completed, completedSteps: [1, 2, 3, 4, 5], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: df5c582aa803f55bb091dabaf3a3cf41e0f02f78, report: docs/task-reports/task-06.md}
+  "6": {status: completed, completedSteps: [1, 2, 3, 4, 5], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: df5b582aa803f55bb091dabaf3a3cf41e0f02f78, report: docs/task-reports/task-06.md}
   "7": {status: completed, completedSteps: [1, 2, 3, 4, 5, 6], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: 0e523e8d70cb5c3357b9e8beb7a1dae6b2480e46, report: docs/task-reports/task-07.md}
   "8": {status: completed, completedSteps: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: 716b8c1e87d865d2c8fae47e3aa36c8c0c4865, report: docs/task-reports/task-08.md}
   "9": {status: completed, completedSteps: [1, 2, 3, 4, 5], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: ac9392c1a6ffe5ca773455b6240a8149010bfe42, report: docs/task-reports/task-09.md}
@@ -78,5 +81,5 @@ tasks:
   "28": {status: completed, completedSteps: [1, 2, 3, 4, 5, 6, 7], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: 2dbdc75e90dcc959b62160b035ac9233d96b6cf9, report: docs/task-reports/task-28.md}
   "29": {status: completed, completedSteps: [1, 2, 3, 4, 5, 6, 7], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: 38db538ba932d8ebddd388bab6471325f8577ad4, report: docs/task-reports/task-29.md}
   "30": {status: completed, completedSteps: [1, 2, 3, 4, 5, 6, 7, 8], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: 85ab175f04a6642db73714f42048bfa5c73ce89c, report: docs/task-reports/task-30.md}
-  "31": {status: awaiting_acceptance, completedSteps: [1, 2, 3, 4, 5, 6, 7, 8], verificationStatus: pass, taskGateStatus: pass, humanAccepted: false, checkpoint: 64f870ab8128402445ed2579844358598fca9a2f, report: docs/task-reports/task-31.md}
+  "31": {status: awaiting_acceptance, completedSteps: [1, 2, 3, 4, 5, 6, 7, 8], verificationStatus: pass, taskGateStatus: pass, humanAccepted: false, checkpoint: 75fc1feef9fd5e0363eaec5cb63fc6d2a3d3869d, report: docs/task-reports/task-31.md}
   "32": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false}
