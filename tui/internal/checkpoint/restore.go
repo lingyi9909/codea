@@ -98,10 +98,6 @@ func (s *Service) applyRestore(ctx context.Context, target, safety Checkpoint) (
 	if err != nil {
 		return 0, err
 	}
-	protected := make(map[string]struct{}, len(safety.Skipped))
-	for _, item := range safety.Skipped {
-		protected[item.Path] = struct{}{}
-	}
 
 	changedSet := map[string]struct{}{}
 	for path, before := range safetyEntries {
@@ -117,10 +113,27 @@ func (s *Service) applyRestore(ctx context.Context, target, safety Checkpoint) (
 		}
 	}
 
+	// Fail closed before changing any project file if a changed path currently
+	// traverses a symlink, junction, or other reparse-point ancestor.
+	changedPaths := make([]string, 0, len(changedSet))
+	for path := range changedSet {
+		changedPaths = append(changedPaths, path)
+	}
+	sort.Strings(changedPaths)
+	for _, rel := range changedPaths {
+		full, err := s.safeProjectPath(rel)
+		if err != nil {
+			return 0, err
+		}
+		if err := s.ensureRestoreAncestorsSafe(full); err != nil {
+			return 0, err
+		}
+	}
+
 	deletions := make([]string, 0)
 	writes := make([]string, 0)
 	for path := range changedSet {
-		if _, skip := protected[path]; skip {
+		if restorePathProtectedBySkipped(path, safety.Skipped) {
 			continue
 		}
 		if _, exists := targetEntries[path]; exists {
@@ -145,6 +158,9 @@ func (s *Service) applyRestore(ctx context.Context, target, safety Checkpoint) (
 		if err != nil {
 			return applied, err
 		}
+		if err := s.ensureRestoreAncestorsSafe(full); err != nil {
+			return applied, err
+		}
 		if err := os.Remove(full); err != nil && !os.IsNotExist(err) {
 			return applied, err
 		}
@@ -165,6 +181,9 @@ func (s *Service) applyRestore(ctx context.Context, target, safety Checkpoint) (
 		}
 		full, err := s.safeProjectPath(rel)
 		if err != nil {
+			return applied, err
+		}
+		if err := s.ensureRestoreAncestorsSafe(full); err != nil {
 			return applied, err
 		}
 		mode := os.FileMode(0o644)
