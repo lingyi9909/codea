@@ -6,24 +6,24 @@ current:
   task: "31"
   step: 8
   status: awaiting_acceptance
-  nextAction: Task 31 production baseline 0057614d0617248efdf40c2420f0303d1417e498 的 Fresh Gate 33842705894 已在 Linux/Windows/macOS 全部通过；等待人工验收，Task 32 尚未开始。
+  nextAction: Task 31 production baseline 64f870ab8128402445ed2579844358598fca9a2f 的 Fresh Gate 33972223045 已在 Linux/Windows/macOS 全部通过；Task 20-21 real parity 33972223097 与 Task 26 G3-G14 33972223096 也已通过。等待人工验收，Task 32 尚未开始。
 checkpoint:
-  commit: 0057614d0617248efdf40c2420f0303d1417e498
-  updatedAt: "2026-09-04T06:14:00Z"
+  commit: 64f870ab8128402445ed2579844358598fca9a2f
+  updatedAt: "2026-09-05T14:34:36Z"
 verification:
   status: pass
   commands:
-    - "Fresh Task 31 Gate 33842705894 @ 0057614d0617248efdf40c2420f0303d1417e498: Linux PASS; Windows PASS; macOS PASS"
+    - "Fresh Task 31 Gate 33972223045 @ 64f870ab8128402445ed2579844358598fca9a2f: Linux PASS; Windows PASS; macOS PASS"
+    - "Fresh Task 20-21 Gate 33972223097 @ 64f870ab8128402445ed2579844358598fca9a2f: real distinct baseline/candidate parity 12/12 PASS; plugin regression 307/0; full Go PASS"
+    - "Fresh Task 26 Gate 33972223096 @ 64f870ab8128402445ed2579844358598fca9a2f: Linux/Windows/macOS PASS; V1 release parity G3-G14 PASS"
     - "bash tests/task31-checkpoint.sh"
     - "Windows Server 2025: native tests/task31-checkpoint-windows.ps1 + CGO_ENABLED=0 full Go regression/build PASS"
     - "macOS 15: Task 31 mechanical acceptance + full Go regression/build PASS"
     - "cd tui && GOTOOLCHAIN=local go test ./... -count=1 && GOTOOLCHAIN=local go build ./cmd/codea"
     - "CGO_ENABLED=0 GOOS=windows GOARCH=amd64 GOTOOLCHAIN=local go build ./cmd/codea"
-    - "Task 26 historical acceptance contract step PASS: run 33843454021 @ 3fc9fc3b8ae60d187273b8a521f1de5029a42d0b"
-    - "Task 27 historical trust/Auth/security contract steps PASS: run 33843474717 @ 74cb0fbab80119e03fda1853152dd968e0cb5833"
     - "Markers: TASK31_AGENT_CHECKPOINT PASS; SHADOW_GIT_ISOLATION PASS; BASELINE_RESTORE PASS; SAFETY_RESTORE PASS; PROJECT_INDEX_UNCHANGED PASS; WINDOWS_SPACES_UNICODE PASS; GIT_UNAVAILABLE_FAIL_VISIBLE PASS; WINDOWS_WORKFLOW_FAIL_FAST PASS"
   errorSummary: ""
-  recoveryAdvice: "Task 31 technical verification and Fresh Gate 33842705894 have passed. Historical Task 26/27 acceptance contracts were made forward-compatible with later task progression without changing production behavior. Keep humanAcceptance.accepted=false and Task 32 pending until explicit human acceptance."
+  recoveryAdvice: "Task 31 technical verification and fresh full-repository parity certification have passed at production baseline 64f870ab8128402445ed2579844358598fca9a2f. Keep humanAcceptance.accepted=false and Task 32 pending until explicit human acceptance."
 taskGate:
   status: pass
   gateItems:
@@ -78,5 +78,5 @@ tasks:
   "28": {status: completed, completedSteps: [1, 2, 3, 4, 5, 6, 7], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: 2dbdc75e90dcc959b62160b035ac9233d96b6cf9, report: docs/task-reports/task-28.md}
   "29": {status: completed, completedSteps: [1, 2, 3, 4, 5, 6, 7], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: 38db538ba932d8ebddd388bab6471325f8577ad4, report: docs/task-reports/task-29.md}
   "30": {status: completed, completedSteps: [1, 2, 3, 4, 5, 6, 7, 8], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: 85ab175f04a6642db73714f42048bfa5c73ce89c, report: docs/task-reports/task-30.md}
-  "31": {status: awaiting_acceptance, completedSteps: [1, 2, 3, 4, 5, 6, 7, 8], verificationStatus: pass, taskGateStatus: pass, humanAccepted: false, checkpoint: 0057614d0617248efdf40c2420f0303d1417e498, report: docs/task-reports/task-31.md}
+  "31": {status: awaiting_acceptance, completedSteps: [1, 2, 3, 4, 5, 6, 7, 8], verificationStatus: pass, taskGateStatus: pass, humanAccepted: false, checkpoint: 64f870ab8128402445ed2579844358598fca9a2f, report: docs/task-reports/task-31.md}
   "32": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false}
