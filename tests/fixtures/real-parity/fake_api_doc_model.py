@@ -4,8 +4,9 @@
 The model only decides the next tool call. OpenCode v1.18.11, Codea's plugin,
 permission enforcement, tool execution, SSE delivery, and document persistence
 remain real. APIDOCFLOW deliberately consumes the real extract_api_spec result,
-feeds that exact spec into validate_api_example, then renders Markdown from the
-structured result before calling write_document.
+feeds that exact spec into validate_api_example, then creates the Task 29 plan
+required for mutation before rendering Markdown from the structured result and
+calling write_document.
 """
 import json
 import os
@@ -38,6 +39,22 @@ def assistant_tool_names(messages):
             if name:
                 names.append(name)
     return names
+
+
+def api_doc_plan(goal):
+    """Return the smallest valid Task 29 plan needed by document mutations."""
+    return {
+        "goal": goal,
+        "steps": [
+            {"id": "inspect", "title": "Inspect the API source"},
+            {"id": "document", "title": "Write the API documentation"},
+            {
+                "id": "verify",
+                "title": "Verify the generated documentation",
+                "verification": "Use the structured API extraction and validation results",
+            },
+        ],
+    }
 
 
 def decode_json(value):
@@ -194,6 +211,8 @@ def decide(prompt, messages):
         validation = validation_result(messages)
         if validation is None:
             return None, None, None, json.dumps({"result": "FAIL", "reason": "validate_api_example result missing"})
+        if "task_plan" not in names:
+            return "task_plan", api_doc_plan("Generate validated API documentation"), "call_api_plan", None
         if "write_document" not in names:
             return "write_document", {
                 "path": DOC_PATH,
@@ -201,10 +220,17 @@ def decide(prompt, messages):
             }, "call_api_write", None
         return None, None, None, json.dumps({"result": "PASS", "source": "write_document"}, separators=(",", ":"))
 
+    # WRITE_DOCUMENT is a mutating custom-tool scenario. Keep it ahead of the
+    # generic last-tool close so a successful task_plan can advance to the write.
+    if "WRITE_DOCUMENT" in text:
+        if "task_plan" not in names:
+            return "task_plan", api_doc_plan("Write a deterministic API document"), "call_doc_plan", None
+        if "write_document" not in names:
+            return "write_document", {"path": "docs/smoke.md", "content": "smoke\n"}, "call_doc", None
+        return None, None, None, None
+
     if last_is_tool:
         return None, None, None, None
-    if "WRITE_DOCUMENT" in text:
-        return "write_document", {"path": "docs/smoke.md", "content": "smoke\n"}, "call_doc", None
     if "WRITE_TEST_FILE" in text:
         return "write_test_file", {
             "path": "src/test/java/com/example/demo/ShouldBeDenied.java",
