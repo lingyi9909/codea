@@ -1,3 +1,4 @@
+import importlib.util
 import json
 import pathlib
 import re
@@ -6,6 +7,23 @@ import unittest
 import yaml
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
+
+
+def load_fake_api_doc_model():
+    module_path = ROOT / "tests/fixtures/real-parity/fake_api_doc_model.py"
+    spec = importlib.util.spec_from_file_location("fake_api_doc_model_contract", module_path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError("cannot load fake_api_doc_model.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def assistant_tool(name, call_id):
+    return {
+        "role": "assistant",
+        "tool_calls": [{"id": call_id, "type": "function", "function": {"name": name, "arguments": "{}"}}],
+    }
 
 
 class Task26AcceptanceContract(unittest.TestCase):
@@ -68,6 +86,38 @@ class Task26AcceptanceContract(unittest.TestCase):
                 self.windows_install,
             )
         )
+
+    def test_api_doc_real_parity_fixture_plans_before_document_mutation(self):
+        model = load_fake_api_doc_model()
+
+        single_messages = [{"role": "user", "content": "CALL WRITE_DOCUMENT please"}]
+        name, args, call_id, _ = model.decide("CALL WRITE_DOCUMENT please", single_messages)
+        self.assertEqual(name, "task_plan")
+        self.assertGreaterEqual(len(args["steps"]), 3)
+        single_messages.append(assistant_tool("task_plan", call_id))
+        name, _, _, _ = model.decide("CALL WRITE_DOCUMENT please", single_messages)
+        self.assertEqual(name, "write_document")
+
+        spec = {
+            "controllerName": "DemoController",
+            "basePath": "/api",
+            "endpoints": [{"method": "POST", "path": "/users", "requestBody": {"type": "CreateUserRequest"}, "errorCodes": []}],
+            "dtos": {},
+            "enums": {},
+        }
+        flow_messages = [
+            {"role": "user", "content": "APIDOCFLOW generate the API documentation"},
+            assistant_tool("extract_api_spec", "call_api_extract"),
+            {"role": "tool", "tool_call_id": "call_api_extract", "content": json.dumps(spec)},
+            assistant_tool("validate_api_example", "call_api_validate"),
+            {"role": "tool", "tool_call_id": "call_api_validate", "content": json.dumps({"valid": True, "errors": [], "warnings": []})},
+        ]
+        name, args, call_id, _ = model.decide("APIDOCFLOW generate the API documentation", flow_messages)
+        self.assertEqual(name, "task_plan")
+        self.assertGreaterEqual(len(args["steps"]), 3)
+        flow_messages.append(assistant_tool("task_plan", call_id))
+        name, _, _, _ = model.decide("APIDOCFLOW generate the API documentation", flow_messages)
+        self.assertEqual(name, "write_document")
 
 
 if __name__ == "__main__":
