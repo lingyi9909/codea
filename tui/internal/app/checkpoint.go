@@ -186,12 +186,15 @@ func (m *Model) handleCheckpointMessage(msg tea.Msg) (bool, tea.Cmd) {
 
 	case checkpointRestoreResultMsg:
 		m.checkpointInFlight = false
+		// A restore can fail after partially mutating the workspace. Invalidate
+		// Repo Context for every completed restore attempt so a stale map is
+		// never reused after either success or interruption.
+		if m.repoContextService != nil {
+			m.repoContextService.Invalidate()
+		}
 		if msg.err != nil {
 			m.appendInfo("Restore failed: " + msg.err.Error())
 			return true, nil
-		}
-		if m.repoContextService != nil {
-			m.repoContextService.Invalidate()
 		}
 		m.appendInfo(fmt.Sprintf("Restored %s · safety %s · %d files changed", msg.value.Target.ID, msg.value.Safety.ID, msg.value.FilesChanged))
 		return true, nil
