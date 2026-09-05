@@ -3,10 +3,10 @@
 ## Status
 
 - Task: **31 — Agent Checkpoint & Restore**
-- Production baseline: `64f870ab8128402445ed2579844358598fca9a2f`
-- Fresh Task 31 Gate: **GitHub Actions `33972223045` — PASS**
-- Fresh Task 20-21 real dual-runtime parity: **GitHub Actions `33972223097` — PASS**
-- Fresh Task 26 V1.1 integration / G3-G14 parity: **GitHub Actions `33972223096` — PASS**
+- Production baseline: `75fc1feef9fd5e0363eaec5cb63fc6d2a3d3869d`
+- Fresh Task 31 Gate: **GitHub Actions `33974093998` — PASS**
+- Fresh Task 20-21 real dual-runtime parity: **GitHub Actions `33974093996` — PASS**
+- Fresh Task 26 V1.1 integration / G3-G14 parity: **GitHub Actions `33974093989` — PASS**
 - Linux: **PASS**
 - Windows: **PASS**
 - macOS: **PASS**
@@ -35,6 +35,8 @@
    - Restore reproduces exact eligible bytes for added/modified/deleted paths and the safety checkpoint can restore the pre-restore state.
    - Interrupted restore persists safe recovery IDs in `restore-state.json` and surfaces recovery guidance on reopen.
    - Restore never uses `git reset --hard` against the user's project repository.
+   - Before any changed path is written or deleted, restore inspects its existing ancestor chain and fails closed on symlink ancestors; Windows additionally rejects reparse-point ancestors such as junctions.
+   - A safety-snapshot skipped directory protects both the directory and every descendant path (`dir/**`) from restore mutation.
 
 4. **Agent lifecycle integration**
    - An Agent engineering prompt schedules/reuses an asynchronous baseline checkpoint before Runtime prompt execution.
@@ -46,7 +48,7 @@
    - `/checkpoint`, `/checkpoints`, and `/restore <checkpoint-id>` are protected built-ins.
    - They are local workspace actions and never route through the model as prompts.
    - Restore is blocked while streaming, while approval is pending, or while another checkpoint operation is in flight.
-   - Successful restore invalidates Repo Context so subsequent Agent prompts cannot reuse stale pre-restore source structure.
+   - Every completed restore attempt invalidates Repo Context, including an interrupted restore that has already partially mutated disk state, so subsequent Agent prompts cannot reuse a stale pre-restore Repo Map.
 
 6. **Retention and degradation**
    - Default history keeps the newest 20 checkpoint records while preserving protected active baseline/safety or recovery references.
@@ -83,16 +85,40 @@ The checkpoint subsystem uses the local Git CLI only; its checkpoint control pat
 
 Task 31 itself was already functionally complete, but fresh exact-head full-repository certification exposed forward-compatibility regressions introduced by Task 29's plan-before-mutation contract. They were repaired without weakening production safety gates:
 
-1. **Plan-gated enterprise agents** — `unit-test-generator`, `api-documentation`, and `debug` now expose `task_plan`, `task_step`, and `task_status` before their existing mutation/execute capabilities. Production write/bash/edit policies were not relaxed.
-2. **API Documentation parity fixture** — real-runtime document writes now follow `task_plan -> write_document`; Task 16 real API Documentation workflow smoke is green.
+1. **Plan-gated enterprise agents** — `unit-test-generator`, `api-documentation`, and `debug` expose `task_plan`, `task_step`, and `task_status` before their existing mutation/execute capabilities. Production write/bash/edit policies were not relaxed.
+2. **API Documentation parity fixture** — real-runtime document writes follow `task_plan -> write_document`; Task 16 real API Documentation workflow smoke is green.
 3. **Release parity Approval/Reject fixture** — the candidate creates a valid Task 29 plan before the approval-gated `bash`, while the vanilla baseline preserves its original direct-bash behavior.
 4. **Parity collector continuation** — an intermediate planning `step.finished` can no longer truncate the later `approval.resolved` / final tool result. Replying to an approval opens a fresh continuation and clears only the stale pre-approval terminal wait state.
 
-The final Task 20-21 run `33972223097` proves the real distinct baseline/candidate OpenCode v1.18.11 parity is **12/12 scenarios PASS**. The same run also records enterprise plugin regression **307 PASS / 0 FAIL / 817 expect()** and full Go regression PASS.
+Fresh Task 20-21 run `33974093996` confirms the real distinct baseline/candidate parity remains green after the final Task 31 P0 repairs; full Go and plugin regression also pass.
+
+## P0 re-verification — restore fail-safe boundaries
+
+The final review found two restore fail-safe gaps, both repaired narrowly without changing previously accepted checkpoint behavior.
+
+1. **Symlink / junction ancestor escape**
+   - Restore now performs a fail-closed ancestor-chain preflight before any changed path is applied and repeats the check immediately before each write/delete.
+   - On Unix-like systems, an existing symlink ancestor blocks restore.
+   - On Windows, a symlink or `FILE_ATTRIBUTE_REPARSE_POINT` ancestor blocks restore, covering junctions.
+   - The target file itself may be absent; the check walks existing ancestors rather than relying on `EvalSymlinks` of the final path.
+   - Safety `Skipped` protection is subtree-aware, so a skipped `src` protects `src/**`.
+   - Permanent tests prove outside sentinels remain unchanged and outside files are neither created nor deleted.
+
+2. **Interrupted restore Repo Context invalidation**
+   - Service regression injects failure on the second blob after the first file was restored, proves `CodeRestoreInterrupted`, `FilesChanged == 1`, restored file A, and unchanged file B.
+   - Application handling invalidates Repo Context for every completed restore attempt before branching on success/error, so an interrupted partially-applied restore cannot leave a stale Task 28 Repo Map.
+
+Permanent acceptance markers added for these blockers:
+
+```text
+RESTORE_SYMLINK_ESCAPE_BLOCKED PASS
+RESTORE_JUNCTION_ESCAPE_BLOCKED PASS
+INTERRUPTED_RESTORE_INVALIDATES_REPO_CONTEXT PASS
+```
 
 ## Formal mechanical acceptance
 
-Fresh Task 31 Gate run: **GitHub Actions `33972223045`** on exact production baseline `64f870ab8128402445ed2579844358598fca9a2f`.
+Fresh Task 31 Gate run: **GitHub Actions `33974093998`** on exact production baseline `75fc1feef9fd5e0363eaec5cb63fc6d2a3d3869d`.
 
 Permanent acceptance scenarios emit these markers:
 
@@ -105,12 +131,17 @@ PROJECT_INDEX_UNCHANGED PASS
 WINDOWS_SPACES_UNICODE PASS
 GIT_UNAVAILABLE_FAIL_VISIBLE PASS
 WINDOWS_WORKFLOW_FAIL_FAST PASS
+RESTORE_SYMLINK_ESCAPE_BLOCKED PASS
+RESTORE_JUNCTION_ESCAPE_BLOCKED PASS
+INTERRUPTED_RESTORE_INVALIDATES_REPO_CONTEXT PASS
 ```
 
 ### Linux — Ubuntu 24.04
 
 - Execution-state validation: **PASS**
 - Task 31 mechanical checkpoint acceptance: **PASS**
+- `RESTORE_SYMLINK_ESCAPE_BLOCKED`: **PASS**
+- `INTERRUPTED_RESTORE_INVALIDATES_REPO_CONTEXT`: **PASS**
 - Checkpoint package + Application + command + composition focused tests: **PASS**
 - Full `GOTOOLCHAIN=local go test ./... -count=1`: **PASS**
 - `GOTOOLCHAIN=local go build ./cmd/codea`: **PASS**
@@ -120,6 +151,9 @@ WINDOWS_WORKFLOW_FAIL_FAST PASS
 
 - Native PowerShell fail-fast contract: **PASS**
 - Native `git.exe` checkpoint lifecycle including project/home paths with spaces and non-ASCII (`中文`): **PASS**
+- Native junction/reparse-point escape regression: **PASS**
+- `RESTORE_JUNCTION_ESCAPE_BLOCKED`: **PASS**
+- `INTERRUPTED_RESTORE_INVALIDATES_REPO_CONTEXT`: **PASS**
 - Baseline restore + mandatory safety restore: **PASS**
 - Project HEAD/branch/index/refs isolation: **PASS**
 - Full Go regression with `CGO_ENABLED=0`: **PASS**
@@ -128,19 +162,20 @@ WINDOWS_WORKFLOW_FAIL_FAST PASS
 ### macOS — macOS 15
 
 - Native Task 31 mechanical checkpoint acceptance: **PASS**
+- Symlink-ancestor restore fail-closed regression: **PASS**
 - Full Go regression: **PASS**
 - `go build ./cmd/codea`: **PASS**
 
 ## Full-repository release confidence
 
-Fresh Task 26 Gate `33972223096` on production baseline `64f870ab8128402445ed2579844358598fca9a2f` is green across Linux, Windows, and macOS. On Linux all pre-release checks, full Go race/vet/build, enterprise plugin regression/build, Debug contract, offline packaging, all supported release targets, Windows cross-build, locked OpenCode v1.18.11 download, and **V1 release parity G3 through G14** passed.
+Fresh Task 26 Gate `33974093989` on production baseline `75fc1feef9fd5e0363eaec5cb63fc6d2a3d3869d` is green across Linux, Windows, and macOS. On Linux all pre-release checks, full Go race/vet/build, enterprise plugin regression/build, Debug contract, offline packaging, all supported release targets, Windows cross-build, locked OpenCode v1.18.11 download, and **V1 release parity G3 through G14** passed.
 
-Fresh Task 20-21 Gate `33972223097` is also green and independently proves the distinct vanilla-baseline versus Codea-candidate real-runtime parity after the approval-continuation repair.
+Fresh Task 20-21 Gate `33974093996` is also green and independently confirms the distinct vanilla-baseline versus Codea-candidate real-runtime parity did not regress.
 
 ## Gate conclusion
 
-All Task 31 technical done criteria are satisfied at production baseline `64f870ab8128402445ed2579844358598fca9a2f`. Task 31 Gate `33972223045` passes on Linux, Windows, and macOS; Task 20-21 real dual-runtime parity `33972223097` passes; and Task 26 full V1.1 integration / G3-G14 parity `33972223096` passes.
+The two final Task 31 review blockers are repaired and mechanically verified at production baseline `75fc1feef9fd5e0363eaec5cb63fc6d2a3d3869d`. Task 31 Gate `33974093998` passes on Linux, Windows, and macOS; Task 20-21 real dual-runtime parity `33974093996` passes; and Task 26 full V1.1 integration / G3-G14 parity `33974093989` passes.
 
-Shadow Git metadata is isolated from the project repository, eligible source state is reversible through mandatory safety checkpoints, restore invalidates Repo Context, checkpoint unavailability is fail-visible without blocking Codea, native Windows spaces/non-ASCII behavior is covered by real Git execution, and the forward Task 29 planning contract no longer causes parity regressions.
+Restore now fails closed before following symlink/junction/reparse ancestors outside the lexical project tree, skipped directory protection covers descendants, and interrupted restore results always invalidate Repo Context. Previously accepted Task 31 capabilities were not reworked.
 
-Task 31 technical verification is complete and remains **awaiting human acceptance**. Human acceptance is intentionally not marked true. Task 32 has not started.
+Task 31 remains **awaiting human acceptance**. Human acceptance is intentionally not marked true. Task 32 has not started.
