@@ -95,3 +95,66 @@ func TestRunnerDoesNotStartInactivityUntilAllRequiredSemanticsArrive(t *testing.
 		t.Fatalf("500ms inactivity must not end collection until every required semantic is present: %+v", result.Failures)
 	}
 }
+
+type approvalContinuationRuntime struct {
+	*terminalOrderRuntime
+}
+
+func newApprovalContinuationRuntime(intermediateStep bool) *approvalContinuationRuntime {
+	base := newTerminalOrderRuntime(func(ch chan runtime.Event) {
+		if intermediateStep {
+			ch <- runtime.Event{Type: runtime.EventType("step.finished"), SessionID: "terminal-session"}
+		}
+		ch <- runtime.Event{
+			Type:      runtime.EventType("approval.requested"),
+			SessionID: "terminal-session",
+			Approval: &runtime.ApprovalRequest{
+				ID:         runtime.ApprovalID("approval-1"),
+				Permission: "bash",
+			},
+		}
+	})
+	return &approvalContinuationRuntime{terminalOrderRuntime: base}
+}
+
+func (r *approvalContinuationRuntime) ReplyApproval(_ context.Context, id runtime.ApprovalID, reply runtime.ApprovalReply) error {
+	r.mu.Lock()
+	subs := append([]chan runtime.Event(nil), r.subs...)
+	r.mu.Unlock()
+	for _, ch := range subs {
+		ch <- runtime.Event{
+			Type:      runtime.EventType("approval.resolved"),
+			SessionID: "terminal-session",
+			Approval: &runtime.ApprovalRequest{
+				ID:         id,
+				Permission: "bash",
+			},
+		}
+		if reply.Decision == runtime.ApprovalReject {
+			ch <- runtime.Event{Type: runtime.EventType("tool.failed"), SessionID: "terminal-session"}
+		} else {
+			ch <- runtime.Event{Type: runtime.EventType("tool.success"), SessionID: "terminal-session"}
+		}
+		ch <- runtime.Event{Type: runtime.EventType("step.finished"), SessionID: "terminal-session"}
+	}
+	return nil
+}
+
+func TestRunnerCollectsApprovalResolutionAfterIntermediateStep(t *testing.T) {
+	baseline := newApprovalContinuationRuntime(false)
+	candidate := newApprovalContinuationRuntime(true)
+	runner := Runner{Baseline: baseline, Candidate: candidate}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	decision := runtime.ApprovalReject
+	result := runner.Run(ctx, Scenario{
+		Name: "Reject", Required: true, RepeatCount: 1, Timeout: 2 * time.Second,
+		Prompt: &runtime.PromptRequest{Agent: "general", Parts: []runtime.PromptPart{runtime.TextPart{Text: "reject test"}}},
+		Assertions: Assertion{RequireApproval: true},
+		ApprovalDecision: &decision,
+	})
+	if !result.Passed {
+		t.Fatalf("an intermediate planning step must not truncate later approval resolution/tool failure semantics: %+v", result.Failures)
+	}
+}
