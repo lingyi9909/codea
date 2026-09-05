@@ -19,11 +19,35 @@ def load_fake_api_doc_model():
     return module
 
 
+def load_release_parity_model():
+    module_path = ROOT / "tests/fixtures/release-parity/fake_model.py"
+    spec = importlib.util.spec_from_file_location("release_parity_fake_model_contract", module_path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError("cannot load release-parity fake_model.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def assistant_tool(name, call_id):
     return {
         "role": "assistant",
         "tool_calls": [{"id": call_id, "type": "function", "function": {"name": name, "arguments": "{}"}}],
     }
+
+
+def advertised_tools(*names):
+    return [
+        {
+            "type": "function",
+            "function": {
+                "name": name,
+                "description": f"contract tool {name}",
+                "parameters": {"type": "object", "properties": {}},
+            },
+        }
+        for name in names
+    ]
 
 
 class Task26AcceptanceContract(unittest.TestCase):
@@ -118,6 +142,26 @@ class Task26AcceptanceContract(unittest.TestCase):
         flow_messages.append(assistant_tool("task_plan", call_id))
         name, _, _, _ = model.decide("APIDOCFLOW generate the API documentation", flow_messages)
         self.assertEqual(name, "write_document")
+
+    def test_release_parity_fixture_plans_candidate_approval_before_bash(self):
+        model = load_release_parity_model()
+        baseline_tools = advertised_tools("bash")
+        candidate_tools = advertised_tools("task_plan", "task_step", "task_status", "bash")
+
+        for prompt in ("APPROVAL TEST", "REJECT TEST"):
+            with self.subTest(prompt=prompt, runtime="baseline"):
+                name, _, _, _ = model.decide(prompt, [{"role": "user", "content": prompt}], baseline_tools)
+                self.assertEqual(name, "bash")
+
+            with self.subTest(prompt=prompt, runtime="candidate"):
+                messages = [{"role": "user", "content": prompt}]
+                name, args, call_id, _ = model.decide(prompt, messages, candidate_tools)
+                self.assertEqual(name, "task_plan")
+                self.assertGreaterEqual(len(args["steps"]), 3)
+                messages.append(assistant_tool("task_plan", call_id))
+                messages.append({"role": "tool", "tool_call_id": call_id, "content": '{"status":"active"}'})
+                name, _, _, _ = model.decide(prompt, messages, candidate_tools)
+                self.assertEqual(name, "bash")
 
 
 if __name__ == "__main__":
