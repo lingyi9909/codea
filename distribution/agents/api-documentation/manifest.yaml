@@ -10,6 +10,9 @@ tools:
   glob: allow
   extract_api_spec: allow
   validate_api_example: allow
+  task_plan: allow
+  task_step: allow
+  task_status: allow
   write_document: allow
   dify-query: allow
   write: deny

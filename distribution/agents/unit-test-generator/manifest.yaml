@@ -9,6 +9,9 @@ tools:
   grep: allow
   glob: allow
   analyze_test_project: allow
+  task_plan: allow
+  task_step: allow
+  task_status: allow
   write_test_file: allow
   run_project_test: allow
   dify-query: allow

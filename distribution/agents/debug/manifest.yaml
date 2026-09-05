@@ -8,6 +8,9 @@ tools:
   read: allow
   grep: allow
   glob: allow
+  task_plan: allow
+  task_step: allow
+  task_status: allow
   write: ask
   edit: ask
   bash: ask
