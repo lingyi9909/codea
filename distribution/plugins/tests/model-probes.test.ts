@@ -1,4 +1,6 @@
 import { describe, expect, test } from "bun:test";
+import { z } from "zod";
+import { plugin } from "../src/opencode/entry";
 import { ProbeAttemptState } from "../src/tools/probe-state";
 import { createProbeToolCallTool } from "../src/tools/probe-tool-call";
 import { createProbeStructuredTool } from "../src/tools/probe-structured";
@@ -38,6 +40,26 @@ const exactPlan = {
   ],
 };
 
+async function registeredProbeTools() {
+  const hooks = await plugin.server({
+    client: {},
+    project: {},
+    directory: process.cwd(),
+    worktree: process.cwd(),
+    experimental_workspace: {},
+    serverUrl: new URL("http://127.0.0.1"),
+    $: {},
+  });
+  if (!hooks.tool) throw new Error("plugin did not register tools");
+  return hooks.tool;
+}
+
+// Mirrors the authoritative OpenCode v1.18.11 ToolRegistry.fromPlugin Zod
+// boundary: z.object(def.args). The host validates here before def.execute.
+function openCode11811RegisteredSchema(definition: any, input: unknown) {
+  return z.object(definition.args ?? {}).safeParse(input);
+}
+
 describe("model qualification probes", () => {
   test("accept exact public contracts and emit bounded safe evidence", async () => {
     const state = new ProbeAttemptState();
@@ -58,6 +80,41 @@ describe("model qualification probes", () => {
         codeaProbeResult: "pass",
         codeaProbeAttempt: "1",
       });
+    }
+  });
+
+  test("registered tool IDs and metadata contract match model-check scorer", async () => {
+    const tools = await registeredProbeTools();
+    expect(Object.keys(tools)).toEqual(expect.arrayContaining([
+      "probe_tool_call",
+      "probe_structured",
+      "probe_patch",
+      "probe_plan",
+    ]));
+
+    const cases = [
+      ["probe_tool_call", { token: "CODEA-17", value: 42 }],
+      ["probe_structured", exactStructured],
+      ["probe_patch", exactPatch],
+      ["probe_plan", exactPlan],
+    ] as const;
+    for (const [id, input] of cases) {
+      const parsed = openCode11811RegisteredSchema(tools[id], input);
+      expect(parsed.success).toBe(true);
+    }
+  });
+
+  test("OpenCode v1.18.11 registered schema rejects invalid first attempts before execute", async () => {
+    const tools = await registeredProbeTools();
+    const invalid = [
+      ["probe_tool_call", { token: "WRONG", value: 42 }],
+      ["probe_structured", { ...exactStructured, summary: { count: 3 } }],
+      ["probe_patch", { ...exactPatch, result: "alpha\nbeta\n" }],
+      ["probe_plan", { steps: exactPlan.steps.slice(0, 2) }],
+    ] as const;
+    for (const [id, input] of invalid) {
+      const parsed = openCode11811RegisteredSchema(tools[id], input);
+      expect(parsed.success).toBe(false);
     }
   });
 
