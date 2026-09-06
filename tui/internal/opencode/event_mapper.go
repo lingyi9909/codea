@@ -263,10 +263,30 @@ func safeTaskToolMetadata(props *sseCommonProps) map[string]string {
 			}
 		}
 	}
+	probe := mapString(props.Part.State.Metadata, "codeaProbe")
+	result := mapString(props.Part.State.Metadata, "codeaProbeResult")
+	attempt := mapString(props.Part.State.Metadata, "codeaProbeAttempt")
+	if validProbeMetadata(probe, result, attempt) {
+		metadata["codeaProbe"] = probe
+		metadata["codeaProbeResult"] = result
+		metadata["codeaProbeAttempt"] = attempt
+	}
 	if len(metadata) == 0 {
 		return nil
 	}
 	return metadata
+}
+
+func validProbeMetadata(probe, result, attempt string) bool {
+	switch probe {
+	case "tool_call", "structured", "patch", "planning":
+	default:
+		return false
+	}
+	if result != "pass" {
+		return false
+	}
+	return attempt == "1" || attempt == "2"
 }
 
 func extractTool(event *runtime.Event, props *sseCommonProps) {
