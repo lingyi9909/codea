@@ -13,11 +13,11 @@ import (
 	"codea/tui/internal/command"
 	"codea/tui/internal/components"
 	"codea/tui/internal/doctor"
+	"codea/tui/internal/modelprofile"
 	"codea/tui/internal/reasoning"
 	"codea/tui/internal/runtime"
 )
 
-// Role identifies the author of a chat message.
 type Role string
 
 const (
@@ -26,9 +26,6 @@ const (
 	RoleInfo      Role = "info"
 )
 
-// ChatMessage is one conversation turn. Tool activity is tracked separately
-// (see ToolActivity), not folded into Content. Agent/Model capture the actual
-// PromptRequest identity for this turn; they never mutate persistent currentAgent.
 type ChatMessage struct {
 	Role     Role
 	Content  string
@@ -38,7 +35,6 @@ type ChatMessage struct {
 	Model    string
 }
 
-// ToolStatus is the lifecycle state of a tool invocation for read-only display.
 type ToolStatus string
 
 const (
@@ -47,15 +43,12 @@ const (
 	ToolFailed  ToolStatus = "failed"
 )
 
-// ToolActivity is a read-only view of a tool call in progress or completed.
 type ToolActivity struct {
 	Name   string
 	CallID string
 	Status ToolStatus
 }
 
-// ViewMode controls only the derived Task 25 conversation presentation. The
-// underlying execution trace remains unchanged across modes.
 type ViewMode string
 
 const (
@@ -83,26 +76,17 @@ type Model struct {
 	sessionID   runtime.SessionID
 	msgCounter  int
 
-	// pendingPrompt is the first prompt awaiting a session to be created; it is
-	// sent once the session is established so the current-session filter is in
-	// effect before any of that session's events arrive.
 	pendingPrompt *runtime.PromptRequest
 
-	// Task 30 synthetic verification continuations are queued from Runtime
-	// event handling and dispatched by Update as tea.Cmd, never synchronously.
 	pendingVerificationPrompt        *runtime.PromptRequest
 	verificationContinuationTriggers map[string]struct{}
 
-	// Task 31 checkpoint work is also dispatched as tea.Cmd. Git work never runs
-	// synchronously inside Update, and its failure never changes Task 30 truth.
-	checkpointService       CheckpointService
-	checkpointUnavailable   string
-	checkpointInFlight      bool
-	pendingFinalCheckpoint  *checkpoint.CreateRequest
-	lastBaselineCheckpoint  string
+	checkpointService      CheckpointService
+	checkpointUnavailable  string
+	checkpointInFlight     bool
+	pendingFinalCheckpoint *checkpoint.CreateRequest
+	lastBaselineCheckpoint string
 
-	// pendingResumeID is the session whose history is being loaded during a
-	// resume. It guards against a stale load result applying to the wrong session.
 	pendingResumeID runtime.SessionID
 
 	proc              *reasoning.Processor
@@ -113,8 +97,6 @@ type Model struct {
 
 	tools []ToolActivity
 
-	// Task 25 semantic trace and Task 29 execution plan state are Codea-owned
-	// application truth. Presentation modes only derive from these structures.
 	executionTrace          executionTrace
 	taskExecution           TaskExecutionState
 	viewMode                ViewMode
@@ -123,14 +105,9 @@ type Model struct {
 	pendingApprovalDecision runtime.ApprovalDecision
 	spinnerFrame            int
 
-	// commandRegistry owns terminal-independent parsing/execution definitions;
-	// commandPalette is only presentation/navigation state.
 	commandRegistry *command.Registry
 	commandPalette  commandPaletteModel
 
-	// Task 23/24 workspace state. Model choice is session-scoped and Agent choice
-	// stays entirely in Codea-owned application state; neither adds vendor UI
-	// state to AgentRuntime.
 	modelPicker        modelPickerModel
 	agentPicker        agentPickerModel
 	sessionModels      map[runtime.SessionID]runtime.ModelRef
@@ -139,40 +116,22 @@ type Model struct {
 	doctorService      *doctor.Service
 	repoContextService RepoContextService
 
-	// sessionPanel is the session list/resume overlay. It owns cursor and
-	// visibility; the Application feeds it Codea-domain session items.
+	// Task 32 model qualification is local application state. Profiles contain
+	// only bounded capability metadata; raw provider output never enters them.
+	modelProfileStore *modelprofile.Store
+	modelCheck        ModelCheckState
+	runtimeModels     []runtime.Model
+
 	sessionPanel components.SessionModel
-
-	// sessionNotice is a transient panel message (e.g. streaming blocks resume).
 	sessionNotice string
-
-	// permission is the tool-approval modal. It consumes only the Codea-domain
-	// runtime.ApprovalRequest, never vendor permission DTOs.
 	permission components.PermissionModel
-
-	// approvalErr surfaces a failed ReplyApproval without silently closing the
-	// modal; the user can retry, reject, or close.
 	approvalErr string
-
-	// approvalPending is true while a ReplyApproval for the currently shown
-	// request is in flight. While pending, further allow/reject keys are
-	// swallowed so a single approval cannot be replied to twice.
 	approvalPending bool
 
-	// skills is the skill manager driving the skills page. It is injected by the
-	// composition root; nil means the skills page is unavailable.
 	skills skillManager
-
-	// skillPanel is the skills-page presentation component (cursor + display).
 	skillPanel components.SkillModel
-
-	// skillNotice is a transient skills-page message (load/toggle failure or a
-	// count of skills that failed to load).
 	skillNotice string
 
-	// Task 20 pilot telemetry is metadata-only and optional. loadedSkillIDs is
-	// populated from the Skill snapshot; activeMetricID links one in-flight task
-	// to its metadata event. feedback is a skippable post-task prompt.
 	metrics        *MetricsCollector
 	feedback       FeedbackModel
 	activeMetricID string
@@ -180,20 +139,15 @@ type Model struct {
 
 	eventCh <-chan runtime.Event
 
-	// streamBuf and reasoningBuf coalesce high-frequency streaming deltas so a
-	// token burst does not trigger one full render per token.
 	streamBuf    strings.Builder
 	reasoningBuf strings.Builder
 
-	// rendered is the cached full View output; dirty marks it stale.
 	rendered string
 	dirty    bool
 }
 
-// markDirty invalidates the cached View output.
 func (m *Model) markDirty() { m.dirty = true }
 
-// NewModel constructs the application model around the given Runtime.
 func NewModel(client runtime.AgentRuntime) *Model {
 	return &Model{
 		currentPage:     PageChat,
@@ -213,6 +167,4 @@ func NewModel(client runtime.AgentRuntime) *Model {
 	}
 }
 
-// SetSkillManager injects the skill manager used by the skills page. A nil
-// manager leaves the page unavailable (the page still opens but shows a notice).
 func (m *Model) SetSkillManager(mgr skillManager) { m.skills = mgr }
