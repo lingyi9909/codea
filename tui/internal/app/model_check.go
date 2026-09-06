@@ -14,7 +14,7 @@ import (
 
 const internalModelCheckTitlePrefix = "__codea_internal_model_check__"
 
-const fixedQualificationInstruction = "Run the four Codea model qualification probes in this exact order: probe-state, probe-structured, probe-patch, probe-plan. Use only fixed public probe inputs. Each probe may be attempted at most twice, retrying only after a failed first attempt. Do not read project files, execute commands, call non-probe tools, or include chain-of-thought."
+const fixedQualificationInstruction = "Run the four Codea model qualification probes in this exact order: probe_tool_call, probe_structured, probe_patch, probe_plan. Use only fixed public probe inputs. Each probe may be attempted at most twice, retrying only after a failed first attempt. Do not read project files, execute commands, call non-probe tools, or include chain-of-thought."
 
 type ProbeOutcome struct {
 	Attempts int
@@ -152,7 +152,10 @@ func (m *Model) handleModelCheckMessage(msg tea.Msg) (bool, tea.Cmd) {
 			m.failModelCheck("Failed to resolve Runtime models: " + msg.err.Error())
 			return true, nil
 		}
-		m.runtimeModels = append([]runtime.Model(nil), msg.models...)
+		// A non-nil slice records that Runtime model discovery completed even
+		// when the Runtime returned zero models. Normal first-task resolution
+		// can therefore distinguish unresolved from resolved-empty state.
+		m.runtimeModels = append([]runtime.Model{}, msg.models...)
 		ref, ok := uniqueDefaultModel(msg.models)
 		if !ok {
 			m.failModelCheck("Model qualification requires an exact model. Use /model first, or configure exactly one Runtime default model.")
@@ -200,44 +203,91 @@ func (m *Model) handleModelCheckEvent(ev runtime.Event) (bool, tea.Cmd) {
 	if !m.modelCheck.Active || m.modelCheck.SessionID == "" || runtime.SessionID(ev.SessionID) != m.modelCheck.SessionID {
 		return false, nil
 	}
+	// Once a bounded qualification result has been reached, all later events
+	// from the internal session are consumed while persistence/cancellation
+	// finishes. In particular, the cancellation we issue after two failures
+	// must not turn an already-determined WEAK result into an aborted result.
 	if m.modelCheck.Terminal {
 		return true, nil
 	}
-	if ev.Tool != nil {
-		m.recordProbeEvent(ev.Tool.Metadata)
-	}
-	if ev.Type != runtime.EventType("step.finished") {
+	if ev.Type == eventTypeRuntimeError || ev.Type == eventTypeSessionError {
+		m.failModelCheck("Model qualification was interrupted by an internal Runtime/session error.")
 		return true, nil
 	}
+
+	if terminalWeak := m.recordProbeTerminalEvent(ev); terminalWeak {
+		return m.finishModelCheckEarlyWeak()
+	}
+	if ev.Type != eventTypeStepFinished {
+		return true, nil
+	}
+	return m.finishModelCheck(false)
+}
+
+// recordProbeTerminalEvent derives the mechanical attempt count from Runtime
+// terminal tool events, not from the plugin's execute-local counter. OpenCode
+// v1.18.11 performs registered-tool schema validation before plugin execute;
+// a schema rejection therefore arrives as tool.failed and still consumes one
+// qualification attempt. Successful evidence must additionally carry the
+// plugin's canonical codeaProbe metadata for the exact registered tool ID.
+func (m *Model) recordProbeTerminalEvent(ev runtime.Event) bool {
+	if ev.Tool == nil || (ev.Type != eventTypeToolSuccess && ev.Type != eventTypeToolFailed) {
+		return false
+	}
+	outcome, expectedProbe := m.probeOutcomeForToolID(strings.TrimSpace(ev.Tool.Name))
+	if outcome == nil {
+		return false
+	}
+	if outcome.Attempts >= 2 {
+		// A third terminal invocation is a protocol violation. Fail closed and
+		// terminate the internal qualification so retries cannot continue.
+		outcome.Passed = false
+		return true
+	}
+	outcome.Attempts++
+	if ev.Type == eventTypeToolSuccess {
+		metadata := ev.Tool.Metadata
+		attempt := strings.TrimSpace(metadata["codeaProbeAttempt"])
+		if strings.TrimSpace(metadata["codeaProbe"]) == expectedProbe &&
+			strings.TrimSpace(metadata["codeaProbeResult"]) == "pass" &&
+			(attempt == "1" || attempt == "2") {
+			outcome.Passed = true
+		}
+	}
+	return outcome.Attempts >= 2 && !outcome.Passed
+}
+
+func (m *Model) probeOutcomeForToolID(toolID string) (*ProbeOutcome, string) {
+	switch toolID {
+	case "probe_tool_call":
+		return &m.modelCheck.ToolCalling, "tool_call"
+	case "probe_structured":
+		return &m.modelCheck.Structured, "structured"
+	case "probe_patch":
+		return &m.modelCheck.Patch, "patch"
+	case "probe_plan":
+		return &m.modelCheck.Planning, "planning"
+	default:
+		return nil, ""
+	}
+}
+
+func (m *Model) finishModelCheckEarlyWeak() (bool, tea.Cmd) {
+	return m.finishModelCheck(true)
+}
+
+func (m *Model) finishModelCheck(cancelInternal bool) (bool, tea.Cmd) {
 	m.modelCheck.Terminal = true
 	profile := m.completedModelProfile(time.Now().UTC())
 	if m.modelProfileStore == nil {
 		m.failModelCheck("Model qualification completed but profile store is unavailable.")
 		return true, nil
 	}
-	return true, saveModelCheckProfileCmd(m.modelProfileStore, profile)
-}
-
-func (m *Model) recordProbeEvent(metadata map[string]string) {
-	probe := strings.TrimSpace(metadata["codeaProbe"])
-	result := strings.TrimSpace(metadata["codeaProbeResult"])
-	attemptText := strings.TrimSpace(metadata["codeaProbeAttempt"])
-	attempt := 0
-	if attemptText == "1" { attempt = 1 }
-	if attemptText == "2" { attempt = 2 }
-	if attempt == 0 || (result != "pass" && result != "fail") {
-		return
+	save := saveModelCheckProfileCmd(m.modelProfileStore, profile)
+	if !cancelInternal || m.runtimeClient == nil {
+		return true, save
 	}
-	var outcome *ProbeOutcome
-	switch probe {
-	case "state": outcome = &m.modelCheck.ToolCalling
-	case "structured": outcome = &m.modelCheck.Structured
-	case "patch": outcome = &m.modelCheck.Patch
-	case "plan": outcome = &m.modelCheck.Planning
-	default: return
-	}
-	if attempt > outcome.Attempts { outcome.Attempts = attempt }
-	if result == "pass" { outcome.Passed = true }
+	return true, tea.Batch(CancelResponseCmd(m.runtimeClient, m.modelCheck.SessionID), save)
 }
 
 func levelForProbe(outcome ProbeOutcome) modelprofile.CapabilityLevel {
