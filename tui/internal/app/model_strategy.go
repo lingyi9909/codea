@@ -1,8 +1,12 @@
 package app
 
 import (
+	"context"
+
 	"codea/tui/internal/modelprofile"
 	"codea/tui/internal/runtime"
+
+	tea "github.com/charmbracelet/bubbletea"
 )
 
 func mediumModelStrategy() modelprofile.Strategy {
@@ -35,6 +39,41 @@ func (m *Model) exactModelRefForStrategy(req runtime.PromptRequest) (runtime.Mod
 
 func validModelRef(ref runtime.ModelRef) bool {
 	return ref.ProviderID != "" && ref.ModelID != ""
+}
+
+// runtimeModels == nil means Runtime defaults have not yet been resolved in
+// this process. A non-nil empty slice means discovery completed but produced
+// no uniquely usable default, so later prompts conservatively stay medium
+// without repeatedly opening any picker or requiring /model.
+func (m *Model) needsDefaultModelResolutionForPrompt() bool {
+	if ref, ok := m.sessionModels[m.sessionID]; ok && validModelRef(ref) {
+		return false
+	}
+	return m.runtimeModels == nil
+}
+
+type defaultModelPromptModelsMsg struct {
+	models      []runtime.Model
+	err         error
+	displayText string
+	promptText  string
+	agent       string
+}
+
+func resolveDefaultModelForPromptCmd(client runtime.AgentRuntime, displayText, promptText, agent string) tea.Cmd {
+	return func() tea.Msg {
+		if client == nil {
+			return defaultModelPromptModelsMsg{err: context.Canceled, displayText: displayText, promptText: promptText, agent: agent}
+		}
+		models, err := client.ListModels(context.Background())
+		return defaultModelPromptModelsMsg{
+			models:      models,
+			err:         err,
+			displayText: displayText,
+			promptText:  promptText,
+			agent:       agent,
+		}
+	}
 }
 
 func modelStrategyPart(strategy modelprofile.Strategy) runtime.TextPart {
