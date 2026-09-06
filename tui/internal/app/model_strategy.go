@@ -44,8 +44,13 @@ func validModelRef(ref runtime.ModelRef) bool {
 // runtimeModels == nil means Runtime defaults have not yet been resolved in
 // this process. A non-nil empty slice means discovery completed but produced
 // no uniquely usable default, so later prompts conservatively stay medium
-// without repeatedly opening any picker or requiring /model.
+// without repeatedly opening any picker or requiring /model. The lazy lookup
+// is only needed when a profile store exists; legacy/no-profile paths retain
+// their previous synchronous medium behavior.
 func (m *Model) needsDefaultModelResolutionForPrompt() bool {
+	if m.modelProfileStore == nil || m.runtimeClient == nil {
+		return false
+	}
 	if ref, ok := m.sessionModels[m.sessionID]; ok && validModelRef(ref) {
 		return false
 	}
@@ -62,9 +67,6 @@ type defaultModelPromptModelsMsg struct {
 
 func resolveDefaultModelForPromptCmd(client runtime.AgentRuntime, displayText, promptText, agent string) tea.Cmd {
 	return func() tea.Msg {
-		if client == nil {
-			return defaultModelPromptModelsMsg{err: context.Canceled, displayText: displayText, promptText: promptText, agent: agent}
-		}
 		models, err := client.ListModels(context.Background())
 		return defaultModelPromptModelsMsg{
 			models:      models,
