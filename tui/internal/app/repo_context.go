@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 
+	"codea/tui/internal/modelprofile"
 	"codea/tui/internal/repoctx"
 	"codea/tui/internal/runtime"
 
@@ -26,6 +27,7 @@ type repoPromptIntent struct {
 	displayText string
 	promptText  string
 	queryText   string
+	strategy    modelprofile.Strategy
 }
 
 type repoContextResultMsg struct {
@@ -34,23 +36,20 @@ type repoContextResultMsg struct {
 	err    error
 }
 
-// SetRepoContextService injects the repository context service created by the
-// composition root for the already-resolved project directory.
 func (m *Model) SetRepoContextService(service RepoContextService) {
 	m.repoContextService = service
 }
 
-// RepoContextCmd performs all repository scanning outside Bubble Tea Update.
-// The result is returned as a message so Model mutation stays single-threaded.
 func RepoContextCmd(service RepoContextService, intent repoPromptIntent) tea.Cmd {
 	return func() tea.Msg {
 		if service == nil {
 			return repoContextResultMsg{intent: intent}
 		}
-		q := repoctx.Query{
-			Text:     strings.TrimSpace(intent.queryText),
-			MaxChars: repoContextPromptBudget,
+		budget := intent.strategy.RepoMapMaxChars
+		if budget <= 0 {
+			budget = repoContextPromptBudget
 		}
+		q := repoctx.Query{Text: strings.TrimSpace(intent.queryText), MaxChars: budget}
 		result, err := service.BuildMap(context.Background(), q)
 		return repoContextResultMsg{intent: intent, mapOut: result, err: err}
 	}
@@ -58,21 +57,24 @@ func RepoContextCmd(service RepoContextService, intent repoPromptIntent) tea.Cmd
 
 func buildRepoAwarePrompt(intent repoPromptIntent, repoMap repoctx.RepoMap, repoErr error) runtime.PromptRequest {
 	req := intent.request
-	parts := make([]runtime.PromptPart, 0, 3)
+	strategy := intent.strategy
+	if strategy.RepoMapMaxChars <= 0 {
+		strategy = mediumModelStrategy()
+	}
+	parts := make([]runtime.PromptPart, 0, 4)
+	parts = append(parts, modelStrategyPart(strategy))
 	if repoErr == nil {
 		rendered := strings.TrimSpace(repoMap.Render())
 		if rendered != "" {
 			parts = append(parts, runtime.TextPart{
 				Text:      rendered,
 				Synthetic: true,
-				Metadata: map[string]any{
-					"codea.kind": "repo-map",
-				},
+				Metadata:  map[string]any{"codea.kind": "repo-map"},
 			})
 		}
 	}
-	if strategy, ok := taskStrategyPart(req.Agent); ok {
-		parts = append(parts, strategy)
+	if taskStrategy, ok := taskStrategyPart(req.Agent, strategy); ok {
+		parts = append(parts, taskStrategy)
 	}
 	parts = append(parts, runtime.TextPart{Text: intent.promptText})
 	req.Parts = parts

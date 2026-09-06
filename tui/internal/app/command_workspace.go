@@ -45,8 +45,7 @@ func (m *Model) executeWorkspaceAction(action command.Action, arguments string) 
 		if m.isStreaming{m.appendInfo("Finish or cancel the current response before changing agents.");return nil};return ListAgentsCmd(m.runtimeClient)
 	case command.ActionModel:
 		if m.sessionID==""{m.appendInfo("No active session. Start a conversation before selecting a model.");return nil};if m.isStreaming{m.appendInfo("Finish or cancel the current response before changing models.");return nil};return ListModelsCmd(m.runtimeClient,m.sessionID)
-	case command.ActionModelCheck:
-		return m.beginModelCheck(arguments)
+	case command.ActionModelCheck:return m.beginModelCheck(arguments)
 	case command.ActionCompact:
 		if m.sessionID==""{m.appendInfo("No active session to compact.");return nil};if !m.runtimeClient.Capabilities().ContextCompaction{m.appendInfo("Context compaction is unsupported by the current Runtime.");return nil};if m.isStreaming{m.appendInfo("Finish or cancel the current response before compacting context.");return nil};return CompactSessionCmd(m.runtimeClient,m.sessionID)
 	case command.ActionCancel:
@@ -71,6 +70,7 @@ func (m *Model) startCommandPrompt(displayText,promptText,requestedAgent string)
 func (m *Model) startPrompt(displayText,promptText,fallbackAgent string)tea.Cmd{agent:=strings.TrimSpace(m.currentAgent);if agent==""{agent=strings.TrimSpace(fallbackAgent)};return m.startPromptWithAgent(displayText,promptText,m.activeAgent(agent))}
 func (m *Model) startPromptWithAgent(displayText,promptText,agent string)tea.Cmd{
 	req:=runtime.PromptRequest{MessageID:fmt.Sprintf("msg-%d",m.msgCounter),Agent:agent,Parts:[]runtime.PromptPart{runtime.TextPart{Text:promptText}}};modelLabel:="";if m.sessionID!=""{if selected,ok:=m.sessionModels[m.sessionID];ok{model:=selected;req.Model=&model;modelLabel=strings.TrimSpace(selected.ModelID)}}
+	strategy:=m.currentModelStrategy(req);m.activeModelStrategy=strategy
 	m.messages=append(m.messages,ChatMessage{Role:RoleUser,Content:displayText,Finished:true,TurnID:req.MessageID},ChatMessage{Role:RoleAssistant,TurnID:req.MessageID,Agent:req.Agent,Model:modelLabel});m.isStreaming=true;m.proc.Reset();m.reasoningActive=false;m.reasoningContent="";m.reasoningDuration=0;m.reasoningExpanded=false;m.streamBuf.Reset();m.reasoningBuf.Reset();m.tools=make([]ToolActivity,0);m.beginPromptTrace(req);m.msgCounter++;m.input="";m.startTaskMetric(req.Agent)
-	intent:=repoPromptIntent{request:req,displayText:displayText,promptText:promptText,queryText:promptText};return m.beginBaselineCheckpoint(intent)
+	intent:=repoPromptIntent{request:req,displayText:displayText,promptText:promptText,queryText:promptText,strategy:strategy};return m.beginBaselineCheckpoint(intent)
 }

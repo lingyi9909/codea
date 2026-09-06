@@ -10,8 +10,6 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-const maxVerificationContinuations = 2
-
 type ControlPromptKind string
 
 const (
@@ -23,24 +21,16 @@ const missingVerificationControlPrompt = "Codea verification gate: project mutat
 const failedVerificationControlPrompt = "Codea verification gate: the latest verify_project result failed. Inspect the verification evidence already available in this session, update the current plan step as needed, make the smallest justified fix, rerun verify_project, and stop if the bounded repair attempt cannot produce PASS."
 
 func verificationStepTriggerKey(ev runtime.Event) string {
-	if id := strings.TrimSpace(ev.PartID); id != "" {
-		return "part:" + id
-	}
-	if id := strings.TrimSpace(ev.ID); id != "" {
-		return "event:" + id
-	}
-	if id := strings.TrimSpace(ev.MessageID); id != "" {
-		return "message:" + id + ":" + strconv.FormatInt(ev.Sequence, 10)
-	}
+	if id := strings.TrimSpace(ev.PartID); id != "" { return "part:" + id }
+	if id := strings.TrimSpace(ev.ID); id != "" { return "event:" + id }
+	if id := strings.TrimSpace(ev.MessageID); id != "" { return "message:" + id + ":" + strconv.FormatInt(ev.Sequence, 10) }
 	return "sequence:" + strconv.FormatInt(ev.Sequence, 10)
 }
 
 func (m *Model) rootAgentForVerification() string {
 	if m.activeTurnID != "" {
 		if entry, ok := m.executionTrace.Entry("turn:" + m.activeTurnID + ":agent"); ok {
-			if agent := strings.TrimSpace(entry.Title); agent != "" {
-				return agent
-			}
+			if agent := strings.TrimSpace(entry.Title); agent != "" { return agent }
 		}
 	}
 	return m.activeAgent("")
@@ -48,12 +38,8 @@ func (m *Model) rootAgentForVerification() string {
 
 func (m *Model) nextVerificationContinuation(ev runtime.Event) *runtime.PromptRequest {
 	key := verificationStepTriggerKey(ev)
-	if m.verificationContinuationTriggers == nil {
-		m.verificationContinuationTriggers = make(map[string]struct{})
-	}
-	if _, replay := m.verificationContinuationTriggers[key]; replay {
-		return nil
-	}
+	if m.verificationContinuationTriggers == nil { m.verificationContinuationTriggers = make(map[string]struct{}) }
+	if _, replay := m.verificationContinuationTriggers[key]; replay { return nil }
 	m.verificationContinuationTriggers[key] = struct{}{}
 
 	decision := verificationDecision(m.taskExecution)
@@ -61,7 +47,9 @@ func (m *Model) nextVerificationContinuation(ev runtime.Event) *runtime.PromptRe
 		m.finishStepWithVerification()
 		return nil
 	}
-	if m.taskExecution.AutoContinuation >= maxVerificationContinuations {
+	limit := m.taskExecution.VerificationContinuationLimit
+	if limit <= 0 { limit = 2 }
+	if m.taskExecution.AutoContinuation >= limit {
 		m.finishStepWithVerification()
 		return nil
 	}
@@ -69,14 +57,10 @@ func (m *Model) nextVerificationContinuation(ev runtime.Event) *runtime.PromptRe
 	m.taskExecution.AutoContinuation++
 	attempt := m.taskExecution.AutoContinuation
 	root := strings.TrimSpace(m.taskExecution.RootTurnID)
-	if root == "" {
-		root = strings.TrimSpace(m.activeTurnID)
-	}
+	if root == "" { root = strings.TrimSpace(m.activeTurnID) }
 	messageID := fmt.Sprintf("codea-verification-%s-%d", root, attempt)
 	text := missingVerificationControlPrompt
-	if decision == VerifyFailed {
-		text = failedVerificationControlPrompt
-	}
+	if decision == VerifyFailed { text = failedVerificationControlPrompt }
 
 	req := runtime.PromptRequest{
 		MessageID: messageID,
@@ -85,60 +69,30 @@ func (m *Model) nextVerificationContinuation(ev runtime.Event) *runtime.PromptRe
 			Text:      text,
 			Synthetic: true,
 			Metadata: map[string]any{
-				"codea.kind":     "verification-control",
-				"codea.rootTurn": root,
-				"codea.attempt":  attempt,
+				"codea.kind": "verification-control", "codea.rootTurn": root, "codea.attempt": attempt,
 			},
 		}},
 	}
-	if selected, ok := m.sessionModels[m.sessionID]; ok {
-		model := selected
-		req.Model = &model
-	}
+	if selected, ok := m.sessionModels[m.sessionID]; ok { model := selected; req.Model = &model }
 	m.recordMessageRoot(messageID, root)
 	return &req
 }
 
-// handleVerificationStepFinished is the direct, testable control path. The
-// Bubble Tea integration queues the same request and returns it as a Cmd from
-// Update, so Runtime.Prompt is never invoked synchronously inside Update.
 func (m *Model) handleVerificationStepFinished(ev runtime.Event) tea.Cmd {
 	req := m.nextVerificationContinuation(ev)
-	if req == nil {
-		return m.takePendingCheckpointCmd()
-	}
+	if req == nil { return m.takePendingCheckpointCmd() }
 	promptCmd := PromptCmd(m.runtimeClient, m.sessionID, *req)
-	if checkpointCmd := m.takePendingCheckpointCmd(); checkpointCmd != nil {
-		return tea.Batch(promptCmd, checkpointCmd)
-	}
+	if checkpointCmd := m.takePendingCheckpointCmd(); checkpointCmd != nil { return tea.Batch(promptCmd, checkpointCmd) }
 	return promptCmd
 }
 
 func (m *Model) queueVerificationStepFinished(ev runtime.Event) {
-	if req := m.nextVerificationContinuation(ev); req != nil {
-		m.pendingVerificationPrompt = req
-	}
+	if req := m.nextVerificationContinuation(ev); req != nil { m.pendingVerificationPrompt = req }
 }
 
-// takeVerificationContinuationCmd drains both Task 30 control continuation and
-// a Task 31 final-checkpoint request. Both are already queued by event handling;
-// their actual I/O occurs only inside returned tea.Cmd functions.
 func (m *Model) takeVerificationContinuationCmd() tea.Cmd {
 	cmds := make([]tea.Cmd, 0, 2)
-	if m.pendingVerificationPrompt != nil {
-		req := *m.pendingVerificationPrompt
-		m.pendingVerificationPrompt = nil
-		cmds = append(cmds, PromptCmd(m.runtimeClient, m.sessionID, req))
-	}
-	if checkpointCmd := m.takePendingCheckpointCmd(); checkpointCmd != nil {
-		cmds = append(cmds, checkpointCmd)
-	}
-	switch len(cmds) {
-	case 0:
-		return nil
-	case 1:
-		return cmds[0]
-	default:
-		return tea.Batch(cmds...)
-	}
+	if m.pendingVerificationPrompt != nil { req := *m.pendingVerificationPrompt; m.pendingVerificationPrompt = nil; cmds = append(cmds, PromptCmd(m.runtimeClient, m.sessionID, req)) }
+	if checkpointCmd := m.takePendingCheckpointCmd(); checkpointCmd != nil { cmds = append(cmds, checkpointCmd) }
+	switch len(cmds) { case 0: return nil; case 1: return cmds[0]; default: return tea.Batch(cmds...) }
 }
