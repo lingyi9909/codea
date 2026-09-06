@@ -6,23 +6,23 @@ current:
   task: "32"
   step: 9
   status: awaiting_acceptance
-  nextAction: Task 32 production baseline cbf008b8f239a3273062c059c43bdfa2b4cbf713 的 Fresh Gate 34005073941 已在 Linux/Windows/macOS 全部通过；STRONG/MEDIUM/WEAK、MODEL_PROFILE_ISOLATION、STRATEGY_SECURITY_INVARIANT、Windows 中文路径与 no-CGO 均 PASS。等待人工验收；Task 33 尚未开始。
+  nextAction: Task 32 production baseline b451d160cf7d327738fe15e82a71859281b1f9fc 的 Fresh Gate 34020962776 已在 Linux/Windows/macOS 全部通过；STRONG/MEDIUM/WEAK、MODEL_PROFILE_ISOLATION、STRATEGY_SECURITY_INVARIANT、Windows 中文路径与 no-CGO 均 PASS。等待人工验收；Task 33 尚未开始。
 checkpoint:
-  commit: cbf008b8f239a3273062c059c43bdfa2b4cbf713
+  commit: b451d160cf7d327738fe15e82a71859281b1f9fc
   updatedAt: "2026-09-06T01:58:00Z"
 verification:
   status: pass
   commands:
-    - "Fresh Task 32 Gate 34005073941 @ cbf008b8f239a3273062c059c43bdfa2b4cbf713: Linux PASS; Windows PASS; macOS PASS"
+    - "Fresh Task 32 Gate 34020962776 @ b451d160cf7d327738fe15e82a71859281b1f9fc: Linux PASS; Windows PASS; macOS PASS"
     - "bash tests/task32-adaptive-model-strategy.sh"
     - "bash tests/task32-strategy-security.sh"
     - "cd distribution/plugins && bun test && bun run build"
     - "cd tui && GOTOOLCHAIN=local go test ./... -count=1 && GOTOOLCHAIN=local go build ./cmd/codea"
     - "CGO_ENABLED=0 GOOS=windows GOARCH=amd64 GOTOOLCHAIN=local go build ./cmd/codea"
     - "Windows Server 2025: CODEA_HOME='Codea Home 中文 Model Profiles'; native modelprofile/app/checkpoint tests; full plugin build; full Go with CGO_ENABLED=0 PASS"
-    - "Markers: TASK32_MODEL_QUALIFICATION PASS; STRONG_PROFILE PASS; MEDIUM_PROFILE PASS; WEAK_PROFILE PASS; MODEL_PROFILE_ISOLATION PASS; STRATEGY_SECURITY_INVARIANT PASS; V12_AGENT_RELIABILITY_REGRESSION PASS; WINDOWS_WORKFLOW_FAIL_FAST PASS; WINDOWS_UNICODE_MODEL_PROFILE PASS"
+    - "Markers: TASK32_MODEL_QUALIFICATION PASS; STRONG_PROFILE PASS; MEDIUM_PROFILE PASS; WEAK_PROFILE PASS; MODEL_PROFILE_ISOLATION PASS; STRATEGY_SECURITY_INVARIANT PASS; V12_AGENT_RELIABILITY_REGRESSION PASS; WINDOWS_WORKFLOW_FAIL_FAST PASS; WINDOWS_UNICODE_MODEL_PROFILE PASS; MODEL_CHECK_UPDATE_FLOW PASS; MODEL_CHECK_INTERNAL_EVENT_INTERCEPT PASS; MODEL_CHECK_EVENT_STREAM_CONTINUES PASS; MODEL_CHECK_ABORT_FALLBACK PASS; MODEL_CHECK_PROBE_IDS_MATCH_REGISTRY PASS; MODEL_CHECK_REAL_METADATA_SCORING PASS; MODEL_PROBE_SCHEMA_FAILURE_COUNTS PASS; MODEL_PROBE_RETRY_SCORES_MEDIUM PASS; MODEL_PROBE_ATTEMPTS_BOUNDED PASS; MODEL_CHECK_INTERNAL_SESSION_HIDDEN PASS; PERSISTED_DEFAULT_PROFILE_APPLIED PASS; AMBIGUOUS_DEFAULT_FALLS_BACK_MEDIUM PASS"
   errorSummary: ""
-  recoveryAdvice: "Task 32 automated verification passed at production baseline cbf008b8f239a3273062c059c43bdfa2b4cbf713. Keep humanAcceptance.accepted=false until explicit human acceptance. Private-intranet model acceptance remains separate environment-specific evidence and is not fabricated by public CI."
+  recoveryAdvice: "Task 32 automated verification passed at production baseline b451d160cf7d327738fe15e82a71859281b1f9fc. Keep humanAcceptance.accepted=false until explicit human acceptance. Private-intranet model acceptance remains separate environment-specific evidence and is not fabricated by public CI."
 taskGate:
   status: pass
   gateItems:
@@ -81,4 +81,4 @@ tasks:
   "29": {status: completed, completedSteps: [1, 2, 3, 4, 5, 6, 7], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: 38db538ba932d8ebddd388bab6471325f8577ad4, report: docs/task-reports/task-29.md}
   "30": {status: completed, completedSteps: [1, 2, 3, 4, 5, 6, 7, 8], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: 85ab175f04a6642db73714f42048bfa5c73ce89c, report: docs/task-reports/task-30.md}
   "31": {status: completed, completedSteps: [1, 2, 3, 4, 5, 6, 7, 8], verificationStatus: pass, taskGateStatus: pass, humanAccepted: true, checkpoint: 75fc1feef9fd5e0363eaec5cb63fc6d2a3d3869d, report: docs/task-reports/task-31.md}
-  "32": {status: awaiting_acceptance, completedSteps: [1, 2, 3, 4, 5, 6, 7, 8, 9], verificationStatus: pass, taskGateStatus: pass, humanAccepted: false, checkpoint: cbf008b8f239a3273062c059c43bdfa2b4cbf713, report: docs/task-reports/task-32.md}
+  "32": {status: awaiting_acceptance, completedSteps: [1, 2, 3, 4, 5, 6, 7, 8, 9], verificationStatus: pass, taskGateStatus: pass, humanAccepted: false, checkpoint: b451d160cf7d327738fe15e82a71859281b1f9fc, report: docs/task-reports/task-32.md}

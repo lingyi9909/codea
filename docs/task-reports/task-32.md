@@ -3,8 +3,8 @@
 ## Status
 
 - Task: **32 — Model Qualification & Adaptive Agent Strategy**
-- Production baseline: `cbf008b8f239a3273062c059c43bdfa2b4cbf713`
-- Fresh Task 32 Gate: **GitHub Actions `34005073941` — PASS**
+- Production baseline: `b451d160cf7d327738fe15e82a71859281b1f9fc`
+- Fresh Task 32 Gate: **GitHub Actions `34020962776` — PASS**
 - Linux: **PASS**
 - Windows: **PASS**
 - macOS: **PASS**
@@ -48,7 +48,7 @@
 
 ## Task 32 mechanical acceptance
 
-Fresh dedicated Task 32 Gate: **GitHub Actions `34005073941`** on exact production baseline `cbf008b8f239a3273062c059c43bdfa2b4cbf713`.
+Fresh dedicated Task 32 Gate: **GitHub Actions `34020962776`** on exact production baseline `b451d160cf7d327738fe15e82a71859281b1f9fc`.
 
 Permanent acceptance emits:
 
@@ -60,6 +60,18 @@ WEAK_PROFILE PASS
 MODEL_PROFILE_ISOLATION PASS
 STRATEGY_SECURITY_INVARIANT PASS
 V12_AGENT_RELIABILITY_REGRESSION PASS
+MODEL_CHECK_UPDATE_FLOW PASS
+MODEL_CHECK_INTERNAL_EVENT_INTERCEPT PASS
+MODEL_CHECK_EVENT_STREAM_CONTINUES PASS
+MODEL_CHECK_ABORT_FALLBACK PASS
+MODEL_CHECK_PROBE_IDS_MATCH_REGISTRY PASS
+MODEL_CHECK_REAL_METADATA_SCORING PASS
+MODEL_PROBE_SCHEMA_FAILURE_COUNTS PASS
+MODEL_PROBE_RETRY_SCORES_MEDIUM PASS
+MODEL_PROBE_ATTEMPTS_BOUNDED PASS
+MODEL_CHECK_INTERNAL_SESSION_HIDDEN PASS
+PERSISTED_DEFAULT_PROFILE_APPLIED PASS
+AMBIGUOUS_DEFAULT_FALLS_BACK_MEDIUM PASS
 ```
 
 ### Linux — Ubuntu 24.04
@@ -102,7 +114,7 @@ A real company-intranet run against the private deployed model is environment-sp
 
 ## Gate conclusion
 
-Task 32 automated implementation and certification are complete at production baseline `cbf008b8f239a3273062c059c43bdfa2b4cbf713`. Dedicated Gate `34005073941` passes on Linux, Windows, and macOS, including full Go/plugin regressions, native Windows spaces/non-ASCII profile paths, and the Windows no-CGO build contract.
+Task 32 automated implementation and certification are complete at production baseline `b451d160cf7d327738fe15e82a71859281b1f9fc`. Dedicated Gate `34020962776` passes on Linux, Windows, and macOS, including full Go/plugin regressions, native Windows spaces/non-ASCII profile paths, and the Windows no-CGO build contract.
 
 The adaptive strategy changes context/planning/retry support only. Agent routing, security permission decisions, verification truth, and checkpoint protection remain authoritative and invariant.
 
