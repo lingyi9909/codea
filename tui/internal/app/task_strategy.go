@@ -12,9 +12,13 @@ const generalTaskStrategy = `For read-only/explanatory work, do not create a pla
 Before your first project mutation or project command execution, create task_plan.
 Keep the machine-valid plan bounded to 3–7 steps and update task_step with evidence.`
 
-func taskStrategyPart(agent string, strategy modelprofile.Strategy) (runtime.TextPart, bool) {
+func taskStrategyPart(agent string, strategies ...modelprofile.Strategy) (runtime.TextPart, bool) {
 	if strings.ToLower(strings.TrimSpace(agent)) != "general" {
 		return runtime.TextPart{}, false
+	}
+	strategy := modelprofile.StrategyForLevel(modelprofile.CapabilityMedium)
+	if len(strategies) > 0 && strategies[0].RepoMapMaxChars > 0 {
+		strategy = strategies[0]
 	}
 	preference := "Prefer 3–5 concise steps."
 	switch strategy.Level {
