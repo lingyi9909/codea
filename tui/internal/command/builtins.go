@@ -2,8 +2,9 @@ package command
 
 // BuiltinCommands returns the controlled V1.1/V1.2 command workspace surface.
 // Professional commands route directly to their fixed enterprise Agent through
-// the same PromptRequest path as every other Codea prompt; checkpoint commands
-// remain local workspace actions and never route through a model.
+// the same PromptRequest path as every other Codea prompt; checkpoint and model
+// qualification commands remain local workspace actions and never route through
+// an ordinary user prompt.
 func BuiltinCommands() []Definition {
 	return []Definition{
 		{Name: "help", Description: "Show available commands", Category: "workspace", Source: SourceBuiltin, Action: ActionHelp},
@@ -13,6 +14,7 @@ func BuiltinCommands() []Definition {
 		{Name: "skills", Description: "Open skill workspace", Category: "workspace", Source: SourceBuiltin, Action: ActionSkills},
 		{Name: "agents", Description: "Select an available runtime agent", Category: "runtime", Source: SourceBuiltin, Action: ActionAgents},
 		{Name: "model", Description: "Select the model for the current session", Category: "runtime", Source: SourceBuiltin, Action: ActionModel},
+		{Name: "model-check", Description: "Qualify the selected/default model", Category: "runtime", Usage: "/model-check", Source: SourceBuiltin, Action: ActionModelCheck},
 		{Name: "compact", Description: "Compact the current session context", Category: "runtime", Source: SourceBuiltin, Action: ActionCompact, RequiredCapability: "context_compaction"},
 		{Name: "cancel", Description: "Cancel the current response", Category: "runtime", Source: SourceBuiltin, Action: ActionCancel},
 		{Name: "doctor", Description: "Run the shared Codea Doctor", Category: "runtime", Source: SourceBuiltin, Action: ActionDoctor},
