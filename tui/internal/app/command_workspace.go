@@ -58,7 +58,8 @@ func (m *Model) executeWorkspaceAction(action command.Action, arguments string) 
 		if strings.TrimSpace(arguments)!=""{m.appendInfo("Usage: /checkpoints");return nil};if m.checkpointService==nil{m.appendInfo("Checkpoints unavailable: "+checkpointUnavailableText(m.checkpointUnavailable));return nil};if m.checkpointInFlight{m.appendInfo("Checkpoint operation already in progress.");return nil};m.checkpointInFlight=true;return ListCheckpointsCmd(m.checkpointService)
 	case command.ActionRestore:
 		id:=strings.TrimSpace(arguments);if id==""||strings.ContainsAny(id," \t\r\n"){m.appendInfo("Usage: /restore <checkpoint-id>");return nil};if m.checkpointService==nil{m.appendInfo("Restore unavailable: "+checkpointUnavailableText(m.checkpointUnavailable));return nil};if m.isStreaming{m.appendInfo("Finish or cancel the current response before restoring a checkpoint.");return nil};if m.permission.Visible()||m.approvalPending{m.appendInfo("Resolve the active approval before restoring a checkpoint.");return nil};if m.checkpointInFlight{m.appendInfo("Checkpoint operation already in progress.");return nil};m.checkpointInFlight=true;return RestoreCheckpointCmd(m.checkpointService,id)
-	default:m.appendInfo("Command error: unsupported workspace action "+string(action));return nil}
+	default:m.appendInfo("Command error: unsupported workspace action "+string(action));return nil
+	}
 }
 
 func checkpointUnavailableText(detail string)string{if strings.TrimSpace(detail)==""{return "local checkpoint service is not configured"};return detail}
@@ -69,6 +70,10 @@ func (m *Model) activeAgent(requested string)string{requested=strings.TrimSpace(
 func (m *Model) startCommandPrompt(displayText,promptText,requestedAgent string)tea.Cmd{return m.startPromptWithAgent(displayText,promptText,m.activeAgent(requestedAgent))}
 func (m *Model) startPrompt(displayText,promptText,fallbackAgent string)tea.Cmd{agent:=strings.TrimSpace(m.currentAgent);if agent==""{agent=strings.TrimSpace(fallbackAgent)};return m.startPromptWithAgent(displayText,promptText,m.activeAgent(agent))}
 func (m *Model) startPromptWithAgent(displayText,promptText,agent string)tea.Cmd{
+	if m.needsDefaultModelResolutionForPrompt(){return resolveDefaultModelForPromptCmd(m.runtimeClient,displayText,promptText,agent)}
+	return m.startPromptWithAgentResolved(displayText,promptText,agent)
+}
+func (m *Model) startPromptWithAgentResolved(displayText,promptText,agent string)tea.Cmd{
 	req:=runtime.PromptRequest{MessageID:fmt.Sprintf("msg-%d",m.msgCounter),Agent:agent,Parts:[]runtime.PromptPart{runtime.TextPart{Text:promptText}}};modelLabel:="";if m.sessionID!=""{if selected,ok:=m.sessionModels[m.sessionID];ok{model:=selected;req.Model=&model;modelLabel=strings.TrimSpace(selected.ModelID)}}
 	strategy:=m.currentModelStrategy(req);m.activeModelStrategy=strategy
 	m.messages=append(m.messages,ChatMessage{Role:RoleUser,Content:displayText,Finished:true,TurnID:req.MessageID},ChatMessage{Role:RoleAssistant,TurnID:req.MessageID,Agent:req.Agent,Model:modelLabel});m.isStreaming=true;m.proc.Reset();m.reasoningActive=false;m.reasoningContent="";m.reasoningDuration=0;m.reasoningExpanded=false;m.streamBuf.Reset();m.reasoningBuf.Reset();m.tools=make([]ToolActivity,0);m.beginPromptTrace(req);m.msgCounter++;m.input="";m.startTaskMetric(req.Agent)
