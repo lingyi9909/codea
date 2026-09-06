@@ -10,8 +10,8 @@
 - macOS: **PASS**
 - Automated verification: **PASS**
 - Task Gate: **PASS**
-- Human acceptance: **PENDING**
-- Task 33: **not started**
+- Human acceptance: **ACCEPTED**
+- Formal task order: **ends at Task 32**
 
 ## Delivered behavior
 
@@ -110,7 +110,7 @@ AMBIGUOUS_DEFAULT_FALLS_BACK_MEDIUM PASS
 
 Task 32 itself introduces no external benchmark, telemetry upload, or public API dependency. Public CI verifies local qualification, profile storage, adaptive strategy, security invariance, Windows no-CGO compatibility, and three-platform regressions.
 
-A real company-intranet run against the private deployed model is environment-specific evidence and **cannot be certified by public GitHub Actions**. No private endpoint, credential, provider payload, or fabricated intranet result is recorded in this report. That evidence remains a separate manual acceptance item when the private environment is available.
+A real company-intranet run against the private deployed model is environment-specific evidence and **cannot be certified by public GitHub Actions**. No private endpoint, credential, provider payload, or fabricated intranet result is recorded in this report. That evidence remains separate environment-specific evidence when the private environment is available.
 
 ## Gate conclusion
 
@@ -118,4 +118,4 @@ Task 32 automated implementation and certification are complete at production ba
 
 The adaptive strategy changes context/planning/retry support only. Agent routing, security permission decisions, verification truth, and checkpoint protection remain authoritative and invariant.
 
-Task 32 is ready for **human acceptance** and must remain `awaiting_acceptance` with `humanAccepted: false` until explicitly approved. Task 33 has not started.
+Task 32 technical re-verification passed, remediation evidence was closed, and human acceptance was explicitly approved on 2026-09-06. Task 32 is therefore **completed**. The formal `taskOrder` ends at Task 32; no Task 33 is created by this acceptance closure. Any V1.2 Final Release Certification or project-closure work requires a separate explicit instruction.
