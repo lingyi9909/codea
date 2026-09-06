@@ -24,8 +24,11 @@ func (m *Model) handleProfessionalWorkspaceMessage(msg tea.Msg)(bool,tea.Cmd){
 		if handled,cmd:=m.handleModelCheckEvent(msg.ev);handled{if m.eventCh!=nil&&cmd!=nil{return true,tea.Batch(waitForEvent(m.eventCh),cmd)};if m.eventCh!=nil{return true,waitForEvent(m.eventCh)};return true,cmd}
 	case listSessionsResultMsg:
 		filtered:=filterInternalSessions(msg.sessions);if len(filtered)!=len(msg.sessions){if msg.err!=nil{m.sessionNotice="Failed to load sessions: "+msg.err.Error();m.markDirty();return true,nil};m.sessionPanel.Open(sessionItems(filtered));m.sessionPanel.SetActive(m.sessionID);m.sessionNotice="";m.markDirty();return true,nil}
+	case defaultModelPromptModelsMsg:
+		if msg.err!=nil{m.runtimeModels=[]runtime.Model{}}else{m.runtimeModels=append([]runtime.Model{},msg.models...)}
+		return true,m.startPromptWithAgentResolved(msg.displayText,msg.promptText,msg.agent)
 	case listModelsResultMsg:
-		if msg.err==nil{m.runtimeModels=append([]runtime.Model(nil),msg.models...)}
+		if msg.err==nil{m.runtimeModels=append([]runtime.Model{},msg.models...)}
 		return false,nil
 	case subscribeErrMsg:
 		if m.modelCheck.Active{m.failModelCheck("Model qualification stopped because the Runtime subscription failed.")};return false,nil
