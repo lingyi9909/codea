@@ -1,0 +1,168 @@
+name: Task 32 Adaptive Model Strategy Gates
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [develop]
+    paths:
+      - 'tui/**'
+      - 'distribution/plugins/**'
+      - 'distribution/agents/**'
+      - 'distribution/config/**'
+      - 'tests/task28-repo-intelligence.sh'
+      - 'tests/task29-agent-planning.sh'
+      - 'tests/task30-verification-loop.sh'
+      - 'tests/task31-checkpoint.sh'
+      - 'tests/task32-strategy-security.sh'
+      - 'tests/task32-adaptive-model-strategy.sh'
+      - 'scripts/check-execution-state.sh'
+      - 'docs/task-reports/task-32.md'
+      - 'docs/execution-state.yaml'
+      - '.github/workflows/task32-gates.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: task32-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux-task32:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.5'
+          cache-dependency-path: tui/go.sum
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.3.14'
+
+      - name: Validate V1.2 execution state
+        run: bash scripts/check-execution-state.sh
+
+      - name: Install enterprise plugin dependencies
+        working-directory: distribution/plugins
+        run: bun install --frozen-lockfile
+
+      - name: Task 32 mechanical acceptance
+        run: bash tests/task32-adaptive-model-strategy.sh
+
+      - name: Full plugin regression and build
+        working-directory: distribution/plugins
+        run: |
+          bun test
+          bun run build
+
+      - name: Full Go regression and build
+        working-directory: tui
+        run: |
+          GOTOOLCHAIN=local go test ./... -count=1
+          GOTOOLCHAIN=local go build ./cmd/codea
+
+      - name: Windows amd64 no-CGO cross-build
+        working-directory: tui
+        run: CGO_ENABLED=0 GOOS=windows GOARCH=amd64 GOTOOLCHAIN=local go build ./cmd/codea
+
+  windows-task32:
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.5'
+          cache-dependency-path: tui/go.sum
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.3.14'
+
+      - name: Install enterprise plugin dependencies
+        working-directory: distribution/plugins
+        shell: pwsh
+        run: |
+          bun install --frozen-lockfile
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Verify PowerShell native fail-fast contract
+        shell: pwsh
+        run: |
+          $probe = Start-Process -FilePath pwsh -ArgumentList @('-NoProfile', '-Command', 'cmd /c exit 7; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }') -Wait -PassThru
+          if ($probe.ExitCode -ne 7) { throw "native fail-fast contract did not propagate exit 7" }
+          Write-Output 'WINDOWS_WORKFLOW_FAIL_FAST PASS'
+
+      - name: Native Windows Task 32 plugin security and probes
+        working-directory: distribution/plugins
+        shell: pwsh
+        run: |
+          bun test tests/model-probes.test.ts tests/model-evaluator-agent.test.ts tests/model-strategy-security.test.ts
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Write-Output 'WINDOWS_TASK32_PLUGIN PASS'
+
+      - name: Native Windows model profile and adaptive strategy
+        working-directory: tui
+        shell: pwsh
+        run: |
+          $env:GOTOOLCHAIN='local'
+          $env:CGO_ENABLED='0'
+          $env:CODEA_HOME=Join-Path $env:RUNNER_TEMP 'Codea Home 中文 Model Profiles'
+          New-Item -ItemType Directory -Force -Path $env:CODEA_HOME | Out-Null
+          go test ./internal/modelprofile -run 'Task32|Store|Aggregate' -count=1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          go test ./internal/app -run 'Task32' -count=1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          go test ./internal/checkpoint -count=1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          go build ./cmd/codea
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Write-Output 'WINDOWS_UNICODE_MODEL_PROFILE PASS'
+
+      - name: Native Windows full plugin regression and build
+        working-directory: distribution/plugins
+        shell: pwsh
+        run: |
+          bun test
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          bun run build
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Native Windows full Go regression
+        working-directory: tui
+        shell: pwsh
+        run: |
+          $env:GOTOOLCHAIN='local'
+          $env:CGO_ENABLED='0'
+          go test ./... -count=1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+  macos-task32:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.5'
+          cache-dependency-path: tui/go.sum
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.3.14'
+
+      - name: Install enterprise plugin dependencies
+        working-directory: distribution/plugins
+        run: bun install --frozen-lockfile
+
+      - name: Native macOS Task 32 mechanical acceptance
+        run: bash tests/task32-adaptive-model-strategy.sh
+
+      - name: Native macOS full plugin regression and build
+        working-directory: distribution/plugins
+        run: |
+          bun test
+          bun run build
+
+      - name: Native macOS full Go regression and build
+        working-directory: tui
+        run: |
+          GOTOOLCHAIN=local go test ./... -count=1
+          GOTOOLCHAIN=local go build ./cmd/codea
