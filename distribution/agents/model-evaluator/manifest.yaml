@@ -1,0 +1,33 @@
+name: model-evaluator
+version: 1.0.0
+displayName: Model Evaluator
+mode: enterprise-controlled
+requiredSkills: []
+tools:
+  probe_tool_call: allow
+  probe_structured: allow
+  probe_patch: allow
+  probe_plan: allow
+  read: deny
+  grep: deny
+  glob: deny
+  write: deny
+  edit: deny
+  bash: deny
+  collect_review_context: deny
+  analyze_test_project: deny
+  write_test_file: deny
+  run_project_test: deny
+  verify_project: deny
+  extract_api_spec: deny
+  validate_api_example: deny
+  write_document: deny
+  task_plan: deny
+  task_step: deny
+  task_status: deny
+  dify-query: deny
+constraints:
+  preserveProjectBoundary: true
+  preserveApproval: true
+  preserveDlp: true
+  offlineOnly: true
