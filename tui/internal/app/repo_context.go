@@ -57,12 +57,15 @@ func RepoContextCmd(service RepoContextService, intent repoPromptIntent) tea.Cmd
 
 func buildRepoAwarePrompt(intent repoPromptIntent, repoMap repoctx.RepoMap, repoErr error) runtime.PromptRequest {
 	req := intent.request
+	hasExplicitStrategy := intent.strategy.RepoMapMaxChars > 0
 	strategy := intent.strategy
-	if strategy.RepoMapMaxChars <= 0 {
+	if !hasExplicitStrategy {
 		strategy = mediumModelStrategy()
 	}
 	parts := make([]runtime.PromptPart, 0, 4)
-	parts = append(parts, modelStrategyPart(strategy))
+	if hasExplicitStrategy {
+		parts = append(parts, modelStrategyPart(strategy))
+	}
 	if repoErr == nil {
 		rendered := strings.TrimSpace(repoMap.Render())
 		if rendered != "" {
