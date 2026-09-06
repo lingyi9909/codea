@@ -29,5 +29,10 @@ export * from "./tools/write-document";
 export * from "./tools/task-plan";
 export * from "./tools/task-step";
 export * from "./tools/task-status";
+export * from "./tools/probe-state";
+export * from "./tools/probe-tool-call";
+export * from "./tools/probe-structured";
+export * from "./tools/probe-patch";
+export * from "./tools/probe-plan";
 
 export { plugin, plugin as default } from "./opencode/entry";

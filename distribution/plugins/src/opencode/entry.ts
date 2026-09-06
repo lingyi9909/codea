@@ -19,6 +19,11 @@ import { createTaskPlanTool } from "../tools/task-plan";
 import { createTaskStepTool } from "../tools/task-step";
 import { createTaskStatusTool } from "../tools/task-status";
 import { verifyProjectTool } from "../tools/verify-project";
+import { ProbeAttemptState } from "../tools/probe-state";
+import { createProbeToolCallTool } from "../tools/probe-tool-call";
+import { createProbeStructuredTool } from "../tools/probe-structured";
+import { createProbePatchTool } from "../tools/probe-patch";
+import { createProbePlanTool } from "../tools/probe-plan";
 import type { ToolContext as CodeaToolContext, ToolResult as CodeaToolResult, WriteOwnership } from "../tools/types";
 import type { Hooks, PluginModule, ToolContext, ToolDefinition, ToolResult } from "./types";
 
@@ -36,6 +41,10 @@ const TOOL_ACTIONS: Record<string, string> = {
   task_plan: "plan",
   task_step: "plan",
   task_status: "plan",
+  probe_tool_call: "probe",
+  probe_structured: "probe",
+  probe_patch: "probe",
+  probe_plan: "probe",
   "dify-query": "read",
 };
 
@@ -87,6 +96,29 @@ const TOOL_ARGS: Record<string, z.ZodRawShape> = {
     evidence: z.string().max(1000).optional(),
   },
   task_status: {},
+  probe_tool_call: {
+    token: z.literal("CODEA-17"),
+    value: z.literal(42),
+  },
+  probe_structured: {
+    items: z.tuple([
+      z.object({ id: z.literal("A"), enabled: z.literal(true) }).strict(),
+      z.object({ id: z.literal("B"), enabled: z.literal(false) }).strict(),
+    ]),
+    summary: z.object({ count: z.literal(2) }).strict(),
+  },
+  probe_patch: {
+    original: z.literal("alpha\nbeta\n"),
+    instruction: z.literal("replace beta with gamma"),
+    result: z.literal("alpha\ngamma\n"),
+  },
+  probe_plan: {
+    steps: z.tuple([
+      z.object({ id: z.literal("1"), action: z.literal("inspect") }).strict(),
+      z.object({ id: z.literal("2"), action: z.literal("edit") }).strict(),
+      z.object({ id: z.literal("3"), action: z.literal("verify") }).strict(),
+    ]),
+  },
   "dify-query": { question: z.string().min(1) },
 };
 
@@ -142,6 +174,17 @@ function verificationMetadata(name: string, result: CodeaToolResult<unknown>): R
     codeaVerificationResult: resultValue,
     codeaVerificationProfile: profileValue,
   };
+}
+
+function probeMetadata(name: string, result: CodeaToolResult<unknown>): Record<string, string> {
+  if (!result.ok || !["probe_tool_call", "probe_structured", "probe_patch", "probe_plan"].includes(name)) return {};
+  const data = result.data as any;
+  const probe = data?.codeaProbe;
+  const outcome = data?.codeaProbeResult;
+  const attempt = data?.codeaProbeAttempt;
+  if (!["tool_call", "structured", "patch", "planning"].includes(probe)) return {};
+  if (outcome !== "pass" || !["1", "2"].includes(attempt)) return {};
+  return { codeaProbe: probe, codeaProbeResult: outcome, codeaProbeAttempt: attempt };
 }
 
 async function requirePlanForOperation(
@@ -220,6 +263,7 @@ function adaptTool(
           codeaPlugin: CODEA_PLUGIN_ID,
           ...planningMetadata(name, result),
           ...verificationMetadata(name, result),
+          ...probeMetadata(name, result),
         },
       };
     },
@@ -256,6 +300,7 @@ export const plugin: PluginModule = {
       codeaHome: process.env.CODEA_HOME || path.join(os.homedir(), ".codea"),
     });
     const rootTurns = new RootTurnEpochs();
+    const probeState = new ProbeAttemptState();
 
     const difyEnv = difyConfigFromEnv(process.env);
     const dify = difyEnv ? new DifyClient({ baseUrl: difyEnv.baseUrl, apiKey: difyEnv.apiKey }) : null;
@@ -280,6 +325,10 @@ export const plugin: PluginModule = {
       task_plan: adaptTool("task_plan", createTaskPlanTool(taskState), audit, guard, taskState, rootTurns),
       task_step: adaptTool("task_step", createTaskStepTool(taskState), audit, guard, taskState, rootTurns),
       task_status: adaptTool("task_status", createTaskStatusTool(taskState), audit, guard, taskState, rootTurns),
+      probe_tool_call: adaptTool("probe_tool_call", createProbeToolCallTool(probeState), audit, guard, taskState, rootTurns),
+      probe_structured: adaptTool("probe_structured", createProbeStructuredTool(probeState), audit, guard, taskState, rootTurns),
+      probe_patch: adaptTool("probe_patch", createProbePatchTool(probeState), audit, guard, taskState, rootTurns),
+      probe_plan: adaptTool("probe_plan", createProbePlanTool(probeState), audit, guard, taskState, rootTurns),
       "dify-query": buildDifyTool(dify, audit, guard),
     };
 
